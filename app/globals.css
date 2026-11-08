@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #07090d;
+  --ink-elevated: #10151c;
+  --fog: #9aa7b5;
+  --paper: #e8eef4;
+  --gold: #c9a227;
+  --gold-soft: #e0c56a;
+  --teal: #2f6f66;
+  --teal-bright: #3f9a8c;
+  --line: rgba(232, 238, 244, 0.08);
+  --background: var(--ink);
+  --foreground: var(--paper);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-ink-elevated: var(--ink-elevated);
+  --color-fog: var(--fog);
+  --color-paper: var(--paper);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-teal: var(--teal);
+  --color-teal-bright: var(--teal-bright);
+  --color-line: var(--line);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), ui-sans-serif, sans-serif;
+  min-height: 100%;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--gold) 40%, transparent);
+  color: var(--paper);
+}
+
+.atmosphere {
+  background:
+    radial-gradient(1200px 700px at 78% 12%, rgba(47, 111, 102, 0.28), transparent 55%),
+    radial-gradient(900px 600px at 12% 18%, rgba(201, 162, 39, 0.12), transparent 50%),
+    linear-gradient(165deg, #0a1016 0%, #07090d 45%, #0c1412 100%);
+}
+
+.grid-sheen {
+  background-image:
+    linear-gradient(rgba(232, 238, 244, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 238, 244, 0.035) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 70% 60% at 70% 30%, black 20%, transparent 75%);
+  animation: drift 28s linear infinite;
+}
+
+.chart-silhouette {
+  background:
+    linear-gradient(180deg, transparent 0%, rgba(7, 9, 13, 0.55) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700' fill='none'%3E%3Cpath d='M40 520 L140 480 L220 510 L320 390 L410 430 L520 280 L610 320 L720 210 L820 250 L930 140 L1040 190 L1160 90' stroke='%233f9a8c' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M40 520 L140 480 L220 510 L320 390 L410 430 L520 280 L610 320 L720 210 L820 250 L930 140 L1040 190 L1160 90 L1160 700 L40 700 Z' fill='url(%23g)' opacity='0.35'/%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop stop-color='%233f9a8c' stop-opacity='0.45'/%3E%3Cstop offset='1' stop-color='%233f9a8c' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='320' cy='390' r='5' fill='%23c9a227'/%3E%3Ccircle cx='520' cy='280' r='5' fill='%23c9a227'/%3E%3Ccircle cx='720' cy='210' r='5' fill='%23c9a227'/%3E%3Ccircle cx='930' cy='140' r='5' fill='%23c9a227'/%3E%3C/svg%3E");
+  background-size: cover;
+  background-position: center right;
+  background-repeat: no-repeat;
+  animation: rise-in 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-64px, -64px, 0);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(1.02);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal {
+  animation: fade-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.reveal-delay-1 {
+  animation-delay: 0.12s;
+}
+
+.reveal-delay-2 {
+  animation-delay: 0.24s;
+}
+
+.reveal-delay-3 {
+  animation-delay: 0.36s;
+}
+
+.cta-pulse {
+  position: relative;
+}
+
+.cta-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 1px solid color-mix(in oklab, var(--gold) 55%, transparent);
+  opacity: 0;
+  animation: soft-ring 2.8s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes soft-ring {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grid-sheen,
+  .chart-silhouette,
+  .reveal,
+  .cta-pulse::after {
+    animation: none !important;
+  }
+}
