@@ -20,9 +20,9 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Smart Financial Academy — Student Dashboard",
+  title: "Smart Financial Academy — Learning Portal",
   description:
-    "Student mission dashboard for Smart Financial Academy: current weekly mission, trading rule cheat sheet, and weekly trade journal submission.",
+    "Interactive eight-stage Smart Financial Academy portal: curriculum stages, rulebook with position sizing, and weekly trade journal submission.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
