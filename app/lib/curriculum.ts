@@ -6,93 +6,108 @@ export type ReadingLink = {
 export type Stage = {
   id: number;
   title: string;
-  summary: string;
-  topics: string[];
-  readings: ReadingLink[];
-  passCriteria: string[];
+  overview: string;
+  principles: string[];
+  links: ReadingLink[];
+  milestones: string[];
+  mission: string;
+  audioTitle: string;
+  audioNote: string;
 };
 
+/** 02_Student_Submissions — Google Drive */
 export const JOURNAL_URL =
-  "https://drive.google.com/drive/folders/1BoLFZnSEm3tbdmPOxcDNSXn8qXRDsLLj?usp=sharing";
+  "https://drive.google.com/drive/folders/1cTzdyCZWhywRVCbv2_vPg1CWGps51FVC";
+
+export const ESSENTIAL_LINKS: ReadingLink[] = [
+  {
+    label: "BabyPips — School of Pipsology",
+    href: "https://www.babypips.com/learn/forex",
+  },
+  {
+    label: "CME — FX Education",
+    href: "https://www.cmegroup.com/education/courses/introduction-to-fx.html",
+  },
+  {
+    label: "BIS — FX Statistics",
+    href: "https://www.bis.org/statistics/about_fx_stats.htm",
+  },
+  {
+    label: "Banque de France — Statistics & research",
+    href: "https://www.banque-france.fr/en/publications-and-statistics/statistics",
+  },
+];
 
 export const stages: Stage[] = [
   {
     id: 1,
-    title: "FX Foundations",
-    summary:
-      "Build fluency in spot FX mechanics, quote convention, session rhythm, and the instruments SFA trades with discipline.",
-    topics: [
-      "Base vs quote currency, pip/point, and spread cost",
-      "London / New York overlap as primary liquidity window",
-      "EUR/USD and XAU/USD contract math at 1.00 lot",
-      "Order types: market, limit, stop; why mental stops are forbidden",
-      "Journal hygiene: screenshot, thesis, risk, outcome",
+    title: "FX Foundations & Mechanics",
+    overview:
+      "Institutional fluency starts with quote convention, session liquidity, and contract math. Trade only what you can size and journal with precision.",
+    principles: [
+      "Base vs quote, pip/point value, and spread as a cost of business",
+      "London–New York overlap as the primary execution window",
+      "EUR/USD and XAU/USD lot math before any discretionary entry",
+      "Hard stops only — mental stops are a rulebook violation",
+      "Journal fields: thesis, structure, risk, outcome — every session",
     ],
-    readings: [
-      {
-        label: "BabyPips — How to Trade Forex",
-        href: "https://www.babypips.com/learn/forex",
-      },
-      {
-        label: "CME — FX products overview",
-        href: "https://www.cmegroup.com/markets/fx.html",
-      },
-      {
-        label: "BIS — Triennial FX survey",
-        href: "https://www.bis.org/statistics/rpfx23.htm",
-      },
-    ],
-    passCriteria: [
-      "Correctly convert a stop distance into dollars risked for EUR/USD and XAU/USD",
+    links: ESSENTIAL_LINKS,
+    milestones: [
+      "Convert a stop distance into dollars risked for EUR/USD and XAU/USD",
       "Label pip, point, and spread cost on a live chart screenshot",
       "Submit one practice journal entry with thesis + risk fields complete",
     ],
+    mission:
+      "Map one London–NY overlap session: annotate quote convention, spread, and a hypothetical 1.0% risk size for EUR/USD and XAU/USD. Submit the annotated journal to Drive.",
+    audioTitle: "FX Mechanics Desk Briefing",
+    audioNote:
+      "NotebookLM audio overview covering pip math, sessions, and order hygiene. Placeholder until the stage recording is published.",
   },
   {
     id: 2,
-    title: "Market Structure & Liquidity",
-    summary:
-      "Mission 1 core: read trend through swing points, map HTF bias, and locate liquidity that fuels BOS and CHoCH.",
-    topics: [
-      "HH / HL / LH / LL swing taxonomy",
-      "HTF (4H) bias first, then LTF (15m) execution context",
-      "Break of Structure (BOS) vs Change of Character (CHoCH)",
-      "Liquidity pools above highs / below lows and sweep behavior",
-      "Fair Value Gaps as delivery zones inside structure",
+    title: "Liquidity Pools & Order Types",
+    overview:
+      "Liquidity is the fuel of structural shifts. Map pools above highs and below lows, then choose the order type that expresses your plan without ambiguity.",
+    principles: [
+      "Liquidity pools rest beyond obvious swing highs and lows",
+      "Sweeps often precede Break of Structure or Change of Character",
+      "Market, limit, and stop orders each encode a different intent",
+      "HTF (4H) bias frames where liquidity is meaningful; LTF (15m) times entry",
+      "Never chase a sweep — wait for displacement and retest logic",
     ],
-    readings: [
-      {
-        label: "BabyPips — Market structure & trends",
-        href: "https://www.babypips.com/learn/forex/market-structure",
-      },
+    links: [
+      ...ESSENTIAL_LINKS.slice(0, 2),
       {
         label: "CME — Understanding FX liquidity",
         href: "https://www.cmegroup.com/education/articles-and-reports/understanding-fx-market-liquidity.html",
       },
-      {
-        label: "BIS — FX market structure notes",
-        href: "https://www.bis.org/publ/qtrpdf/r_qt1912f.htm",
-      },
+      ESSENTIAL_LINKS[2],
+      ESSENTIAL_LINKS[3],
     ],
-    passCriteria: [
-      "Mark HH/HL or LH/LL on a 4H chart and state the active bias",
-      "Show one BOS and one CHoCH on 15m nested inside that HTF bias",
-      "Annotate a liquidity sweep that preceded the structural shift",
+    milestones: [
+      "Mark two liquidity pools and the order type you would use at each",
+      "Show one sweep that preceded a structural shift on 15m inside 4H bias",
+      "Journal a rejected chase vs a planned retest entry",
     ],
+    mission:
+      "For Mission 1 market structure week: annotate HH/HL or LH/LL on 4H, locate one liquidity pool, and define the exact order type for a 15m execution plan. Cap risk at 1.0%.",
+    audioTitle: "Liquidity & Order Intent Briefing",
+    audioNote:
+      "NotebookLM walkthrough of pools, sweeps, and institutional order choice. Audio file placeholder.",
   },
   {
     id: 3,
     title: "Chart Literacy & Price Action",
-    summary:
-      "Translate raw candles into decision-grade narrative: impulse, pullback, rejection, and continuation without indicator dependence.",
-    topics: [
-      "Candlestick anatomy and rejection wicks at key levels",
-      "Impulse vs corrective legs; measured pullbacks",
-      "Session opens, range breaks, and continuation signatures",
-      "Entries from price action; EMA / VWAP as context only",
-      "Screenshot standards for reviewable trade notes",
+    overview:
+      "Candles are narrative units. Read impulse, pullback, and rejection so entries come from price — indicators stay contextual.",
+    principles: [
+      "Rejection wicks at levels beat indicator crossovers for entries",
+      "Impulse vs corrective legs define where risk belongs",
+      "Session opens and range breaks create continuation signatures",
+      "EMA / VWAP may frame context; they never replace structure",
+      "Screenshot standards make reviews mentor-grade",
     ],
-    readings: [
+    links: [
       {
         label: "BabyPips — Japanese candlesticks",
         href: "https://www.babypips.com/learn/forex/japanese-candlesticks",
@@ -101,30 +116,34 @@ export const stages: Stage[] = [
         label: "BabyPips — Support & resistance",
         href: "https://www.babypips.com/learn/forex/support-and-resistance",
       },
-      {
-        label: "CME — Charting essentials",
-        href: "https://www.cmegroup.com/education/courses/technical-analysis.html",
-      },
+      ESSENTIAL_LINKS[1],
+      ESSENTIAL_LINKS[2],
+      ESSENTIAL_LINKS[3],
     ],
-    passCriteria: [
-      "Deliver three annotated charts showing impulse → pullback → continuation",
-      "Write a one-paragraph PA thesis with zero indicator-based entry language",
+    milestones: [
+      "Deliver three annotated charts: impulse → pullback → continuation",
+      "Write a PA thesis with zero indicator-based entry language",
       "Score R:R ≥ 1:2 on a hypothetical entry from a marked level",
     ],
+    mission:
+      "Capture three price-action examples this week. Each must include entry logic, hard stop, and a target that clears 1:2. Submit screenshots to the student Drive folder.",
+    audioTitle: "Price Action Narrative Briefing",
+    audioNote:
+      "NotebookLM audio on impulse, rejection, and continuation literacy. Placeholder embed.",
   },
   {
     id: 4,
     title: "Fundamental Macro & Fed Policy",
-    summary:
-      "Connect policy path, data releases, and dollar liquidity to FX and gold without abandoning price-action execution.",
-    topics: [
-      "Fed dual mandate, FOMC cycle, and dots as narrative—not signals",
-      "CPI, NFP, PCE: calendar risk and when not to trade",
-      "USD strength regimes and EUR/USD sensitivity",
-      "Gold as a real-rate / risk-sentiment hybrid",
-      "Macro note template: bias, catalysts, invalidation",
+    overview:
+      "Policy path and data releases shape dollar and gold regimes. Macro sets bias; price action still times the trade.",
+    principles: [
+      "Fed dual mandate and FOMC cycle are narrative — not entry signals",
+      "CPI, NFP, PCE define calendar risk and stand-down windows",
+      "USD strength regimes transmit directly into EUR/USD",
+      "Gold behaves as a real-rate and risk-sentiment hybrid",
+      "Macro notes require bias, catalysts, and invalidation",
     ],
-    readings: [
+    links: [
       {
         label: "Federal Reserve — Monetary Policy",
         href: "https://www.federalreserve.gov/monetarypolicy.htm",
@@ -133,30 +152,34 @@ export const stages: Stage[] = [
         label: "CME FedWatch Tool",
         href: "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
       },
-      {
-        label: "BIS — Central bank policy hub",
-        href: "https://www.bis.org/cbanks.htm",
-      },
+      ESSENTIAL_LINKS[2],
+      ESSENTIAL_LINKS[3],
+      ESSENTIAL_LINKS[0],
     ],
-    passCriteria: [
-      "Produce a weekly macro brief covering Fed path + two data catalysts",
-      "State how the brief maps to EUR/USD and XAU/USD directional bias",
-      "List three sessions you would stand down due to event risk",
+    milestones: [
+      "Produce a weekly macro brief: Fed path + two data catalysts",
+      "Map the brief to EUR/USD and XAU/USD directional bias",
+      "List three sessions you would stand down for event risk",
     ],
+    mission:
+      "Write this week’s macro desk note before Sunday prep. Include Fed path, two catalysts, and explicit stand-down windows. File it with your journal submission.",
+    audioTitle: "Fed Path & Macro Desk Briefing",
+    audioNote:
+      "NotebookLM overview of FOMC narrative vs execution discipline. Placeholder audio.",
   },
   {
     id: 5,
     title: "Intermarket & Yield Transmission",
-    summary:
-      "Trace how yields, equities, and the dollar transmit into FX and gold so your bias stays consistent across markets.",
-    topics: [
-      "UST yields ↔ USD ↔ EUR/USD pathways",
-      "Real yields and XAU/USD inverse tendency",
-      "Risk-on / risk-off: equities, HY credit, and FX crosses",
-      "DXY context without treating it as an entry trigger",
-      "Building a simple intermarket dashboard for Sunday prep",
+    overview:
+      "Yields, equities, and the dollar transmit into FX and gold. Keep bias consistent across markets before you size risk.",
+    principles: [
+      "UST yields ↔ USD ↔ EUR/USD is a primary transmission path",
+      "Real yields often inverse XAU/USD tendency",
+      "Risk-on / risk-off shows in equities, HY credit, and FX crosses",
+      "DXY informs context — it is not an entry trigger",
+      "Sunday intermarket prep prevents midweek narrative drift",
     ],
-    readings: [
+    links: [
       {
         label: "BIS — Global liquidity indicators",
         href: "https://www.bis.org/statistics/gli.htm",
@@ -165,62 +188,68 @@ export const stages: Stage[] = [
         label: "CME — Interest rates markets",
         href: "https://www.cmegroup.com/markets/interest-rates.html",
       },
-      {
-        label: "BabyPips — Intermarket analysis",
-        href: "https://www.babypips.com/learn/forex/intermarket-analysis",
-      },
+      ESSENTIAL_LINKS[0],
+      ESSENTIAL_LINKS[3],
     ],
-    passCriteria: [
-      "Chart 10Y yield vs EUR/USD for a 3-month window and narrate the link",
-      "Explain one gold move using real-yield context in ≤150 words",
+    milestones: [
+      "Chart 10Y yield vs EUR/USD over three months and narrate the link",
+      "Explain one gold move with real-yield context in ≤150 words",
       "Update an intermarket prep sheet before the next London open",
     ],
+    mission:
+      "Build a one-page intermarket dashboard (yields, DXY, equities, gold). State the bias it implies for EUR/USD this week and submit with your journal.",
+    audioTitle: "Yield Transmission Briefing",
+    audioNote:
+      "NotebookLM audio on cross-asset bias construction. Placeholder until published.",
   },
   {
     id: 6,
-    title: "Quantitative Research & Evaluation",
-    summary:
-      "Measure edge honestly: define hypotheses, sample windows, and pass/fail metrics before scaling size.",
-    topics: [
-      "Trade taxonomy and tagging for reviewable datasets",
-      "Expectancy, win rate, average R, and drawdown bounds",
-      "Sample-size humility; avoiding curve-fit narratives",
-      "Before/after rule changes — controlled comparison",
-      "Notebook structure for reproducible weekly research",
+    title: "Quantitative Testing & Research",
+    overview:
+      "Edge is measured, not asserted. Define hypotheses, sample windows, and pass/fail metrics before you scale size.",
+    principles: [
+      "Tag every trade so datasets stay reviewable",
+      "Expectancy, average R, and drawdown bound honest evaluation",
+      "Small samples invite curve-fit stories — stay humble",
+      "Rule changes need before/after controlled comparison",
+      "Research notebooks must be reproducible week to week",
     ],
-    readings: [
+    links: [
       {
         label: "BabyPips — Trading journal & review",
         href: "https://www.babypips.com/trading/learn-how-to-keep-a-trading-journal",
       },
-      {
-        label: "BIS — Statistical resources",
-        href: "https://www.bis.org/statistics/index.htm",
-      },
+      ESSENTIAL_LINKS[2],
       {
         label: "CME — Market data education",
         href: "https://www.cmegroup.com/market-data.html",
       },
+      ESSENTIAL_LINKS[3],
     ],
-    passCriteria: [
+    milestones: [
       "Tag ≥20 historical examples of one setup with outcome in R",
       "Report expectancy and max adverse excursion for that sample",
       "Write a one-page verdict: keep, refine, or retire the setup",
     ],
+    mission:
+      "Run a mini research sprint on one setup. Deliver tags, expectancy, and a keep/refine/retire verdict. Upload the notebook page to Drive.",
+    audioTitle: "Research Hygiene Briefing",
+    audioNote:
+      "NotebookLM briefing on expectancy math and sample humility. Audio placeholder.",
   },
   {
     id: 7,
-    title: "Risk Discipline & Position Sizing Math",
-    summary:
-      "Non-negotiable capital protection: fixed fractional risk, mandatory stops, and exact lot sizing for FX and gold.",
-    topics: [
-      "1.0% maximum risk per trade — no exceptions",
+    title: "Risk Discipline & Simulation Math",
+    overview:
+      "Capital protection is non-negotiable. Fixed fractional risk, mandatory stops, and exact lot math for FX and gold — then simulate before you live-size.",
+    principles: [
+      "1.0% maximum risk per trade — hard academy cap",
       "Mandatory hard stop-loss; no mental stops",
-      "Forex lot formula: (Equity × 0.01) ÷ (Stop Pips × 10)",
-      "Gold lot formula: (Equity × 0.01) ÷ (|Entry − Stop| × 100)",
-      "Minimum R:R 1:2; size down before moving stops wider",
+      "Forex: Lot = (Equity × risk%) ÷ (Stop Pips × 10)",
+      "Gold: Lot = (Equity × risk%) ÷ (|Entry − Stop| × 100)",
+      "Minimum R:R 1:2; size down before widening stops",
     ],
-    readings: [
+    links: [
       {
         label: "BabyPips — Position sizing & risk",
         href: "https://www.babypips.com/learn/forex/position-sizing",
@@ -233,43 +262,49 @@ export const stages: Stage[] = [
         label: "CME — Risk management education",
         href: "https://www.cmegroup.com/education/courses/risk-management.html",
       },
+      ESSENTIAL_LINKS[3],
     ],
-    passCriteria: [
-      "Size three EUR/USD and three XAU/USD examples to exactly 1.0% risk",
+    milestones: [
+      "Size three EUR/USD and three XAU/USD examples to ≤1.0% risk",
       "Show a rejected trade that failed the 1:2 R:R screen",
-      "Recite and apply the general lot-size formula without notes",
+      "Complete a simulation sheet using the Institutional Position Sizer",
     ],
+    mission:
+      "Use the Institutional Position Sizing Calculator on six hypothetical trades (3 FX, 3 gold). Screenshot results that pass 1:2 and one that fails. Submit the pack to Drive.",
+    audioTitle: "Simulation Math Briefing",
+    audioNote:
+      "NotebookLM audio covering academy lot formulas and R:R gates. Placeholder file.",
   },
   {
     id: 8,
-    title: "Capstone Research Notebook",
-    summary:
-      "Synthesize the curriculum into a living research notebook: bias, structure, risk, and measured review in one artifact.",
-    topics: [
-      "Weekly bias memo from Stages 4–5",
-      "Structure map (Stage 2) + PA plan (Stage 3)",
-      "Sized trade plan with Stage 7 math locked",
-      "Post-trade evaluation using Stage 6 metrics",
-      "Presentation-ready notebook for mentor review",
+    title: "Capstone Macro Notebook",
+    overview:
+      "Synthesize the curriculum into one living artifact: bias, structure, risk math, and measured review ready for mentor critique.",
+    principles: [
+      "Weekly bias memo drawn from macro and intermarket stages",
+      "Structure map + price-action plan in one coherent narrative",
+      "Sized trade plan locked to Stage 7 math and the 1.0% cap",
+      "Post-trade evaluation uses Stage 6 research metrics",
+      "Presentation-ready notebook for Echo / mentor office hours",
     ],
-    readings: [
+    links: [
       {
         label: "BabyPips — Building a trading plan",
         href: "https://www.babypips.com/learn/forex/building-a-trading-plan",
       },
-      {
-        label: "BIS — Research & publications",
-        href: "https://www.bis.org/index.htm",
-      },
-      {
-        label: "CME — Education hub",
-        href: "https://www.cmegroup.com/education.html",
-      },
+      ESSENTIAL_LINKS[1],
+      ESSENTIAL_LINKS[2],
+      ESSENTIAL_LINKS[3],
     ],
-    passCriteria: [
-      "Submit a complete weekly notebook covering bias → plan → size → review",
+    milestones: [
+      "Submit a complete weekly notebook: bias → plan → size → review",
       "Include annotated HTF/LTF charts and risk calculations",
-      "Present findings in mentor office hours with clear pass/fail self-score",
+      "Present findings with Echo and a clear pass/fail self-score",
     ],
+    mission:
+      "Ship your capstone notebook this week: macro bias, structure map, sized plan (≤1.0%), and review metrics. Submit to Drive, then discuss with Echo.",
+    audioTitle: "Capstone Synthesis Briefing",
+    audioNote:
+      "NotebookLM wrap-up for assembling the mentor-ready notebook. Placeholder audio.",
   },
 ];
