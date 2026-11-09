@@ -20,9 +20,9 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Smart Financial Academy — Iteration 3 Pilot",
+  title: "Smart Financial Academy — Iteration 4 Pilot",
   description:
-    "Bilingual M1–M5 + A6–A8 educational pilot within the eight-stage Smart Financial Academy roadmap. Synthetic practice only.",
+    "Bilingual M1–M5 + A6–A8 educational pilot within the eight-stage Smart Financial Academy roadmap. Synthetic practice only. Weekly submission packets are local evidence exports.",
 };
 
 export default function RootLayout({

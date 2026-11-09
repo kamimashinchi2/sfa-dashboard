@@ -1,46 +1,139 @@
 import type { Attempt, RiskStatus } from "./contracts";
 import type { QuizItem } from "./curriculum";
+import { canonicalize, decCompare, normalizeNumericText } from "./decimal";
 
-export type QuizAnswer = string | number | number[];
+export type QuizAnswer = string | number | number[] | null | undefined;
+
+export type PerItemResult = {
+  id: string;
+  pass: boolean;
+  unanswered: boolean;
+  skipped: boolean;
+  remediationTopic: string;
+  kind: QuizItem["kind"];
+};
+
+/**
+ * Normalize numeric quiz answers: FA/Arabic digits, Arabic decimal separator,
+ * thousands separators and whitespace, then compare via decimal equality.
+ * "۱۰۰" = "100" = "100.00"
+ */
+export function normalizeQuizNumeric(raw: string): string | null {
+  let s = normalizeNumericText(String(raw));
+  // Strip whitespace and common thousands separators after digit map
+  s = s.replace(/[\s\u00a0]/g, "").replace(/,/g, "").replace(/٬/g, "");
+  if (s === "") return null;
+  if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
+  return canonicalize(s);
+}
+
+export function numericAnswersEqual(
+  given: string,
+  expected: string | number,
+): boolean {
+  const a = normalizeQuizNumeric(given);
+  const b = normalizeQuizNumeric(String(expected));
+  if (a === null || b === null) return false;
+  return decCompare(a, b) === 0;
+}
 
 export function scoreQuiz(
   items: QuizItem[],
   answers: Record<string, QuizAnswer>,
+  opts?: {
+    /** Item ids the student explicitly marked skipped. */
+    skippedIds?: Set<string> | string[];
+    /** Item ids the student interacted with (order/mc/numeric). Untouched order = unanswered. */
+    touchedIds?: Set<string> | string[];
+  },
 ): {
   score: number;
   correct: number;
   total: number;
   weakTopics: string[];
-  perItem: { id: string; pass: boolean; remediationTopic: string }[];
+  perItem: PerItemResult[];
+  allAnswered: boolean;
 } {
+  const skipped = new Set(
+    opts?.skippedIds
+      ? Array.isArray(opts.skippedIds)
+        ? opts.skippedIds
+        : [...opts.skippedIds]
+      : [],
+  );
+  const touched = new Set(
+    opts?.touchedIds
+      ? Array.isArray(opts.touchedIds)
+        ? opts.touchedIds
+        : [...opts.touchedIds]
+      : Object.keys(answers),
+  );
+
   let correct = 0;
   const weakTopics: string[] = [];
-  const perItem: { id: string; pass: boolean; remediationTopic: string }[] = [];
+  const perItem: PerItemResult[] = [];
+  let allAnswered = true;
 
   for (const item of items) {
+    const isSkipped = skipped.has(item.id);
     const given = answers[item.id];
     let pass = false;
-    if (item.kind === "mc" && typeof given === "number") {
-      pass = given === item.answer;
+    let unanswered = false;
+
+    if (isSkipped) {
+      unanswered = false;
+      pass = false;
+      allAnswered = true; // skipped counts as answered for gate
+    } else if (item.kind === "order") {
+      // Untouched order item is UNANSWERED (scores 0)
+      if (!touched.has(item.id) || given === undefined || given === null) {
+        unanswered = true;
+        pass = false;
+        allAnswered = false;
+      } else if (Array.isArray(given) && Array.isArray(item.answer)) {
+        pass =
+          given.length === item.answer.length &&
+          given.every((v, i) => v === (item.answer as number[])[i]);
+      }
+    } else if (item.kind === "mc") {
+      if (typeof given !== "number") {
+        unanswered = true;
+        allAnswered = false;
+      } else {
+        pass = given === item.answer;
+      }
     } else if (item.kind === "numeric") {
-      pass = String(given).trim() === String(item.answer).trim();
-    } else if (item.kind === "order" && Array.isArray(given) && Array.isArray(item.answer)) {
-      pass =
-        given.length === item.answer.length &&
-        given.every((v, i) => v === (item.answer as number[])[i]);
+      if (given === undefined || given === null || String(given).trim() === "") {
+        unanswered = true;
+        allAnswered = false;
+      } else {
+        pass = numericAnswersEqual(String(given), item.answer as string | number);
+      }
     }
+
     if (pass) correct++;
     else weakTopics.push(item.remediationTopic);
+
     perItem.push({
       id: item.id,
       pass,
+      unanswered,
+      skipped: isSkipped,
       remediationTopic: item.remediationTopic,
+      kind: item.kind,
     });
   }
 
   const total = items.length || 1;
   const score = Math.round((correct / total) * 100);
-  return { score, correct, total, weakTopics: [...new Set(weakTopics)], perItem };
+  return {
+    score,
+    correct,
+    total,
+    weakTopics: [...new Set(weakTopics)],
+    perItem,
+    allAnswered,
+  };
 }
 
 /**
@@ -107,7 +200,6 @@ export function evaluateReadiness(input: {
   }
 
   if (!requiresRisk && input.riskStatus === null) {
-    // Non-risk mission: null risk is not failure — mentor pending for free text
     return {
       numericPass: true,
       riskStatus: null,
@@ -127,7 +219,7 @@ export function evaluateReadiness(input: {
 
   if (requiresRisk && input.riskStatus === null) {
     return {
-      numericPass,
+      numericPass: false,
       riskStatus: null,
       readiness: "REMEDIATION",
       ownerReviewRequired: false,
@@ -203,4 +295,29 @@ export function performanceCard(input: {
     },
     advancement: "INCOMPLETE",
   };
+}
+
+/** Compact ISO for attempt ids: 20261109T134155Z → 20261109T134155Z (no ms/punct extras). */
+export function compactIso(d = new Date()): string {
+  return d
+    .toISOString()
+    .replace(/\.\d{3}Z$/, "Z")
+    .replace(/[-:]/g, "");
+}
+
+export function makeAttemptNonce4(): string {
+  const n = Math.floor(Math.random() * 0x10000);
+  return n.toString(16).padStart(4, "0");
+}
+
+/** `${quizId}-v${criteria}-${submittedISO compact}-${nonce4}` */
+export function makeQuizAttemptId(input: {
+  quizId: string;
+  criteria: number;
+  submittedAt?: Date;
+  nonce?: string;
+}): string {
+  const compact = compactIso(input.submittedAt ?? new Date());
+  const nonce = input.nonce ?? makeAttemptNonce4();
+  return `${input.quizId}-v${input.criteria}-${compact}-${nonce}`;
 }

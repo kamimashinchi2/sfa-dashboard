@@ -9,6 +9,11 @@ import {
   type MacroNodeId,
 } from "../../lib/academy/macro";
 import { t, ui } from "../../lib/academy/dictionary";
+import {
+  pushSimRun,
+  simRunsStore,
+} from "../../lib/academy/persist";
+import { MACRO_ENGINE_VERSION } from "../../lib/academy/packet/schema";
 import { useProgress } from "./ProgressProvider";
 
 const NODES: MacroNodeId[] = [
@@ -226,12 +231,41 @@ export default function MacroTransmissionBuilder({
         type="button"
         className="min-h-11 border border-gold/50 px-3 text-sm text-gold-soft"
         disabled={readOnly}
-        onClick={() =>
+        onClick={() => {
           onAssessedScore?.(
             scored.assessedCredit ? scored.score : null,
             scored.assessedCredit,
-          )
-        }
+          );
+          const issues: string[] = [];
+          if (scored.macroAsEntry) issues.push("MACRO_AS_ENTRY");
+          for (const n of scored.notes ?? []) {
+            if (String(n).startsWith("MACRO_AS_ENTRY")) issues.push(String(n));
+          }
+          simRunsStore.set(
+            pushSimRun(simRunsStore.getSnapshot(), {
+              runId: `macro-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              tool: "macro-chain",
+              missionId: null,
+              atISO: new Date().toISOString(),
+              engineVersion: MACRO_ENGINE_VERSION,
+              inputs: {
+                edges,
+                assumptions,
+                conclusion: conclusions,
+                fromPreset,
+              },
+              outputs: {
+                score: scored.score,
+                assessedCredit: scored.assessedCredit,
+                issues: scored.notes ?? [],
+              },
+              status: "CONTEXT_ONLY",
+              issueCodes: [...new Set(issues)],
+              studentDecision: "EXPLORATION",
+              note: null,
+            }),
+          );
+        }}
       >
         {locale === "fa" ? "ثبت نمره assessed" : "Commit assessed score"}
       </button>

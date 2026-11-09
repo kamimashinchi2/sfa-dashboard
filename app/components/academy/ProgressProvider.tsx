@@ -26,7 +26,15 @@ import {
   migrateProgressV1ToV2,
   parseBackup,
   readLegacyV1Backup,
+  prefsStore,
+  quizStore,
+  responsesStore,
+  sanitizeBackupSections,
   sanitizeImportedProgress,
+  sanitizeImportedQuiz,
+  sanitizeImportedResponses,
+  sanitizeImportedSimRuns,
+  simRunsStore,
   storageKey,
   SFA_V2_PREFIX,
   type ProgressV2,
@@ -426,10 +434,33 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   }, [commit]);
 
   const exportBackup = useCallback(() => {
+    // Read journal from localStorage if present (domain may be written by JournalBuilder)
+    let journalSection: { entries: unknown[] } | undefined;
+    let calcHistorySection: { entries: unknown[] } | undefined;
+    try {
+      if (typeof window !== "undefined") {
+        const jRaw = window.localStorage.getItem(storageKey("journal"));
+        if (jRaw) journalSection = JSON.parse(jRaw) as { entries: unknown[] };
+        const cRaw = window.localStorage.getItem(storageKey("calcHistory"));
+        if (cRaw) calcHistorySection = JSON.parse(cRaw) as { entries: unknown[] };
+      }
+    } catch {
+      /* ignore */
+    }
+    const prefs = {
+      ...prefsStore.getSnapshot(),
+      locale: memoryProgress.locale,
+    };
+    prefsStore.set(prefs);
     const payload = buildBackup({
       meta: memoryMeta,
       progress: toV2(memoryProgress),
-      prefs: { locale: memoryProgress.locale },
+      prefs,
+      quiz: quizStore.getSnapshot(),
+      responses: responsesStore.getSnapshot(),
+      simRuns: simRunsStore.getSnapshot(),
+      calcHistory: calcHistorySection as never,
+      journal: journalSection as never,
     });
     downloadTextFile({
       filename: `sfa-academy-backup-${new Date()
@@ -448,7 +479,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       if (!parsed.ok || !parsed.value) {
         return { ok: false, error: parsed.error };
       }
-      const incoming = parsed.value.sections.progress;
+      const sections = sanitizeBackupSections(parsed.value.sections);
+      const incoming = sections.progress;
       if (!incoming) return { ok: false, error: "NO_PROGRESS_SECTION" };
 
       if (mode === "replace") {
@@ -462,6 +494,26 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         }
         exportBackup();
         commit(toFacade(sanitizeImportedProgress(incoming)));
+        if (sections.quiz) quizStore.set(sanitizeImportedQuiz(sections.quiz));
+        if (sections.responses) {
+          responsesStore.set(sanitizeImportedResponses(sections.responses));
+        }
+        if (sections.simRuns) {
+          simRunsStore.set(sanitizeImportedSimRuns(sections.simRuns));
+        }
+        if (sections.prefs) prefsStore.set(sections.prefs);
+        if (sections.calcHistory && typeof window !== "undefined") {
+          window.localStorage.setItem(
+            storageKey("calcHistory"),
+            JSON.stringify(sections.calcHistory),
+          );
+        }
+        if (sections.journal && typeof window !== "undefined") {
+          window.localStorage.setItem(
+            storageKey("journal"),
+            JSON.stringify(sections.journal),
+          );
+        }
         return { ok: true, diff: parsed.dryRunDiff };
       }
 
@@ -484,6 +536,44 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       };
       const { rewards } = computeXp(merged);
       commit({ ...merged, rewardIds: rewards });
+      if (sections.quiz) {
+        const cur = quizStore.getSnapshot();
+        quizStore.set(
+          sanitizeImportedQuiz({
+            schemaVersion: 3,
+            attempts: [...sections.quiz.attempts, ...cur.attempts],
+            answers: { ...cur.answers, ...sections.quiz.answers },
+          }),
+        );
+      }
+      if (sections.responses) {
+        const cur = responsesStore.getSnapshot();
+        responsesStore.set(
+          sanitizeImportedResponses({
+            schemaVersion: 1,
+            lessonResponses: [
+              ...sections.responses.lessonResponses,
+              ...cur.lessonResponses,
+            ],
+            selfReports: [
+              ...sections.responses.selfReports,
+              ...cur.selfReports,
+            ],
+          }),
+        );
+      }
+      if (sections.simRuns) {
+        const cur = simRunsStore.getSnapshot();
+        simRunsStore.set(
+          sanitizeImportedSimRuns({
+            schemaVersion: 1,
+            entries: [...sections.simRuns.entries, ...cur.entries],
+          }),
+        );
+      }
+      if (sections.prefs) {
+        prefsStore.set({ ...prefsStore.getSnapshot(), ...sections.prefs });
+      }
       return { ok: true, diff: parsed.dryRunDiff };
     },
     [commit, exportBackup],

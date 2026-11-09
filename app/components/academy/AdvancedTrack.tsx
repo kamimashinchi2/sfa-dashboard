@@ -121,13 +121,17 @@ export default function AdvancedTrack({ moduleId }: { moduleId: string }) {
             disabled={readOnly}
             onChange={(e) => setTaskComplete(e.target.checked)}
           />
-          {locale === "fa" ? "تمرین کامل شد" : "Mark practical complete"}
+          {locale === "fa"
+            ? "خودبررسی (نمره‌دهی نشده): تمرین کامل شد"
+            : "Self-check (not graded): Mark practical complete"}
         </label>
       </section>
 
       <QuizGate
         items={mod.quiz}
+        quizId={mod.id}
         readOnly={readOnly}
+        mode={readOnly ? "READ_ONLY_PREVIEW" : "ASSESSED"}
         initialScore={quizScore}
         onScored={(score, topics) => {
           setQuizScore(score);
@@ -140,7 +144,7 @@ export default function AdvancedTrack({ moduleId }: { moduleId: string }) {
             missionRequiresRisk: false,
           });
           const attempt: Attempt = {
-            id: `${mod.id}-v${ASSESSMENT_CRITERIA_VERSION}`,
+            id: `${mod.id}-v${ASSESSMENT_CRITERIA_VERSION}-latest`,
             missionId: mod.id,
             scenarioVersion: 1,
             quizScore: score,
@@ -148,7 +152,7 @@ export default function AdvancedTrack({ moduleId }: { moduleId: string }) {
             taskComplete,
             riskStatus: gate.riskStatus,
             readiness: gate.readiness,
-            weakTopics: topics,
+            weakTopics: [...new Set(topics)],
             assessmentCriteriaVersion: ASSESSMENT_CRITERIA_VERSION,
           };
           recordAttempt(attempt);

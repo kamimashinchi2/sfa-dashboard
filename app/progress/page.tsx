@@ -27,6 +27,11 @@ function ProgressBody() {
         Saved on this device only, not an account
       </p>
       <p className="text-sm text-fog">
+        <a href="/submit" className="text-gold-soft underline">
+          Weekly submission packet
+        </a>
+      </p>
+      <p className="text-sm text-fog">
         localStorage practice only — not entitlement. Hydrated:{" "}
         {String(hydrated)}
       </p>

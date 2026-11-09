@@ -10,6 +10,10 @@ import {
   latestValidAttempt,
   resolveMissionAccess,
 } from "../../lib/academy/unlock";
+import {
+  pushSelfReport,
+  responsesStore,
+} from "../../lib/academy/persist";
 import MicroLesson from "./MicroLesson";
 import QuizGate from "./QuizGate";
 import SetupValidator from "./SetupValidator";
@@ -104,8 +108,12 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
       freeTextSubmitted: freeTextSubmitted || lessonDone,
       missionRequiresRisk: needsRisk,
     });
+    // Keep a single unlock-driving attempt id per mission for progress facade.
+    // Detailed per-item evidence lives in sfa.v2.quiz (QuizAttemptRecord).
+    const { id: _ignoredId, ...restOverrides } = overrides ?? {};
+    void _ignoredId;
     const attempt: Attempt = {
-      id: `${mission.id}-v${ASSESSMENT_CRITERIA_VERSION}`,
+      id: `${mission.id}-v${ASSESSMENT_CRITERIA_VERSION}-latest`,
       missionId: mission.id,
       scenarioVersion: 1,
       quizScore: score,
@@ -113,10 +121,11 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
       taskComplete: taskOk,
       riskStatus: gate.riskStatus,
       readiness: gate.readiness,
-      weakTopics: topics,
+      weakTopics: [...new Set(topics)],
       assessmentCriteriaVersion: ASSESSMENT_CRITERIA_VERSION,
-      practicalEvidence: overrides?.practicalEvidence ?? saved?.practicalEvidence ?? null,
-      ...overrides,
+      practicalEvidence:
+        restOverrides.practicalEvidence ?? saved?.practicalEvidence ?? null,
+      ...restOverrides,
     };
     recordAttempt(attempt);
   };
@@ -212,9 +221,20 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
             onChange={(e) => {
               if (mission.id === "M2" && !practicalValidated) return;
               setTaskComplete(e.target.checked);
+              if (e.target.checked) {
+                responsesStore.set(
+                  pushSelfReport(responsesStore.getSnapshot(), {
+                    kind: "PRACTICAL_COMPLETE",
+                    refId: mission.id,
+                    atISO: new Date().toISOString(),
+                  }),
+                );
+              }
             }}
           />
-          {locale === "fa" ? "تمرین کامل شد" : "Mark practical complete"}
+          {locale === "fa"
+            ? "خودبررسی (نمره‌دهی نشده): تمرین کامل شد"
+            : "Self-check (not graded): Mark practical complete"}
           {mission.id === "M2"
             ? locale === "fa"
               ? " (پس از اعتبارسنجی حاشیه)"
@@ -225,16 +245,26 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
 
       <QuizGate
         items={mission.quiz}
+        quizId={mission.id}
         readOnly={readOnly}
+        mode={readOnly ? "READ_ONLY_PREVIEW" : "ASSESSED"}
         initialScore={quizScore}
-        onScored={(score, topics) => {
+        onScored={(score, topics, detailed) => {
           setQuizScore(score);
           setWeakTopics(topics);
-          persistAttempt(score, topics);
+          persistAttempt(score, topics, { id: detailed.attemptId });
         }}
       />
 
-      {readiness ? (
+      {saved?.archivedLegacy ? (
+        <p className="border border-line bg-ink/40 p-3 text-sm text-gold-soft">
+          {locale === "fa"
+            ? "تلاش بایگانی‌شدهٔ قدیمی — نیاز به ارزیابی مجدد. بدون نشان نمره."
+            : "Archived legacy attempt, reassessment required. No score badge."}
+        </p>
+      ) : null}
+
+      {readiness && !saved?.archivedLegacy ? (
         <div className="border border-line p-4" aria-live="polite">
           <p className="font-mono text-sm text-gold-soft">
             numericPass={String(readiness.numericPass)} · readiness=
@@ -242,12 +272,15 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
             {readiness.ownerReviewRequired ? " · OWNER_REVIEW_REQUIRED" : ""}
             {readiness.readiness === "MENTOR_PENDING" ||
             readiness.readiness === "PENDING_REVIEW"
-              ? " · (mentor/pending — not remediation)"
+              ? " · (local readiness — not sent)"
               : ""}
           </p>
           <p className="mt-2 text-xs text-fog">
-            No certification awarded. Mentor review remains pending for free text.
-            Assessment criteria v{ASSESSMENT_CRITERIA_VERSION}.
+            No certification awarded. Client scores are UNVERIFIED until mentor review.
+            Assessment criteria v{ASSESSMENT_CRITERIA_VERSION}.{" "}
+            <a className="text-gold-soft underline" href="/submit">
+              {locale === "fa" ? "بستهٔ ارسال" : "Submission packet"}
+            </a>
           </p>
         </div>
       ) : null}
@@ -262,6 +295,7 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
       <RiskGridCalculator
         open={sizerOpen}
         onClose={() => setSizerOpen(false)}
+        missionId={mission.id}
         onResult={(r) => {
           setRiskStatus(r.status);
           if (quizScore !== null) {

@@ -441,10 +441,11 @@ const A8_QUIZ: QuizItem[] = [
       en: "Future revisions changing earlier snapshots?",
     },
     options: [
-      { fa: "مجاز", en: "Allowed" },
       { fa: "ممنوع", en: "Forbidden" },
+      { fa: "مجاز", en: "Allowed" },
+      { fa: "فقط برای طلا", en: "Only for gold" },
     ],
-    answer: 1,
+    answer: 0,
     rationale: {
       fa: "vintage جدا می‌ماند.",
       en: "Keep vintage intact.",
@@ -459,10 +460,11 @@ const A8_QUIZ: QuizItem[] = [
       en: "Timestamp without offset?",
     },
     options: [
-      { fa: "قبول با فرض UTC", en: "Accept as UTC" },
       { fa: "رد — مبهم DST", en: "Reject — ambiguous DST" },
+      { fa: "قبول با فرض UTC", en: "Accept as UTC" },
+      { fa: "تبدیل خودکار به CET", en: "Auto-convert to CET" },
     ],
-    answer: 1,
+    answer: 0,
     rationale: {
       fa: "ISO با offset الزامی است.",
       en: "Zoned ISO required.",
@@ -514,10 +516,11 @@ const A8_QUIZ: QuizItem[] = [
       en: "Mid-return percentages are:",
     },
     options: [
-      { fa: "P&L اجرایی", en: "Executable P&L" },
       { fa: "توصیفی — نه اجرایی", en: "Descriptive — not executable" },
+      { fa: "P&L اجرایی", en: "Executable P&L" },
+      { fa: "سیگنال ورود", en: "Entry signal" },
     ],
-    answer: 1,
+    answer: 0,
     rationale: {
       fa: "درصد mid سیگنال اجرا نیست.",
       en: "Mid returns are descriptive only.",
@@ -572,10 +575,11 @@ const A8_QUIZ: QuizItem[] = [
       en: "Return measurement intervals?",
     },
     options: [
-      { fa: "۱س، ۱ر، ۱م", en: "1h, 1d, 1m" },
       { fa: "۰–۵، ۵–۱۵، ۱۵–۶۰ دقیقه", en: "0–5, 5–15, 15–60 minutes" },
+      { fa: "۱س، ۱ر، ۱م", en: "1h, 1d, 1m" },
+      { fa: "فقط سوئینگ", en: "Swing only" },
     ],
-    answer: 1,
+    answer: 0,
     rationale: {
       fa: "بازه‌های تعریف‌شده آموزشی.",
       en: "Authored teaching intervals.",
@@ -590,10 +594,11 @@ const A8_QUIZ: QuizItem[] = [
       en: "Teaching display timezone?",
     },
     options: [
-      { fa: "فقط UTC خام", en: "Raw UTC only" },
       { fa: "Europe/Amsterdam CET/CEST", en: "Europe/Amsterdam CET/CEST" },
+      { fa: "فقط UTC خام", en: "Raw UTC only" },
+      { fa: "وقت محلی دستگاه", en: "Device local time" },
     ],
-    answer: 1,
+    answer: 0,
     rationale: {
       fa: "نمایش آمستردام؛ ذخیره ISO.",
       en: "Display Amsterdam; store ISO.",

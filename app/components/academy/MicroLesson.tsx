@@ -2,6 +2,10 @@
 
 import type { Lesson } from "../../lib/academy/contracts";
 import { t } from "../../lib/academy/dictionary";
+import {
+  pushSelfReport,
+  responsesStore,
+} from "../../lib/academy/persist";
 import { useProgress } from "./ProgressProvider";
 import SocraticPrompt from "./SocraticPrompt";
 
@@ -47,17 +51,32 @@ export default function MicroLesson({
         </p>
       </section>
 
-      <SocraticPrompt question={lesson.question} rubric={lesson.selfReviewRubric} />
+      <SocraticPrompt
+        question={lesson.question}
+        rubric={lesson.selfReviewRubric}
+        lessonId={lesson.id}
+        missionId={lesson.missionId}
+      />
 
       <button
         type="button"
         className="min-h-11 bg-gold px-4 text-sm font-semibold text-ink"
+        data-testid={`self-check-lesson-${lesson.id}`}
         onClick={() => {
           completeLesson(lesson.id);
+          responsesStore.set(
+            pushSelfReport(responsesStore.getSnapshot(), {
+              kind: "LESSON_REVIEWED",
+              refId: lesson.id,
+              atISO: new Date().toISOString(),
+            }),
+          );
           onComplete();
         }}
       >
-        {locale === "fa" ? "درس را علامت بزن" : "Mark lesson reviewed"}
+        {locale === "fa"
+          ? "خودبررسی: درس مرور شد (نمره‌دهی نشده)"
+          : "Self-check (not graded): Mark lesson reviewed"}
       </button>
     </article>
   );

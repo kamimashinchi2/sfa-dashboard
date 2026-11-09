@@ -62,6 +62,13 @@ function ShellInner({ children }: { children: ReactNode }) {
                 Journal
               </Link>
               <Link
+                href="/submit"
+                className="inline-flex min-h-11 items-center gap-2 border border-gold/45 px-3 py-2 text-xs font-semibold text-gold-soft hover:bg-gold/10"
+                data-testid="nav-submit"
+              >
+                {locale === "fa" ? "ارسال" : "Submit"}
+              </Link>
+              <Link
                 href="/progress"
                 className="inline-flex min-h-11 items-center gap-2 border border-line px-3 py-2 text-xs text-fog hover:text-paper"
               >
