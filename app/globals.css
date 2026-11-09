@@ -124,6 +124,10 @@ body {
   animation-delay: 0.36s;
 }
 
+.stage-panel {
+  animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .cta-pulse {
   position: relative;
 }
@@ -154,6 +158,7 @@ body {
   .grid-sheen,
   .chart-silhouette,
   .reveal,
+  .stage-panel,
   .cta-pulse::after {
     animation: none !important;
   }
