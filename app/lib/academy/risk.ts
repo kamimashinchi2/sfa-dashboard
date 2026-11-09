@@ -26,6 +26,13 @@ function issue(code: string, field?: string, evidenceIds: string[] = []): Issue 
 
 /**
  * Educational risk engine. Pure: no Date.now, network, storage, or randomness.
+ *
+ * Lot formula (exact decimal, never round up):
+ *   riskAmount = equity × risk%
+ *   stopPips = |entry − SL| / pipSize
+ *   pipValueAccount = pipValueQuote × conversion
+ *   lots = floor_to_step(riskAmount / (stopPips × pipValueAccount))
+ * Report actual loss at the floored lots.
  */
 export function evaluateRisk(input: RiskInput): RiskResult {
   const issues: Issue[] = [];
@@ -47,9 +54,11 @@ export function evaluateRisk(input: RiskInput): RiskResult {
     markUnverified("MISSING_SPEC", "spec");
   }
 
-  // Stop type / pre-entry
-  if (input.stopType === "MENTAL" || input.stopType === "NONE") {
-    markHard("STOP_NOT_HARD_STRUCTURAL", "stopType");
+  // Stop type — HARD_BLOCK reasons always surface, even when other fields missing
+  if (input.stopType === "MENTAL") {
+    markHard("MENTAL_STOP", "stopType");
+  } else if (input.stopType === "NONE") {
+    markHard("NO_STOP", "stopType");
   }
   if (input.preEntry === "NO") {
     markHard("PRE_ENTRY_NO", "preEntry");
@@ -85,15 +94,29 @@ export function evaluateRisk(input: RiskInput): RiskResult {
     }
   }
 
-  // Conversion
+  // Conversion — required when quote ≠ account; never guess
   let conversion: string | null = null;
-  if (input.conversion === null) {
-    markUnverified("MISSING_CONVERSION", "conversion");
+  const quoteCcy = input.spec?.pnlCurrency ?? null;
+  const accountCcy = input.accountCurrency;
+  const needsConversion =
+    Boolean(quoteCcy) && quoteCcy !== accountCcy;
+
+  if (needsConversion) {
+    if (input.conversion === null) {
+      markUnverified("MISSING_CONVERSION", "conversion");
+    } else {
+      const p = parseDec(input.conversion);
+      if (!p.ok || !decIsPositive(p.value)) {
+        markUnverified("INVALID_CONVERSION", "conversion");
+      } else {
+        conversion = p.value;
+      }
+    }
+  } else if (input.conversion === null || input.conversion === "") {
+    conversion = "1";
   } else {
     const p = parseDec(input.conversion);
-    if (!p.ok) {
-      markUnverified("INVALID_CONVERSION", "conversion");
-    } else if (!decIsPositive(p.value)) {
+    if (!p.ok || !decIsPositive(p.value)) {
       markUnverified("INVALID_CONVERSION", "conversion");
     } else {
       conversion = p.value;
@@ -110,22 +133,30 @@ export function evaluateRisk(input: RiskInput): RiskResult {
       markUnverified("MALFORMED_RISK_PCT", "riskPct");
     } else if (decCompare(p.value, "0") < 0) {
       markHard("NEGATIVE_RISK_PCT", "riskPct");
-      riskPct = p.value; // persist as invalid; do not clamp
+      riskPct = p.value;
     } else if (decCompare(p.value, "0") === 0) {
       markHard("NONPOSITIVE_RISK_PCT", "riskPct");
       riskPct = p.value;
     } else if (decCompare(p.value, MAX_RISK_PCT) > 0) {
       markHard("RISK_PCT_HARD_BLOCK", "riskPct");
-      riskPct = p.value; // preserve attempted value (e.g. 2%)
+      riskPct = p.value;
     } else {
       riskPct = p.value;
     }
   }
 
   // Prices — empty ≠ zero; reject nonpositive
+  // Hard structural requires numeric SL; mental/none already HARD_BLOCK above
   const parsePrice = (raw: string | null, field: string): string | null => {
     if (raw === null) {
-      markUnverified("MISSING_PRICE", field);
+      if (field === "stop" && input.stopType === "HARD_STRUCTURAL") {
+        markUnverified("MISSING_PRICE", field);
+      } else if (field !== "stop") {
+        markUnverified("MISSING_PRICE", field);
+      } else {
+        // Mental/None: stop price optional; HARD_BLOCK already recorded
+        markUnverified("MISSING_PRICE", field);
+      }
       return null;
     }
     const p = parseDec(raw);
@@ -133,6 +164,7 @@ export function evaluateRisk(input: RiskInput): RiskResult {
       if (p.reason === "EMPTY") {
         markUnverified("EMPTY_PRICE", field);
       } else {
+        // Typing "mental" into SL → not a silent PASS; still unverified price
         markUnverified(`MALFORMED_PRICE_${p.reason}`, field);
       }
       return null;
@@ -145,7 +177,12 @@ export function evaluateRisk(input: RiskInput): RiskResult {
   };
 
   const entry = parsePrice(input.entry, "entry");
-  const stop = parsePrice(input.stop, "stop");
+  const stop =
+    input.stopType === "HARD_STRUCTURAL"
+      ? parsePrice(input.stop, "stop")
+      : input.stop === null
+        ? null
+        : parsePrice(input.stop, "stop");
   const target = parsePrice(input.target, "target");
 
   // Directional stop/target validation when prices present and positive
@@ -207,6 +244,8 @@ export function evaluateRisk(input: RiskInput): RiskResult {
   let loss: string | null = null;
   let grossRR: string | null = null;
   let netRR: string | null = null;
+  let stopPips: string | null = null;
+  let pipValueAccount: string | null = null;
 
   const canSize =
     input.spec &&
@@ -228,42 +267,45 @@ export function evaluateRisk(input: RiskInput): RiskResult {
   if (canSize && input.spec) {
     const spec = input.spec;
     const D = decAbs(decSub(entry!, stop!));
-    if (!decIsPositive(D)) {
-      // already HARD_BLOCK via equal stop
-    } else {
-      const tickSize = parseDec(spec.tickSize);
-      const tickValue = parseDec(spec.tickValuePerLot);
+    if (decIsPositive(D)) {
+      const pipSize = parseDec(spec.pipSize);
+      const pipValueQuote = parseDec(spec.pipValueQuotePerLot);
       const minLot = parseDec(spec.minLot);
       const maxLot = parseDec(spec.maxLot);
       const lotStep = parseDec(spec.lotStep);
 
       if (
-        !tickSize.ok ||
-        !tickValue.ok ||
+        !pipSize.ok ||
+        !pipValueQuote.ok ||
         !minLot.ok ||
         !maxLot.ok ||
         !lotStep.ok ||
-        !decIsPositive(tickSize.value) ||
-        !decIsPositive(tickValue.value) ||
+        !decIsPositive(pipSize.value) ||
+        !decIsPositive(pipValueQuote.value) ||
         !decIsPositive(minLot.value) ||
         !decIsPositive(lotStep.value)
       ) {
         markUnverified("INVALID_SPEC_FIELDS", "spec");
       } else {
-        // L = D/tickSize*tickValue*conversion + slippageTicks*tickValue*conversion + feePerLot
-        const ticks = decDiv(D, tickSize.value);
-        if (ticks === null) {
-          markUnverified("DIV_BY_ZERO_TICK", "spec");
+        // stopPips = |entry − SL| / pipSize
+        const pips = decDiv(D, pipSize.value);
+        if (pips === null) {
+          markUnverified("DIV_BY_ZERO_PIP", "spec");
         } else {
-          const perLotPriceRisk = decMul(
-            decMul(ticks, tickValue.value),
-            conversion!,
+          stopPips = canonicalize(pips);
+          // pipValueAccount = pipValueQuote × conversion
+          pipValueAccount = canonicalize(
+            decMul(pipValueQuote.value, conversion!),
           );
+
+          // Per-lot loss L = stopPips × pipValueAccount + slippage + feePerLot
+          // slippageTicks interpreted as pip-equivalent ticks for educational model
+          const priceRiskPerLot = decMul(stopPips, pipValueAccount);
           const slipCost = decMul(
-            decMul(slippageTicks, tickValue.value),
+            decMul(slippageTicks, pipValueQuote.value),
             conversion!,
           );
-          const L = decAdd(decAdd(perLotPriceRisk, slipCost), feePerLot);
+          const L = decAdd(decAdd(priceRiskPerLot, slipCost), feePerLot);
 
           if (!decIsPositive(L)) {
             markUnverified("NONPOSITIVE_L", "loss");
@@ -274,6 +316,8 @@ export function evaluateRisk(input: RiskInput): RiskResult {
               noValidSize = true;
               issues.push(issue("INSUFFICIENT_BUDGET_FOR_FIXED_FEE", "budget"));
             } else {
+              // lots = floor_to_step(riskAmount / (stopPips × pipValueAccount))
+              // Never round up
               const rawMax = decDiv(available, L);
               if (rawMax === null) {
                 markUnverified("DIV_BY_ZERO_L", "maxLots");
@@ -290,7 +334,6 @@ export function evaluateRisk(input: RiskInput): RiskResult {
               }
             }
 
-            // Submitted lots
             let lots: string | null = null;
             if (input.submittedLots === null) {
               lots = maxLots;
@@ -301,7 +344,6 @@ export function evaluateRisk(input: RiskInput): RiskResult {
               } else if (!decIsPositive(p.value)) {
                 markHard("NONPOSITIVE_LOTS", "submittedLots");
               } else {
-                // lattice check
                 const stepped = decFloorToStep(p.value, lotStep.value);
                 if (stepped === null || decCompare(stepped, p.value) !== 0) {
                   markHard("INVALID_LOT_INCREMENT", "submittedLots");
@@ -318,36 +360,31 @@ export function evaluateRisk(input: RiskInput): RiskResult {
             }
 
             if (lots && decIsPositive(lots)) {
+              // Actual loss at floored lots
               loss = decAdd(decMul(lots, L), fixedFee);
               if (budget && decCompare(loss, budget) > 0) {
                 markHard("LOSS_EXCEEDS_BUDGET", "loss");
               }
               if (equity) {
-                const actualPct = decMul(
-                  decDiv(loss, equity)!,
-                  "100",
-                );
+                const actualPct = decMul(decDiv(loss, equity)!, "100");
                 if (decCompare(actualPct, MAX_RISK_PCT) > 0) {
                   markHard("ACTUAL_RISK_OVER_CAP", "loss");
                 }
               }
 
               const rewardDist = decAbs(decSub(target!, entry!));
-              const rewardTicks = decDiv(rewardDist, tickSize.value);
-              if (rewardTicks !== null) {
+              const rewardPips = decDiv(rewardDist, pipSize.value);
+              if (rewardPips !== null) {
                 const grossReward = decMul(
-                  decMul(decMul(lots, rewardTicks), tickValue.value),
-                  conversion!,
+                  decMul(lots, rewardPips),
+                  pipValueAccount,
                 );
-                // Gross R:R uses price distances (independent of fees)
-                const riskDist = D;
-                grossRR = decDiv(rewardDist, riskDist);
+                grossRR = decDiv(rewardDist, D);
 
                 const netReward = decSub(
                   decSub(grossReward, decMul(lots, feePerLot)),
                   fixedFee,
                 );
-                // Net R:R = netReward / loss (planned)
                 if (loss && decIsPositive(loss)) {
                   netRR = decDiv(netReward, loss);
                 }
@@ -366,7 +403,6 @@ export function evaluateRisk(input: RiskInput): RiskResult {
       }
     }
   } else if (
-    // Incomplete prices must not invent R:R PASS — clear derived readiness
     target === null ||
     entry === null ||
     stop === null ||
@@ -375,10 +411,8 @@ export function evaluateRisk(input: RiskInput): RiskResult {
   ) {
     grossRR = null;
     netRR = null;
-    // ensure no phantom PASS
   }
 
-  // Proven violations dominate missing fields
   let status: RiskStatus;
   if (hardBlock) {
     status = "HARD_BLOCK";
@@ -399,7 +433,6 @@ export function evaluateRisk(input: RiskInput): RiskResult {
     status = "UNVERIFIED";
   }
 
-  // Unknown costs cannot PASS
   if (input.costs.status === "UNKNOWN" && status === "PASS_SIMULATION") {
     status = "UNVERIFIED";
   }
@@ -412,6 +445,8 @@ export function evaluateRisk(input: RiskInput): RiskResult {
     loss,
     grossRR: grossRR ? canonicalize(grossRR) : null,
     netRR: netRR ? canonicalize(netRR) : null,
+    stopPips: stopPips ? canonicalize(stopPips) : null,
+    pipValueAccount: pipValueAccount ? canonicalize(pipValueAccount) : null,
     educationalOnly: true,
   };
 }
@@ -462,4 +497,20 @@ export function explainRiskStatus(status: RiskStatus): string {
     case "NO_VALID_SIZE":
       return "NO_VALID_SIZE — budget/min lot lattice cannot produce a feasible size.";
   }
+}
+
+export function explainStopType(stopType: RiskInput["stopType"], locale: "fa" | "en"): string {
+  if (stopType === "MENTAL") {
+    return locale === "fa"
+      ? "حد ذهنی مجاز نیست. چه قیمتی ایده را باطل می‌کند؟ آن را قبل از ورود روی پلتفرم بگذارید."
+      : "What price proves your idea wrong? Place it on the platform before entry.";
+  }
+  if (stopType === "NONE") {
+    return locale === "fa"
+      ? "بدون حد ضرر ساختاری ورود شبیه‌سازی نمی‌شود."
+      : "No structural stop — simulation entry is blocked.";
+  }
+  return locale === "fa"
+    ? "حد ساختاری سخت روی پلتفرم الزامی است."
+    : "Hard structural stop on the platform is required.";
 }

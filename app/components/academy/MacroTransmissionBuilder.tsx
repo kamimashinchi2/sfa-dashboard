@@ -38,6 +38,7 @@ export default function MacroTransmissionBuilder({
   const [condition, setCondition] = useState("NOT_PRICED");
   const [edges, setEdges] = useState<MacroEdge[]>([]);
   const [fromPreset, setFromPreset] = useState(false);
+  const [studentAuthored, setStudentAuthored] = useState(false);
   const [assumptions, setAssumptions] = useState("Surprise not priced in");
   const [conclusions, setConclusions] = useState(
     "Conditional USD bid window\nGold bias unproven without TIPS/DXY evidence completeness",
@@ -57,10 +58,11 @@ export default function MacroTransmissionBuilder({
             .map((s) => s.trim())
             .filter(Boolean),
           fromAnswerKeyPreset: fromPreset,
+          studentAuthored,
         },
         cpiMacroAlternatives,
       ),
-    [edges, assumptions, conclusions, fromPreset],
+    [edges, assumptions, conclusions, fromPreset, studentAuthored],
   );
 
   return (
@@ -120,6 +122,7 @@ export default function MacroTransmissionBuilder({
           disabled={readOnly}
           onClick={() => {
             setFromPreset(false);
+            setStudentAuthored(true);
             setEdges((prev) => [...prev, { from, to, condition }]);
           }}
         >
@@ -132,6 +135,7 @@ export default function MacroTransmissionBuilder({
           onClick={() => {
             setEdges(cpiMacroAlternatives[0].edges);
             setFromPreset(true);
+            setStudentAuthored(false);
             setAssumptions(cpiMacroAlternatives[0].assumptions.join("\n"));
             setConclusions(cpiMacroAlternatives[0].conclusions.join("\n"));
           }}
@@ -144,6 +148,7 @@ export default function MacroTransmissionBuilder({
           disabled={readOnly}
           onClick={() => {
             setFromPreset(false);
+            setStudentAuthored(true);
             setEdges([]);
           }}
         >
@@ -188,7 +193,26 @@ export default function MacroTransmissionBuilder({
         {scored.status} · score {scored.score ?? "—"} · best{" "}
         {scored.bestAlternativeId ?? "—"} · assessedCredit=
         {String(scored.assessedCredit)}
+        {scored.macroAsEntry ? " · MACRO_AS_ENTRY" : ""}
       </p>
+      {scored.macroAsEntry ? (
+        <div className="border border-red-400/40 bg-ink/50 p-3 text-sm text-red-300">
+          <p className="font-mono text-xs">
+            MACRO_AS_ENTRY: Macro is CONTEXT_ONLY, it describes pressure and
+            environment, never entry/SL/TP
+          </p>
+          {scored.rewritePrompt ? (
+            <p className="mt-2 text-xs text-gold-soft">{scored.rewritePrompt}</p>
+          ) : null}
+        </div>
+      ) : null}
+      {scored.notes
+        .filter((n) => n.startsWith("MACRO_AS_ENTRY"))
+        .map((n) => (
+          <p key={n} className="text-xs text-red-300">
+            {n}
+          </p>
+        ))}
       {scored.edgeFeedback.length ? (
         <ul className="space-y-1 text-xs text-fog">
           {scored.edgeFeedback.map((f) => (

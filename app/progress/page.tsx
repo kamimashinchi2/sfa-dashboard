@@ -1,28 +1,140 @@
 "use client";
 
+import { useState } from "react";
 import AcademyShell from "../components/academy/AcademyShell";
 import { useProgress } from "../components/academy/ProgressProvider";
 
 function ProgressBody() {
-  const { progress, xp, hydrated, warning, storageError } = useProgress();
+  const {
+    progress,
+    xp,
+    hydrated,
+    warning,
+    storageError,
+    quotaExceeded,
+    quarantine,
+    exportBackup,
+    importBackup,
+    resetProgress,
+  } = useProgress();
+  const [importRaw, setImportRaw] = useState("");
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4 px-6 py-10 sm:px-8">
       <h1 className="font-display text-3xl text-paper">Practice progress</h1>
+      <p className="text-sm text-gold-soft">
+        Saved on this device only, not an account
+      </p>
       <p className="text-sm text-fog">
-        localStorage practice only — not entitlement. Hydrated: {String(hydrated)}
+        localStorage practice only — not entitlement. Hydrated:{" "}
+        {String(hydrated)}
       </p>
       {warning ? <p className="text-xs text-gold-soft">{warning}</p> : null}
       {storageError ? <p className="text-xs text-red-400">{storageError}</p> : null}
-      <dl className="space-y-2 font-mono text-sm text-gold-soft">
-        <div>locale: {progress.locale}</div>
-        <div>selectedStage: {progress.selectedStage}</div>
-        <div>xp: {xp}</div>
-        <div>lessons: {progress.completedLessonIds.join(", ") || "—"}</div>
-        <div>attempts: {progress.attempts.length}</div>
-      </dl>
-      <pre className="overflow-auto border border-line bg-ink p-4 text-[11px] text-fog">
-        {JSON.stringify(progress, null, 2)}
-      </pre>
+      {quotaExceeded ? (
+        <div className="border border-gold/50 bg-ink/50 p-3 text-sm text-gold-soft">
+          Storage quota exceeded — memory kept. Please Export a full backup.
+          <button
+            type="button"
+            className="ml-3 min-h-11 border border-gold/50 px-3 text-xs"
+            onClick={exportBackup}
+          >
+            Download full backup
+          </button>
+        </div>
+      ) : null}
+      {quarantine ? (
+        <div className="border border-red-400/40 p-3 text-sm text-red-300">
+          Quarantine: {quarantine.key} · {quarantine.reason}. Defaults in memory
+          only — nothing overwritten until Export raw / Reset / Import.
+        </div>
+      ) : null}
+
+      {!hydrated ? (
+        <div className="animate-pulse space-y-2" aria-busy>
+          <div className="h-6 w-40 bg-line" />
+          <div className="h-4 w-64 bg-line" />
+          <div className="h-4 w-52 bg-line" />
+        </div>
+      ) : (
+        <dl className="space-y-2 font-mono text-sm text-gold-soft">
+          <div>locale: {progress.locale}</div>
+          <div>selectedStage: {progress.selectedStage}</div>
+          <div>xp: {xp}</div>
+          <div>lessons: {progress.completedLessonIds.join(", ") || "—"}</div>
+          <div>attempts: {progress.attempts.length}</div>
+        </dl>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="min-h-11 bg-gold px-4 text-sm font-semibold text-ink"
+          onClick={exportBackup}
+          data-testid="export-backup"
+        >
+          Download full backup
+        </button>
+        <button
+          type="button"
+          className="min-h-11 border border-line px-4 text-sm text-fog"
+          onClick={resetProgress}
+        >
+          Reset section
+        </button>
+      </div>
+
+      <label className="block text-xs text-fog">
+        Import backup JSON (≤2 MB)
+        <textarea
+          className="mt-1 min-h-28 w-full border border-line bg-ink px-3 py-2 font-mono text-xs text-paper"
+          value={importRaw}
+          onChange={(e) => setImportRaw(e.target.value)}
+          data-testid="import-backup-raw"
+        />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="min-h-11 border border-gold/50 px-4 text-sm text-gold-soft"
+          onClick={() => {
+            const r = importBackup(importRaw, "merge");
+            setImportMsg(
+              r.ok
+                ? `Merge OK · sections ${r.diff?.join(",") ?? "—"}`
+                : `Merge failed: ${r.error}`,
+            );
+          }}
+        >
+          Merge import
+        </button>
+        <button
+          type="button"
+          className="min-h-11 border border-line px-4 text-sm text-fog"
+          onClick={() => {
+            const r = importBackup(importRaw, "replace");
+            setImportMsg(
+              r.ok
+                ? `Replace OK · sections ${r.diff?.join(",") ?? "—"}`
+                : `Replace failed: ${r.error}`,
+            );
+          }}
+        >
+          Replace import
+        </button>
+      </div>
+      {importMsg ? (
+        <p className="text-xs text-gold-soft" aria-live="polite">
+          {importMsg}
+        </p>
+      ) : null}
+
+      {hydrated ? (
+        <pre className="overflow-auto border border-line bg-ink p-4 text-[11px] text-fog">
+          {JSON.stringify(progress, null, 2)}
+        </pre>
+      ) : null}
     </div>
   );
 }

@@ -46,7 +46,8 @@ export function downloadTextFile(input: {
     doc.body.appendChild(a);
     a.click();
     doc.body.removeChild(a);
-    const delay = input.revokeDelayMs ?? 4_000;
+    // 30–60s default so Chrome/Safari finish consuming the object URL (avoids .crdownload flakes)
+    const delay = input.revokeDelayMs ?? 45_000;
     // Revoke after the browser has a chance to consume the URL — not synchronously.
     const timer = setTimeout(() => {
       try {

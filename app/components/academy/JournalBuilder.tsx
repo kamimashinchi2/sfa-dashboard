@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   createEmptyJournal,
   exportJournalJson,
@@ -16,17 +16,25 @@ import {
 } from "../../lib/academy/journalV2";
 import { migrateJournalV1ToV2 } from "../../lib/academy/migrations";
 import { downloadTextFile } from "../../lib/academy/download";
+import { copyTextToClipboard } from "../../lib/academy/copyClipboard";
+import {
+  reconcileJournalStage,
+  stageFromMission,
+} from "../../lib/academy/stageRegistry";
+import type { MissionId, StageId } from "../../lib/academy/contracts";
 import { t, ui } from "../../lib/academy/dictionary";
 import { useProgress } from "./ProgressProvider";
 
 export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
   const { progress } = useProgress();
   const locale = progress.locale;
+  const registryStage = stageFromMission("M5") ?? (5 as StageId);
+
   const [draft, setDraft] = useState(() =>
     createEmptyJournal({
       id: "journal-local-1",
       alias: "practice-draft",
-      stageId: progress.selectedStage,
+      stageId: registryStage,
       missionId: "M5",
       attemptId: "local",
       scenarioId: "SYN-SWEEP-REV-LONG-1",
@@ -38,45 +46,98 @@ export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
   const [message, setMessage] = useState<string | null>(null);
   const [lastDownload, setLastDownload] = useState<string | null>(null);
 
+  const stageCheck = useMemo(
+    () =>
+      reconcileJournalStage({
+        stage: draft.stageId,
+        missionId: draft.missionId,
+        advancedModule: null,
+      }),
+    [draft.stageId, draft.missionId],
+  );
+
+  const syncedDraft = useMemo(() => {
+    if (stageCheck.warning?.startsWith("STAGE_MISMATCH")) {
+      return { ...draft, stageId: stageCheck.stage };
+    }
+    return draft;
+  }, [draft, stageCheck]);
+
   const runDownload = (filename: string, content: string, mime: string) => {
     const result = downloadTextFile({
       filename,
       content,
       mime,
-      revokeDelayMs: 4000,
+      revokeDelayMs: 45_000,
     });
     setLastDownload(
       result.ok
         ? `DOWNLOAD_OK ${result.filename} (${result.bytes} bytes UTF-8)`
         : `DOWNLOAD_FAIL ${result.error}`,
     );
-    setMessage(result.ok ? `Exported ${filename}` : `Export failed: ${result.error}`);
+    setMessage(
+      result.ok ? `Exported ${filename}` : `Export failed: ${result.error}`,
+    );
+  };
+
+  const setMission = (missionId: MissionId) => {
+    const stage = stageFromMission(missionId) ?? draft.stageId;
+    setDraft((d) => ({
+      ...d,
+      missionId,
+      stageId: stage,
+      updatedAtISO: new Date().toISOString(),
+    }));
   };
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-fog">{t(ui.journalExport, locale)} — no Drive upload.</p>
+      <p className="text-sm text-fog">
+        {t(ui.journalExport, locale)} — no Drive upload.
+      </p>
+      <div className="flex flex-wrap gap-3 text-xs text-fog">
+        <label>
+          Mission
+          <select
+            className="mt-1 min-h-11 border border-line bg-ink px-2 text-paper"
+            value={syncedDraft.missionId}
+            disabled={readOnly}
+            onChange={(e) => setMission(e.target.value as MissionId)}
+          >
+            {(["M1", "M2", "M3", "M4", "M5"] as MissionId[]).map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="self-end font-mono text-gold-soft" data-testid="journal-stage">
+          Stage {syncedDraft.stageId} · mission {syncedDraft.missionId}
+          {stageCheck.warning ? ` · ${stageCheck.warning}` : " · registry OK"}
+        </p>
+      </div>
       {(
         [
-          ["hypothesis", draft.hypothesis],
-          ["falsification", draft.falsification],
-          ["trainTestSplit", draft.trainTestSplit],
-          ["invalidation", draft.invalidation],
-          ["emotions", draft.emotions],
-          ["counterevidence", draft.counterevidence],
-          ["nextTask", draft.nextTask],
+          ["hypothesis", syncedDraft.hypothesis],
+          ["falsification", syncedDraft.falsification],
+          ["trainTestSplit", syncedDraft.trainTestSplit],
+          ["invalidation", syncedDraft.invalidation],
+          ["emotions", syncedDraft.emotions],
+          ["counterevidence", syncedDraft.counterevidence],
+          ["nextTask", syncedDraft.nextTask],
         ] as const
       ).map(([key, value]) => (
         <label key={key} className="block text-xs text-fog">
           {key}
           <textarea
-            className="mt-1 min-h-20 w-full border border-line bg-ink px-3 py-2 text-sm text-paper"
+            className="mt-1 min-h-20 w-full border border-line bg-ink px-3 py-2 text-base text-paper"
             value={value}
             disabled={readOnly}
             onChange={(e) =>
               setDraft((d) => ({
                 ...d,
                 [key]: e.target.value,
+                stageId: syncedDraft.stageId,
                 updatedAtISO: new Date().toISOString(),
               }))
             }
@@ -92,7 +153,7 @@ export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
           onClick={() =>
             runDownload(
               "sfa-journal.md",
-              exportJournalMarkdown(draft),
+              exportJournalMarkdown(syncedDraft),
               "text/markdown;charset=utf-8",
             )
           }
@@ -103,11 +164,26 @@ export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
           type="button"
           className="min-h-11 border border-line px-4 text-sm text-fog"
           disabled={readOnly}
+          data-testid="copy-markdown"
+          onClick={async () => {
+            const md = exportJournalMarkdown(syncedDraft);
+            const r = await copyTextToClipboard(md);
+            setMessage(
+              r.ok ? "Copied Markdown to clipboard" : `Copy failed: ${r.error}`,
+            );
+          }}
+        >
+          Copy Markdown
+        </button>
+        <button
+          type="button"
+          className="min-h-11 border border-line px-4 text-sm text-fog"
+          disabled={readOnly}
           data-testid="export-json"
           onClick={() =>
             runDownload(
               "sfa-journal.json",
-              exportJournalJson(draft),
+              exportJournalJson(syncedDraft),
               "application/json;charset=utf-8",
             )
           }
@@ -120,14 +196,18 @@ export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
           disabled={readOnly}
           data-testid="export-v2-markdown"
           onClick={() => {
-            const migrated = migrateJournalV1ToV2(draft, locale);
+            const migrated = migrateJournalV1ToV2(syncedDraft, locale);
             if (!migrated.value) {
               setMessage("V2 migrate failed");
               return;
             }
+            const reconciled = {
+              ...migrated.value,
+              stage: stageFromMission(migrated.value.missionId) ?? migrated.value.stage,
+            };
             runDownload(
               "sfa-journal-v2.md",
-              exportJournalV2Markdown(migrated.value),
+              exportJournalV2Markdown(reconciled),
               "text/markdown;charset=utf-8",
             );
           }}
@@ -142,24 +222,24 @@ export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
           onClick={() => {
             const empty = createEmptyJournalV2({
               id: "jv2-local",
-              alias: draft.alias,
+              alias: syncedDraft.alias,
               locale,
-              stage: draft.stageId,
-              missionId: draft.missionId,
+              stage: syncedDraft.stageId,
+              missionId: syncedDraft.missionId,
               advancedModule: null,
-              attemptId: draft.attemptId,
-              scenarioId: draft.scenarioId,
-              scenarioVersion: draft.scenarioVersion,
-              updatedAtISO: draft.updatedAtISO,
-              parentV1Id: draft.id,
+              attemptId: syncedDraft.attemptId,
+              scenarioId: syncedDraft.scenarioId,
+              scenarioVersion: syncedDraft.scenarioVersion,
+              updatedAtISO: syncedDraft.updatedAtISO,
+              parentV1Id: syncedDraft.id,
             });
-            empty.hypothesis = draft.hypothesis;
-            empty.falsification = draft.falsification;
-            empty.trainTestSplit = draft.trainTestSplit;
-            empty.invalidation = draft.invalidation;
-            empty.emotions = draft.emotions;
-            empty.counterevidence = draft.counterevidence;
-            empty.nextTask = draft.nextTask;
+            empty.hypothesis = syncedDraft.hypothesis;
+            empty.falsification = syncedDraft.falsification;
+            empty.trainTestSplit = syncedDraft.trainTestSplit;
+            empty.invalidation = syncedDraft.invalidation;
+            empty.emotions = syncedDraft.emotions;
+            empty.counterevidence = syncedDraft.counterevidence;
+            empty.nextTask = syncedDraft.nextTask;
             runDownload(
               "sfa-journal-v2.json",
               exportJournalV2Json(empty),
@@ -175,11 +255,16 @@ export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
           disabled={readOnly}
           data-testid="export-v2-csv"
           onClick={() => {
-            const migrated = migrateJournalV1ToV2(draft, locale);
+            const migrated = migrateJournalV1ToV2(syncedDraft, locale);
             if (!migrated.value) return;
             runDownload(
               "sfa-journal-v2.csv",
-              exportJournalV2Csv(migrated.value),
+              exportJournalV2Csv({
+                ...migrated.value,
+                stage:
+                  stageFromMission(migrated.value.missionId) ??
+                  migrated.value.stage,
+              }),
               "text/csv;charset=utf-8",
             );
           }}
@@ -188,7 +273,10 @@ export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
         </button>
       </div>
       {lastDownload ? (
-        <p className="font-mono text-xs text-teal-bright" data-testid="download-status">
+        <p
+          className="font-mono text-xs text-teal-bright"
+          data-testid="download-status"
+        >
           {lastDownload}
         </p>
       ) : null}
@@ -208,11 +296,13 @@ export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
         onClick={() => {
           const v2 = importJournalV2Json(importText);
           if (v2.ok && v2.draft) {
+            const stage =
+              stageFromMission(v2.draft.missionId) ?? v2.draft.stage;
             setDraft({
               ...createEmptyJournal({
                 id: v2.draft.parentV1Id ?? v2.draft.id,
                 alias: v2.draft.alias,
-                stageId: v2.draft.stage,
+                stageId: stage,
                 missionId: v2.draft.missionId ?? "M5",
                 attemptId: v2.draft.attemptId,
                 scenarioId: v2.draft.scenarioId,
@@ -237,10 +327,14 @@ export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
           }
           const result = importJournalJson(importText);
           if (!result.ok || !result.draft) {
-            setMessage(`Import failed: ${[...v2.errors, ...result.errors].join(", ")}`);
+            setMessage(
+              `Import failed: ${[...v2.errors, ...result.errors].join(", ")}`,
+            );
             return;
           }
-          setDraft(result.draft);
+          const stage =
+            stageFromMission(result.draft.missionId) ?? result.draft.stageId;
+          setDraft({ ...result.draft, stageId: stage });
           setMessage(
             "Import OK — cached engine outputs not trusted; recompute in Risk Grid.",
           );

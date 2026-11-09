@@ -18,7 +18,7 @@ function ShellInner({ children }: { children: ReactNode }) {
   }, [locale]);
 
   return (
-    <div className="atmosphere relative flex min-h-full flex-1 flex-col overflow-x-hidden">
+    <div className="atmosphere relative flex min-h-dvh flex-1 flex-col overflow-x-hidden">
       <div aria-hidden className="pointer-events-none absolute inset-0 grid-sheen opacity-70" />
 
       <div className="relative z-20 border-b border-gold/30 bg-ink/80 px-4 py-2 text-center text-xs text-gold-soft">
@@ -79,7 +79,7 @@ function ShellInner({ children }: { children: ReactNode }) {
 
       <main className="relative z-10 flex flex-1 flex-col">{children}</main>
 
-      <footer className="relative z-10 border-t border-line">
+      <footer className="relative z-0 border-t border-line isolate">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-fog sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div>
             <p className="font-display text-paper">Smart Financial Academy</p>

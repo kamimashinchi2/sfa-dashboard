@@ -22,6 +22,13 @@ describe("equity drawdown lab", () => {
     expect(recoveryNeededFromDrawdownPct("20")).toBe("25");
   });
 
+  it("10% DD needs 11.11…% and 50% DD needs 100%", () => {
+    const r10 = recoveryNeededFromDrawdownPct("10");
+    expect(r10).not.toBeNull();
+    expect(Number(r10)).toBeCloseTo(11.1111, 3);
+    expect(recoveryNeededFromDrawdownPct("50")).toBe("100");
+  });
+
   it("gap vs plan → STOP_GAP_LOSS", () => {
     const g = evaluateGapVersusPlan({
       plannedRiskPct: "1",
