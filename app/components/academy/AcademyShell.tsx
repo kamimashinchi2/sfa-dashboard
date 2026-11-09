@@ -79,7 +79,7 @@ function ShellInner({ children }: { children: ReactNode }) {
 
       <main className="relative z-10 flex flex-1 flex-col">{children}</main>
 
-      <footer className="relative z-10 border-t border-line">
+      <footer className="relative z-0 border-t border-line isolate">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-fog sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div>
             <p className="font-display text-paper">Smart Financial Academy</p>

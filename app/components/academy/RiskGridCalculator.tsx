@@ -9,6 +9,7 @@ import {
   useSyncExternalStore,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import {
   INSTRUMENT_PRESETS,
@@ -323,12 +324,24 @@ export default function RiskGridCalculator({ open, onClose, onResult }: Props) {
 
   const grid = buildDescriptiveGrid(anchor);
 
-  if (!open) return null;
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
-  return (
-    <>
+  if (!open || !mounted) return null;
+
+  // Portal to body so AcademyShell stacking (header/footer z-index) cannot paint over the drawer.
+  const drawer = (
+    <div
+      className="pointer-events-none fixed inset-0 z-[200] isolate"
+      data-testid="risk-grid-portal"
+      style={{ zIndex: 200 }}
+    >
       <div
-        className="fixed inset-0 z-40 bg-ink/70"
+        className="pointer-events-auto absolute inset-0"
+        style={{ backgroundColor: "rgba(7, 9, 13, 0.92)" }}
         inert
         aria-hidden
         onClick={onClose}
@@ -340,9 +353,15 @@ export default function RiskGridCalculator({ open, onClose, onResult }: Props) {
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col border-l border-line bg-ink-elevated shadow-[-24px_0_60px_rgba(0,0,0,0.45)] max-[430px]:max-w-none"
+        className="pointer-events-auto absolute inset-0 flex w-full max-w-lg flex-col overflow-hidden border-line bg-ink-elevated shadow-[-24px_0_60px_rgba(0,0,0,0.55)] max-[430px]:max-w-none sm:inset-y-0 sm:inset-inline-end-0 sm:inset-inline-start-auto sm:border-s"
+        style={{
+          paddingTop: "env(safe-area-inset-top)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+          backgroundColor: "#10151c",
+          isolation: "isolate",
+        }}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-5">
+        <div className="relative z-10 flex shrink-0 items-start justify-between gap-4 border-b border-line bg-ink-elevated px-5 py-5">
           <div>
             <p className="text-[10px] tracking-[0.22em] text-teal-bright uppercase">
               SYNTHETIC ONLY · engine v{RISK_ENGINE_VERSION}
@@ -362,7 +381,7 @@ export default function RiskGridCalculator({ open, onClose, onResult }: Props) {
           </button>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+        <div className="relative z-10 flex-1 space-y-5 overflow-y-auto overscroll-contain bg-ink-elevated px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <p className="text-sm text-fog">
             {locale === "fa"
               ? "ورودی خالی صفر نیست. ۲٪ = HARD_BLOCK بدون clamp خاموش. مشخصات synthetic — با بروکر خود تأیید کنید."
@@ -681,6 +700,8 @@ export default function RiskGridCalculator({ open, onClose, onResult }: Props) {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
+
+  return createPortal(drawer, document.body);
 }
