@@ -1,11 +1,14 @@
 /** Canonical exact decimal as string. */
 export type Dec = string;
+export type ISO = string;
 
 export type MissionId = "M1" | "M2" | "M3" | "M4" | "M5";
+export type AdvancedId = "A6" | "A7" | "A8";
 export type StageId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type Text = { fa: string; en: string };
 export type Fact = "YES" | "NO" | "UNKNOWN";
 export type Locale = "fa" | "en";
+export type Mode = "SYNTHETIC" | "VERIFIED_HISTORICAL";
 
 export type Issue = {
   code: string;
@@ -44,14 +47,18 @@ export type Lesson = {
 
 export type Attempt = {
   id: string;
-  missionId: MissionId;
+  missionId: MissionId | AdvancedId;
   scenarioVersion: number;
   quizScore: number;
   numericPass: boolean;
   taskComplete: boolean;
   riskStatus: RiskStatus | null;
-  readiness: "READY" | "REMEDIATION" | "PENDING_REVIEW";
+  readiness: "READY" | "REMEDIATION" | "PENDING_REVIEW" | "MENTOR_PENDING";
   weakTopics: string[];
+  /** Assessment bank version; legacy placeholder passes need reassessment. */
+  assessmentCriteriaVersion?: number;
+  archivedLegacy?: boolean;
+  practicalEvidence?: Record<string, unknown> | null;
 };
 
 export type Progress = {
@@ -63,6 +70,18 @@ export type Progress = {
   rewardIds: string[];
   journalDraftIds: string[];
   updatedAtISO: string;
+  /** Feature flag: advanced A6–A8 assessed completion until mentor review. */
+  advancedAssessedEnabled?: boolean;
+};
+
+export type Evidence = {
+  id: string;
+  mode: Mode;
+  observedAt: ISO;
+  availableAt: ISO;
+  sourceLabel: string;
+  locator: string | null;
+  verification: "SYNTHETIC" | "VERIFIED" | "UNVERIFIED";
 };
 
 export type ContractSpec = {

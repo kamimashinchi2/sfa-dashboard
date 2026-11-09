@@ -2,14 +2,18 @@
 
 import { Activity, Bot, Shield } from "lucide-react";
 import { stageTitles } from "../../lib/academy/curriculum";
+import { resolveBuildStamp } from "../../lib/academy/buildStamp";
 import { t } from "../../lib/academy/dictionary";
+import { earnedStageProgress } from "../../lib/academy/unlock";
 import { useProgress } from "./ProgressProvider";
 
 export default function StatusPanel() {
   const { progress, hydrated } = useProgress();
   const locale = progress.locale;
+  const earned = earnedStageProgress(progress);
+  const stamp = resolveBuildStamp();
   const stageLabel = hydrated
-    ? `${locale === "fa" ? "مرحله" : "Stage"} ${progress.selectedStage}: ${t(stageTitles[progress.selectedStage], locale)}`
+    ? `${locale === "fa" ? "مشاهده مرحله" : "Viewing Stage"} ${progress.selectedStage}: ${t(stageTitles[progress.selectedStage], locale)} · earned ${earned}`
     : locale === "fa"
       ? "…"
       : "…";
@@ -22,9 +26,10 @@ export default function StatusPanel() {
           <span className="text-[10px] tracking-[0.16em] text-fog uppercase">
             {locale === "fa" ? "وضعیت دانشجو" : "Student Status"}
           </span>
-          <span className="max-w-[14rem] truncate font-mono text-[11px] text-gold-soft sm:text-xs">
+          <span className="max-w-[18rem] truncate font-mono text-[11px] text-gold-soft sm:text-xs">
             {stageLabel}
           </span>
+          <span className="font-mono text-[10px] text-fog">{stamp.label}</span>
         </span>
       </li>
       <li className="inline-flex items-center gap-2 border border-line bg-ink/40 px-2.5 py-1.5">

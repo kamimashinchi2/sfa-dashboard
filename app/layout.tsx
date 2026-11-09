@@ -20,12 +20,14 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Smart Financial Academy — Iteration 1 Pilot",
+  title: "Smart Financial Academy — Iteration 2 Pilot",
   description:
-    "Bilingual five-mission educational pilot within the eight-stage Smart Financial Academy roadmap. Synthetic practice only.",
+    "Bilingual M1–M5 + A6–A8 educational pilot within the eight-stage Smart Financial Academy roadmap. Synthetic practice only.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
       lang="en"

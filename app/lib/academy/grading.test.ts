@@ -31,10 +31,23 @@ describe("grading gates", () => {
       taskComplete: true,
       riskStatus: "HARD_BLOCK",
       freeTextSubmitted: true,
+      missionRequiresRisk: true,
     });
     expect(r.numericPass).toBe(true);
     expect(r.readiness).toBe("PENDING_REVIEW");
     expect(r.ownerReviewRequired).toBe(true);
+  });
+
+  it("null risk on non-risk mission is MENTOR_PENDING not remediation", () => {
+    const r = evaluateReadiness({
+      quizScore: 90,
+      taskComplete: true,
+      riskStatus: null,
+      freeTextSubmitted: true,
+      missionRequiresRisk: false,
+    });
+    expect(r.numericPass).toBe(true);
+    expect(r.readiness).toBe("MENTOR_PENDING");
   });
 
   it("performance card OWNER_REVIEW_REQUIRED when total>=80 and HARD_BLOCK", () => {

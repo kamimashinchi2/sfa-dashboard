@@ -1,4 +1,11 @@
 import type { Lesson, MissionId, StageId, Text } from "./contracts";
+import {
+  ASSESSMENT_CRITERIA_VERSION,
+  M2_QUIZ,
+  M3_QUIZ,
+  M4_QUIZ,
+  M5_QUIZ,
+} from "./quizzes";
 
 export type QuizItem = {
   id: string;
@@ -11,6 +18,8 @@ export type QuizItem = {
   rationale: Text;
   remediationTopic: string;
 };
+
+export { ASSESSMENT_CRITERIA_VERSION };
 
 export type MissionDef = {
   id: MissionId;
@@ -392,7 +401,7 @@ export const missions: MissionDef[] = [
         },
       }),
     ],
-    quiz: buildGenericQuiz("M2", "liquidity"),
+    quiz: M2_QUIZ,
     practicalTask: {
       fa: "روی فیکسچر synthetic، یک PDH و یک سوئیپ را علامت بزنید و نوع سفارش پیشنهادی را بنویسید (بدون اجرای واقعی).",
       en: "On the synthetic fixture, mark one PDH and one sweep and name the intended order type (no live execution).",
@@ -437,7 +446,7 @@ export const missions: MissionDef[] = [
         },
       }),
     ],
-    quiz: buildGenericQuiz("M3", "setup-risk"),
+    quiz: M3_QUIZ,
     practicalTask: {
       fa: "در Risk Grid، مثال ناامن ارائه‌شده را رد/اصلاح کنید تا HARD_BLOCK برطرف شود.",
       en: "In the Risk Grid, reject/correct the provided unsafe example until HARD_BLOCK clears.",
@@ -482,7 +491,7 @@ export const missions: MissionDef[] = [
         },
       }),
     ],
-    quiz: buildGenericQuiz("M4", "macro"),
+    quiz: M4_QUIZ,
     practicalTask: {
       fa: "گراف شرطی synthetic CPI را با یکی از کلیدهای پذیرفته‌شده هم‌تراز کنید — بدون entry/SL/TP.",
       en: "Align the synthetic CPI conditional graph to an accepted key — no entry/SL/TP.",
@@ -527,36 +536,13 @@ export const missions: MissionDef[] = [
         },
       }),
     ],
-    quiz: buildGenericQuiz("M5", "research"),
+    quiz: M5_QUIZ,
     practicalTask: {
       fa: "پیش‌نویس ژورنال را با فرضیه/ابطال/اسپلیت پر و به‌صورت محلی export کنید.",
       en: "Fill the journal draft with hypothesis/falsification/split and export locally.",
     },
   },
 ];
-
-function buildGenericQuiz(missionId: string, topic: string): QuizItem[] {
-  return Array.from({ length: 10 }, (_, i) => ({
-    id: `${missionId}-Q${i + 1}`,
-    kind: "mc" as const,
-    prompt: {
-      fa: `سؤال ${i + 1} مأموریت ${missionId} درباره ${topic}`,
-      en: `${missionId} Q${i + 1} on ${topic}`,
-    },
-    options: [
-      { fa: "گزینه نادرست A", en: "Incorrect A" },
-      { fa: "گزینه درست", en: "Correct option" },
-      { fa: "گزینه نادرست C", en: "Incorrect C" },
-      { fa: "گزینه نادرست D", en: "Incorrect D" },
-    ],
-    answer: 1,
-    rationale: {
-      fa: `پاسخ درست با منطق ${topic}.`,
-      en: `Correct per ${topic} logic.`,
-    },
-    remediationTopic: topic,
-  }));
-}
 
 export function getMission(id: string): MissionDef | undefined {
   return missions.find((m) => m.id === id);
