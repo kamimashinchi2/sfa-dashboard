@@ -37,14 +37,51 @@ export default function ResearchLab({ readOnly }: { readOnly?: boolean }) {
     (r) => r.eventAt <= hyp.trainEnd,
   );
 
+  const oosAfterIs = hyp.testStart > hyp.trainEnd;
+
   return (
     <div className="space-y-4 border border-line bg-ink/30 p-4">
       <h3 className="font-display text-xl text-paper">
-        {locale === "fa" ? "آزمایشگاه پژوهش (SYNTHETIC)" : "Research Lab (SYNTHETIC)"}
+        {locale === "fa"
+          ? "فرم پیش‌ثبت A6 (SYNTHETIC)"
+          : "A6 Preregistration form (SYNTHETIC)"}
       </h3>
       <p className="text-xs text-fog">
-        n=4 per partition · educational only · no Sharpe / durable-edge claims
+        n=4 per partition · educational only · no Sharpe / durable-edge claims ·
+        locked/hashed on save; edits create a new version
       </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {(
+          [
+            ["claim", "Hypothesis / claim", hyp.claim],
+            ["eligibility", "Instrument / eligibility", hyp.eligibility],
+            ["outcome", "Outcome metric", hyp.outcome],
+            ["falsification", "Kill criterion", hyp.falsification],
+            ["trainEnd", "In-sample end (ISO)", hyp.trainEnd],
+            ["testStart", "Out-of-sample start (ISO)", hyp.testStart],
+          ] as const
+        ).map(([field, label, value]) => (
+          <label key={field} className="block text-[10px] tracking-[0.14em] text-fog uppercase">
+            {label}
+            <input
+              className="mt-2 min-h-11 w-full border border-line bg-ink px-3 font-mono text-base text-paper"
+              value={value}
+              disabled={readOnly || locked}
+              onChange={(e) =>
+                setHyp((h) => ({ ...h, [field]: e.target.value }))
+              }
+              dir="ltr"
+            />
+          </label>
+        ))}
+      </div>
+      {!oosAfterIs ? (
+        <p className="text-xs text-red-300">
+          OOS start must come after IS end (testStart &gt; trainEnd).
+        </p>
+      ) : (
+        <p className="text-xs text-teal-bright">OOS after IS — chronology OK</p>
+      )}
       <dl className="grid gap-2 text-xs text-fog sm:grid-cols-2">
         <div>
           <dt>claim</dt>

@@ -18,7 +18,7 @@ function ShellInner({ children }: { children: ReactNode }) {
   }, [locale]);
 
   return (
-    <div className="atmosphere relative flex min-h-full flex-1 flex-col overflow-x-hidden">
+    <div className="atmosphere relative flex min-h-dvh flex-1 flex-col overflow-x-hidden">
       <div aria-hidden className="pointer-events-none absolute inset-0 grid-sheen opacity-70" />
 
       <div className="relative z-20 border-b border-gold/30 bg-ink/80 px-4 py-2 text-center text-xs text-gold-soft">

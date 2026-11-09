@@ -16,22 +16,50 @@ export type Issue = {
   evidenceIds: string[];
 };
 
+/** Canonical setup states — never ENTRY/BUY/SELL/ACTIVE-as-permission. */
 export type SetupState =
   | "EARLY_WATCH"
   | "ARMED_LONG"
   | "ARMED_SHORT"
-  | "MOMENTUM_ENTRY_ACTIVE"
+  | "SETUP_CONFIRMED_MOMENTUM_STATE"
   | "PENDING_RETRACEMENT"
-  | "RETRACEMENT_ENTRY_ACTIVE"
-  | "MISSED_OR_EXPIRED"
+  | "SETUP_CONFIRMED_RETRACEMENT_STATE"
+  | "SETUP_EXPIRED_OR_CHASE_ZONE"
   | "INCOMPLETE"
   | "INVALIDATED";
+
+/** Legacy labels from Iteration 1–2 exports / saved attempts. */
+export type LegacySetupState =
+  | "MOMENTUM_ENTRY_ACTIVE"
+  | "RETRACEMENT_ENTRY_ACTIVE"
+  | "MISSED_OR_EXPIRED";
+
+export const SETUP_STATE_ALIASES: Record<LegacySetupState, SetupState> = {
+  MOMENTUM_ENTRY_ACTIVE: "SETUP_CONFIRMED_MOMENTUM_STATE",
+  RETRACEMENT_ENTRY_ACTIVE: "SETUP_CONFIRMED_RETRACEMENT_STATE",
+  MISSED_OR_EXPIRED: "SETUP_EXPIRED_OR_CHASE_ZONE",
+};
+
+export function migrateSetupState(raw: string): SetupState | string {
+  if (raw in SETUP_STATE_ALIASES) {
+    return SETUP_STATE_ALIASES[raw as LegacySetupState];
+  }
+  return raw;
+}
 
 export type RiskStatus =
   | "PASS_SIMULATION"
   | "HARD_BLOCK"
   | "UNVERIFIED"
   | "NO_VALID_SIZE";
+
+export type StopType = "HARD_STRUCTURAL" | "MENTAL" | "NONE";
+
+export type InstrumentPresetId =
+  | "SYNTHETIC_EURUSD"
+  | "SYNTHETIC_USDJPY"
+  | "SYNTHETIC_XAUUSD"
+  | "CUSTOM";
 
 export type Lesson = {
   id: string;
@@ -84,17 +112,31 @@ export type Evidence = {
   verification: "SYNTHETIC" | "VERIFIED" | "UNVERIFIED";
 };
 
+/**
+ * Contract / instrument specification.
+ * pipSize + pipValueQuotePerLot drive lot sizing (preferred).
+ * tickSize/tickValuePerLot remain for LINEAR_TICK compatibility (gold).
+ */
 export type ContractSpec = {
   id: string;
+  presetId: InstrumentPresetId;
   tickSize: Dec;
   tickValuePerLot: Dec;
+  /** Units per standard lot (e.g. 100000 EURUSD, 100 oz gold). */
+  contractSize: Dec;
+  /** Pip/tick size used for stop distance in pips. */
+  pipSize: Dec;
+  /** Pip value per lot in quote (PnL) currency. */
+  pipValueQuotePerLot: Dec;
   pnlCurrency: string;
   minLot: Dec;
   maxLot: Dec;
   lotStep: Dec;
   sourceLabel: string;
   verifiedFor: "SYNTHETIC_ONLY";
-  model: "LINEAR_TICK";
+  model: "LINEAR_TICK" | "LINEAR_PIP";
+  /** Shown in UI: Synthetic spec, confirm with your broker. */
+  brokerConfirmNotice: string;
 };
 
 export type RiskInput = {
@@ -107,7 +149,7 @@ export type RiskInput = {
   entry: Dec | null;
   stop: Dec | null;
   target: Dec | null;
-  stopType: "HARD_STRUCTURAL" | "MENTAL" | "NONE";
+  stopType: StopType;
   structuralEvidenceIds: string[];
   preEntry: Fact;
   riskPct: Dec | null;
@@ -129,17 +171,41 @@ export type RiskResult = {
   loss: Dec | null;
   grossRR: Dec | null;
   netRR: Dec | null;
+  stopPips: Dec | null;
+  pipValueAccount: Dec | null;
   educationalOnly: true;
+};
+
+export type CalcHistoryEntry = {
+  id: string;
+  atISO: string;
+  instrument: string;
+  side: "LONG" | "SHORT";
+  riskPct: string;
+  stopType: StopType;
+  status: RiskStatus;
+  lots: string | null;
+  loss: string | null;
+  input: RiskInput;
+  result: RiskResult;
+  engineVersion: number;
 };
 
 export const PROGRESS_STORAGE_KEY = "sfa.progress.v1";
 export const MAX_RISK_PCT = "1";
 export const MIN_NET_RR = "2";
+export const RISK_ENGINE_VERSION = 3;
+
+const BROKER_NOTICE = "Synthetic spec, confirm with your broker.";
 
 export const SYNTHETIC_GOLD_SPEC: ContractSpec = {
   id: "SYNTHETIC_XAUUSD_100OZ",
+  presetId: "SYNTHETIC_XAUUSD",
   tickSize: "0.01",
   tickValuePerLot: "1",
+  contractSize: "100",
+  pipSize: "0.01",
+  pipValueQuotePerLot: "1",
   pnlCurrency: "USD",
   minLot: "0.01",
   maxLot: "100",
@@ -147,17 +213,73 @@ export const SYNTHETIC_GOLD_SPEC: ContractSpec = {
   sourceLabel: "Synthetic Academy Gold (100 oz/lot)",
   verifiedFor: "SYNTHETIC_ONLY",
   model: "LINEAR_TICK",
+  brokerConfirmNotice: BROKER_NOTICE,
 };
 
 export const SYNTHETIC_FOREX_EURUSD_SPEC: ContractSpec = {
   id: "SYNTHETIC_EURUSD_STANDARD",
-  tickSize: "0.00001",
-  tickValuePerLot: "1",
+  presetId: "SYNTHETIC_EURUSD",
+  tickSize: "0.0001",
+  tickValuePerLot: "10",
+  contractSize: "100000",
+  pipSize: "0.0001",
+  pipValueQuotePerLot: "10",
   pnlCurrency: "USD",
   minLot: "0.01",
   maxLot: "100",
   lotStep: "0.01",
   sourceLabel: "Synthetic Academy EURUSD (educational)",
   verifiedFor: "SYNTHETIC_ONLY",
-  model: "LINEAR_TICK",
+  model: "LINEAR_PIP",
+  brokerConfirmNotice: BROKER_NOTICE,
 };
+
+export const SYNTHETIC_FOREX_USDJPY_SPEC: ContractSpec = {
+  id: "SYNTHETIC_USDJPY_STANDARD",
+  presetId: "SYNTHETIC_USDJPY",
+  tickSize: "0.01",
+  tickValuePerLot: "1000",
+  contractSize: "100000",
+  pipSize: "0.01",
+  pipValueQuotePerLot: "1000",
+  pnlCurrency: "JPY",
+  minLot: "0.01",
+  maxLot: "100",
+  lotStep: "0.01",
+  sourceLabel: "Synthetic Academy USDJPY (educational)",
+  verifiedFor: "SYNTHETIC_ONLY",
+  model: "LINEAR_PIP",
+  brokerConfirmNotice: BROKER_NOTICE,
+};
+
+export const INSTRUMENT_PRESETS: Record<
+  Exclude<InstrumentPresetId, "CUSTOM">,
+  ContractSpec
+> = {
+  SYNTHETIC_EURUSD: SYNTHETIC_FOREX_EURUSD_SPEC,
+  SYNTHETIC_USDJPY: SYNTHETIC_FOREX_USDJPY_SPEC,
+  SYNTHETIC_XAUUSD: SYNTHETIC_GOLD_SPEC,
+};
+
+export function customSpec(partial: Partial<ContractSpec> = {}): ContractSpec {
+  const pipSize = partial.pipSize ?? partial.tickSize ?? "0.0001";
+  const pipValue =
+    partial.pipValueQuotePerLot ?? partial.tickValuePerLot ?? "10";
+  return {
+    id: partial.id ?? "CUSTOM",
+    presetId: "CUSTOM",
+    tickSize: pipSize,
+    tickValuePerLot: pipValue,
+    contractSize: partial.contractSize ?? "100000",
+    pipSize,
+    pipValueQuotePerLot: pipValue,
+    pnlCurrency: partial.pnlCurrency ?? "USD",
+    minLot: partial.minLot ?? "0.01",
+    maxLot: partial.maxLot ?? "100",
+    lotStep: partial.lotStep ?? "0.01",
+    sourceLabel: partial.sourceLabel ?? "Custom synthetic (educational)",
+    verifiedFor: "SYNTHETIC_ONLY",
+    model: partial.model ?? "LINEAR_PIP",
+    brokerConfirmNotice: partial.brokerConfirmNotice ?? BROKER_NOTICE,
+  };
+}

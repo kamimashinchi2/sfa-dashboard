@@ -4,8 +4,12 @@ import { useMemo, useState } from "react";
 import type { TimedObservation } from "../../lib/academy/pointInTime";
 import { snapshotRelease, type ReleasePacket } from "../../lib/academy/pointInTime";
 import { computeWindowReturns } from "../../lib/academy/windowReturns";
+import { detectMacroAsEntry } from "../../lib/academy/macro";
 import EvidenceTimeline from "./EvidenceTimeline";
 import { useProgress } from "./ProgressProvider";
+
+const ASSETS = ["US2Y", "TIPS", "DXY", "EURUSD", "USDJPY", "XAUUSD"] as const;
+type Dir = "UP" | "DOWN" | "MIXED" | "UNCHANGED";
 
 const RELEASE = "2024-03-01T13:30:00.000Z";
 const AS_OF = "2024-03-01T15:00:00.000Z";
@@ -75,6 +79,22 @@ export default function CrossAssetCapstone({ readOnly }: { readOnly?: boolean })
   const [frozenB, setFrozenB] = useState(false);
   const [revealB, setRevealB] = useState(false);
   const [expectations, setExpectations] = useState("Conditional USD bid; gold unproven");
+  const [assumptions, setAssumptions] = useState("Surprise not fully priced");
+  const [counter, setCounter] = useState("Already priced / risk-on offset");
+  const [dirs, setDirs] = useState<Record<(typeof ASSETS)[number], Dir>>({
+    US2Y: "UP",
+    TIPS: "UP",
+    DXY: "UP",
+    EURUSD: "DOWN",
+    USDJPY: "UP",
+    XAUUSD: "MIXED",
+  });
+
+  const thesisAsEntry = detectMacroAsEntry([
+    expectations,
+    assumptions,
+    counter,
+  ]);
 
   const snapA = useMemo(
     () => snapshotRelease(packetA, revealA ? AS_OF : "2024-03-01T13:00:00.000Z"),
@@ -114,15 +134,63 @@ export default function CrossAssetCapstone({ readOnly }: { readOnly?: boolean })
       <p className="text-xs text-fog">
         CONTEXT_ONLY · SYNTHETIC packets · mid returns descriptive, not executable P&L
       </p>
+      <p className="text-xs text-teal-bright">
+        Pick a synthetic release (hot CPI) and predict directions — context only.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {ASSETS.map((a) => (
+          <label key={a} className="text-[10px] tracking-[0.14em] text-fog uppercase">
+            {a}
+            <select
+              className="mt-1 min-h-11 w-full border border-line bg-ink px-2 text-sm text-paper"
+              value={dirs[a]}
+              disabled={readOnly}
+              onChange={(e) =>
+                setDirs((d) => ({ ...d, [a]: e.target.value as Dir }))
+              }
+            >
+              {(["UP", "DOWN", "MIXED", "UNCHANGED"] as Dir[]).map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </div>
       <label className="block text-xs text-fog">
         Freeze expectations before reveal
         <textarea
-          className="mt-1 min-h-16 w-full border border-line bg-ink px-3 py-2 text-sm text-paper"
+          className="mt-1 min-h-16 w-full border border-line bg-ink px-3 py-2 text-base text-paper"
           value={expectations}
           disabled={readOnly || (revealA && revealB)}
           onChange={(e) => setExpectations(e.target.value)}
         />
       </label>
+      <label className="block text-xs text-fog">
+        Assumptions
+        <textarea
+          className="mt-1 min-h-14 w-full border border-line bg-ink px-3 py-2 text-base text-paper"
+          value={assumptions}
+          disabled={readOnly}
+          onChange={(e) => setAssumptions(e.target.value)}
+        />
+      </label>
+      <label className="block text-xs text-fog">
+        Counter-evidence
+        <textarea
+          className="mt-1 min-h-14 w-full border border-line bg-ink px-3 py-2 text-base text-paper"
+          value={counter}
+          disabled={readOnly}
+          onChange={(e) => setCounter(e.target.value)}
+        />
+      </label>
+      {thesisAsEntry ? (
+        <p className="border border-red-400/40 p-3 text-xs text-red-300">
+          MACRO_AS_ENTRY: Macro is CONTEXT_ONLY, it describes pressure and
+          environment, never entry/SL/TP
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <button
           type="button"

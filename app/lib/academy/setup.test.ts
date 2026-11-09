@@ -3,7 +3,7 @@ import {
   sweepReversalFrames,
   sweepReversalScenario,
 } from "./fixtures";
-import { evaluateSetup, validateAnnotations } from "./setup";
+import { evaluateSetup, migrateSetupState, validateAnnotations } from "./setup";
 
 describe("setup engine", () => {
   it("excludes future frames beyond cursor", () => {
@@ -34,7 +34,7 @@ describe("setup engine", () => {
       cursor: 3,
       studentHypotheses: {},
     });
-    expect(armed.state).toBe("MOMENTUM_ENTRY_ACTIVE");
+    expect(armed.state).toBe("SETUP_CONFIRMED_MOMENTUM_STATE");
     expect(armed.evidence.zones.some((z) => z.kind === "FVG")).toBe(true);
     expect(armed.reasons.some((r) => r.startsWith("ZONE:"))).toBe(true);
 
@@ -52,14 +52,14 @@ describe("setup engine", () => {
     expect(withoutFvg.reasons).toContain("MISSING_FVG_OB_EVIDENCE");
   });
 
-  it("reaches momentum then chase becomes MISSED_OR_EXPIRED", () => {
+  it("reaches momentum then chase becomes SETUP_EXPIRED_OR_CHASE_ZONE", () => {
     const armed = evaluateSetup({
       scenario: sweepReversalScenario,
       frames: sweepReversalFrames,
       cursor: 3,
       studentHypotheses: {},
     });
-    expect(armed.state).toBe("MOMENTUM_ENTRY_ACTIVE");
+    expect(armed.state).toBe("SETUP_CONFIRMED_MOMENTUM_STATE");
 
     const chased = evaluateSetup({
       scenario: sweepReversalScenario,
@@ -67,7 +67,19 @@ describe("setup engine", () => {
       cursor: 5,
       studentHypotheses: {},
     });
-    expect(chased.state).toBe("MISSED_OR_EXPIRED");
+    expect(chased.state).toBe("SETUP_EXPIRED_OR_CHASE_ZONE");
+  });
+
+  it("migrates legacy *_ENTRY_ACTIVE labels", () => {
+    expect(migrateSetupState("MOMENTUM_ENTRY_ACTIVE")).toBe(
+      "SETUP_CONFIRMED_MOMENTUM_STATE",
+    );
+    expect(migrateSetupState("RETRACEMENT_ENTRY_ACTIVE")).toBe(
+      "SETUP_CONFIRMED_RETRACEMENT_STATE",
+    );
+    expect(migrateSetupState("MISSED_OR_EXPIRED")).toBe(
+      "SETUP_EXPIRED_OR_CHASE_ZONE",
+    );
   });
 
   it("validates PDH/sweep annotations against evidence", () => {

@@ -40,7 +40,17 @@ export default function SetupValidator({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-teal-bright">{t(ui.setupOnly, locale)}</p>
+      <header className="space-y-1">
+        <h2 className="font-display text-xl text-paper">
+          Market Maker Scout v3.0 · SETUP_ONLY
+        </h2>
+        <p className="text-sm text-teal-bright">{t(ui.setupOnly, locale)}</p>
+        <p className="text-xs text-fog">
+          {locale === "fa"
+            ? "فقط شواهد ساختار را توصیف می‌کند؛ مجوز معامله نیست؛ ریسک جداگانه بررسی می‌شود."
+            : "Describes structure evidence only; not permission to trade; risk is reviewed separately."}
+        </p>
+      </header>
       <ReplayChart
         frames={sweepReversalFrames}
         cursor={cursor}

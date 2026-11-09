@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Sora, JetBrains_Mono } from "next/font/google";
-import Script from "next/script";
+import TawkLoader from "./components/academy/TawkLoader";
 import "./globals.css";
 
 const display = Fraunces({
@@ -20,7 +20,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Smart Financial Academy — Iteration 2 Pilot",
+  title: "Smart Financial Academy — Iteration 3 Pilot",
   description:
     "Bilingual M1–M5 + A6–A8 educational pilot within the eight-stage Smart Financial Academy roadmap. Synthetic practice only.",
 };
@@ -33,21 +33,9 @@ export default function RootLayout({
       lang="en"
       className={`${display.variable} ${sans.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans text-paper">
+      <body className="min-h-dvh flex flex-col font-sans text-paper">
         {children}
-        <Script id="tawk-to" strategy="afterInteractive">
-          {`
-            var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-            (function(){
-              var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-              s1.async=true;
-              s1.src='https://embed.tawk.to/6af0cd0c45a9073c4053cbcc/1k6ua1u2r';
-              s1.charset='UTF-8';
-              s1.setAttribute('crossorigin','*');
-              s0.parentNode.insertBefore(s1,s0);
-            })();
-          `}
-        </Script>
+        <TawkLoader />
       </body>
     </html>
   );

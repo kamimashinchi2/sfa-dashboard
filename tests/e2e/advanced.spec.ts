@@ -20,7 +20,9 @@ test.describe("Iteration 2 advanced + gates", () => {
     for (let i = 0; i < 3; i++) {
       await page.getByRole("button", { name: /^Next$/i }).click();
     }
-    await expect(page.getByText(/MOMENTUM_ENTRY_ACTIVE|ARMED_LONG/i)).toBeVisible();
+    await expect(
+      page.getByText(/SETUP_CONFIRMED_MOMENTUM_STATE|ARMED_LONG/i),
+    ).toBeVisible();
     await expect(page.getByText(/FVG|ZONE:/i).first()).toBeVisible();
     await expect(page.getByText(/Evidence & boundaries|شواهد و مرزها/i).first()).toBeVisible();
   });

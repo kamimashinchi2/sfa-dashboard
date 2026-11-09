@@ -1,5 +1,8 @@
 import type { Fact, SetupState } from "./contracts";
+import { migrateSetupState } from "./contracts";
 import { decCompare, parseDec } from "./decimal";
+
+export { migrateSetupState };
 
 export type TouchPolicy = "TOUCH" | "CLOSE";
 
@@ -233,7 +236,7 @@ export function evaluateSetup(input: SetupEvalInput): {
   for (const frame of visibleFrames) {
     if (crosses(scenario.chaseBoundary, frame, "TOUCH", chaseSide)) {
       return {
-        state: "MISSED_OR_EXPIRED",
+        state: "SETUP_EXPIRED_OR_CHASE_ZONE",
         reasons: ["CHASE_OR_EXPIRY"],
         visibleFrames,
         evidence: baseEvidence,
@@ -326,7 +329,7 @@ export function evaluateSetup(input: SetupEvalInput): {
 
   if (inBand(px, scenario.momentumBand.low, scenario.momentumBand.high)) {
     return {
-      state: "MOMENTUM_ENTRY_ACTIVE",
+      state: "SETUP_CONFIRMED_MOMENTUM_STATE",
       reasons: ["INSIDE_MOMENTUM_BAND", ...fvgOrOb.map((z) => `ZONE:${z.id}`)],
       visibleFrames,
       evidence: baseEvidence,
@@ -335,7 +338,7 @@ export function evaluateSetup(input: SetupEvalInput): {
 
   if (inBand(px, scenario.retracementZone.low, scenario.retracementZone.high)) {
     return {
-      state: "RETRACEMENT_ENTRY_ACTIVE",
+      state: "SETUP_CONFIRMED_RETRACEMENT_STATE",
       reasons: ["INSIDE_RETRACEMENT_ZONE", ...fvgOrOb.map((z) => `ZONE:${z.id}`)],
       visibleFrames,
       evidence: baseEvidence,
@@ -384,8 +387,8 @@ export function validateAnnotations(input: {
 
   // Teaching: after closed MSS + displacement, prefer LIMIT into zone — not chase MARKET
   const preferLimit =
-    evald.state === "MOMENTUM_ENTRY_ACTIVE" ||
-    evald.state === "RETRACEMENT_ENTRY_ACTIVE" ||
+    evald.state === "SETUP_CONFIRMED_MOMENTUM_STATE" ||
+    evald.state === "SETUP_CONFIRMED_RETRACEMENT_STATE" ||
     evald.state === "PENDING_RETRACEMENT" ||
     evald.state === "ARMED_LONG" ||
     evald.state === "ARMED_SHORT";

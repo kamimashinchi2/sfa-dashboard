@@ -61,13 +61,24 @@ export default function AdvancedTrack({ moduleId }: { moduleId: string }) {
           {mod.id} · stages {mod.stages.join(", ")} ·{" "}
           {readOnly ? "READ_ONLY_PREVIEW / feature-flagged" : "ASSESSED"}
         </p>
+        {readOnly ? (
+          <p
+            className="mt-2 border border-gold/40 bg-ink/50 px-3 py-2 text-sm text-gold-soft"
+            data-testid="advanced-preview-banner"
+          >
+            {locale === "fa"
+              ? "پیش‌نمایش خواندنی — آزمایشگاه تعاملی برای اعتبارسنجی assessed هنوز قفل است."
+              : "Reading preview, interactive lab coming — assessed credit remains feature-flagged."}
+          </p>
+        ) : null}
         <h1 className="mt-2 font-display text-4xl text-paper">
           {t(mod.title, locale)}
         </h1>
         <p className="mt-3 max-w-3xl text-fog">{t(mod.summary, locale)}</p>
         <p className="mt-2 text-xs text-gold-soft">
           Advanced completion is feature-flagged until tests and mentor content review
-          pass. Five intro missions never imply graduation.
+          pass. Five intro missions never imply graduation. Interactive labs are
+          practice-only while the flag is off — no implied completion.
           {!prereqOk
             ? " Complete M5 assessed practice before advanced assessed attempts."
             : ""}
