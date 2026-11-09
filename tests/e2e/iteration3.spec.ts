@@ -9,6 +9,7 @@ test.describe("Iteration 3 P0/P1", () => {
     await expect(dialog).toBeVisible();
 
     await dialog.getByRole("button", { name: "SYNTHETIC_EURUSD" }).click();
+    await dialog.locator('input[name="preEntry"][value="YES"]').check();
     await expect(dialog.getByText("PASS_SIMULATION", { exact: true })).toBeVisible();
     await expect(dialog.getByText("maxLots: 0.5")).toBeVisible();
     await expect(dialog.getByText("loss: 100")).toBeVisible();

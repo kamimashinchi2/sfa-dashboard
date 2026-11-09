@@ -73,8 +73,10 @@ export function archiveLegacyPlaceholderAttempts(
         archivedLegacy: true,
         readiness: "REMEDIATION",
         weakTopics: [
-          ...a.weakTopics,
-          "legacy-placeholder-reassessment-required",
+          ...new Set([
+            ...a.weakTopics,
+            "legacy-placeholder-reassessment-required",
+          ]),
         ],
       };
     }

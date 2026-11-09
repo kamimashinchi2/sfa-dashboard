@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sfa.local/schemas/sfa-submission.v1.json",
+  "title": "SFA Weekly Submission Packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "schemaVersion",
+    "packetId",
+    "packetSeq",
+    "supersedesDigest",
+    "student",
+    "isoWeek",
+    "period",
+    "generatedAtISO",
+    "timezone",
+    "locale",
+    "build",
+    "versions",
+    "quizAttempts",
+    "lessonResponses",
+    "simulatorRuns",
+    "hardBlockEvents",
+    "journalEntries",
+    "weeklyReflection",
+    "selfReports",
+    "declarations",
+    "integrity"
+  ],
+  "properties": {
+    "format": { "const": "sfa-submission" },
+    "schemaVersion": { "const": 1 },
+    "packetId": { "type": "string", "minLength": 1 },
+    "packetSeq": { "type": "integer", "minimum": 1 },
+    "supersedesDigest": { "type": ["string", "null"] },
+    "student": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["studentId", "alias"],
+      "properties": {
+        "studentId": { "type": "string", "pattern": "^S\\d{2,4}$" },
+        "alias": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9-]{2,23}$" }
+      }
+    },
+    "isoWeek": { "type": "string", "pattern": "^\\d{4}-W\\d{2}$" },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fromISO", "toISO"],
+      "properties": {
+        "fromISO": { "type": "string" },
+        "toISO": { "type": "string" }
+      }
+    },
+    "generatedAtISO": { "type": "string" },
+    "timezone": { "const": "Europe/Amsterdam" },
+    "locale": { "enum": ["fa", "en"] },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "builtAt", "label"],
+      "properties": {
+        "commit": { "type": ["string", "null"] },
+        "builtAt": { "type": ["string", "null"] },
+        "label": { "type": "string" }
+      }
+    },
+    "versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessmentCriteria",
+        "quizBank",
+        "risk",
+        "setup",
+        "macro",
+        "serializer"
+      ],
+      "properties": {
+        "assessmentCriteria": { "type": "integer" },
+        "quizBank": { "type": "string" },
+        "risk": { "type": "integer" },
+        "setup": { "type": "integer" },
+        "macro": { "type": "integer" },
+        "serializer": { "const": "sfa-submission-serializer/1" }
+      }
+    },
+    "quizAttempts": { "type": "array", "items": { "type": "object" } },
+    "lessonResponses": { "type": "array", "items": { "type": "object" } },
+    "simulatorRuns": { "type": "array", "items": { "type": "object" } },
+    "hardBlockEvents": { "type": "array", "items": { "type": "object" } },
+    "journalEntries": { "type": "array", "items": { "type": "object" } },
+    "weeklyReflection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "emotionBefore", "emotionAfter"],
+      "properties": {
+        "text": { "type": "string", "minLength": 50 },
+        "emotionBefore": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "emotionAfter": { "type": "integer", "minimum": 0, "maximum": 10 }
+      }
+    },
+    "selfReports": { "type": "array", "items": { "type": "object" } },
+    "declarations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["syntheticDataOnly", "aliasOnly"],
+      "properties": {
+        "syntheticDataOnly": { "const": true },
+        "aliasOnly": { "const": true }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "canonicalization", "digest", "resultCode"],
+      "properties": {
+        "algorithm": { "const": "SHA-256" },
+        "canonicalization": { "const": "sfa-canon-v1" },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "resultCode": { "type": "string" }
+      }
+    }
+  }
+}

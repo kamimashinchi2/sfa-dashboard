@@ -23,20 +23,24 @@ import {
 } from "../../lib/academy/stageRegistry";
 import type { MissionId, StageId } from "../../lib/academy/contracts";
 import { t, ui } from "../../lib/academy/dictionary";
+import { prefsStore } from "../../lib/academy/persist";
 import { useProgress } from "./ProgressProvider";
 
 export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
   const { progress } = useProgress();
   const locale = progress.locale;
   const registryStage = stageFromMission("M5") ?? (5 as StageId);
+  const prefsAlias = prefsStore.getSnapshot().alias?.trim() || "practice-draft";
+  const prefsAttempt =
+    progress.attempts.find((a) => a.missionId === "M5")?.id ?? "local";
 
   const [draft, setDraft] = useState(() =>
     createEmptyJournal({
       id: "journal-local-1",
-      alias: "practice-draft",
+      alias: prefsAlias,
       stageId: registryStage,
       missionId: "M5",
-      attemptId: "local",
+      attemptId: prefsAttempt,
       scenarioId: "SYN-SWEEP-REV-LONG-1",
       scenarioVersion: 1,
       updatedAtISO: "1970-01-01T00:00:00.000Z",
@@ -93,7 +97,11 @@ export default function JournalBuilder({ readOnly }: { readOnly?: boolean }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-fog">
-        {t(ui.journalExport, locale)} — no Drive upload.
+        {t(ui.journalExport, locale)} —{" "}
+        {locale === "fa"
+          ? "در بستهٔ ارسال هفتگی بگنجانید"
+          : "Include in your weekly packet"}
+        .
       </p>
       <div className="flex flex-wrap gap-3 text-xs text-fog">
         <label>

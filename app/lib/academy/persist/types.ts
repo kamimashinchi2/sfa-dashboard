@@ -9,6 +9,8 @@ import type { JournalV2 } from "../journalV2";
 
 export const SFA_V2_PREFIX = "sfa.v2.";
 export const SFA_SCHEMA_VERSION = 2 as const;
+/** Quiz domain schema (independent of backup envelope). */
+export const QUIZ_DOMAIN_VERSION = 3 as const;
 
 export type PersistMeta = {
   schemaVersion: typeof SFA_SCHEMA_VERSION;
@@ -23,8 +25,49 @@ export type ProgressV2 = Omit<Progress, "version"> & {
   unlockedMilestoneIds: string[];
 };
 
+/** Legacy v2 quiz answers map (pre–Iteration 4). */
+export type QuizAnswersV2 = Record<
+  string,
+  { itemVersion: number; value: unknown; atISO: string }
+>;
+
+export type QuizItemAnswerRecord = {
+  itemId: string;
+  itemHash: string;
+  kind: "mc" | "numeric" | "order";
+  displayedOrder: number[] | null;
+  answer: { raw: unknown; canonical: unknown };
+  touched: boolean;
+  clientCorrect: boolean;
+  reflection: string | null;
+};
+
+export type QuizAttemptRecord = {
+  attemptId: string;
+  quizId: string;
+  mode: "ASSESSED" | "READ_ONLY_PREVIEW";
+  assessmentCriteriaVersion: number;
+  startedAtISO: string;
+  submittedAtISO: string;
+  shuffleSeed: string;
+  buildCommit: string | null;
+  items: QuizItemAnswerRecord[];
+  client: {
+    correct: number;
+    total: number;
+    score: number;
+    numericPass: boolean;
+    weakTopics: string[];
+  };
+  /** Client claim — always UNVERIFIED until mentor review. */
+  unverifiedClaim: true;
+};
+
 export type QuizStore = {
-  answers: Record<string, { itemVersion: number; value: unknown; atISO: string }>;
+  schemaVersion: typeof QUIZ_DOMAIN_VERSION;
+  attempts: QuizAttemptRecord[];
+  /** Retained for backup readability of older exports. */
+  answers?: QuizAnswersV2;
 };
 
 export type CalcHistoryStore = {
@@ -35,8 +78,69 @@ export type JournalStore = {
   entries: JournalV2[];
 };
 
+export type LessonResponseRecord = {
+  id: string;
+  lessonId: string;
+  missionId: string | null;
+  text: string;
+  rubricSelfChecks: boolean[];
+  savedAtISO: string;
+};
+
+export type SelfReportRecord = {
+  kind: "LESSON_REVIEWED" | "PRACTICAL_COMPLETE";
+  refId: string;
+  atISO: string;
+};
+
+export type ResponsesStore = {
+  schemaVersion: 1;
+  lessonResponses: LessonResponseRecord[];
+  selfReports: SelfReportRecord[];
+};
+
+export type StudentDecision =
+  | "FINAL_PLAN"
+  | "EXPLORATION"
+  | "REJECTED_BY_STUDENT";
+
+export type SimRunRecord = {
+  runId: string;
+  tool:
+    | "risk-grid"
+    | "setup-validator"
+    | "macro-chain"
+    | "research-lab"
+    | "drawdown-lab"
+    | "cross-asset";
+  missionId: string | null;
+  atISO: string;
+  engineVersion: number;
+  inputs: Record<string, unknown>;
+  outputs: Record<string, unknown>;
+  status: string;
+  issueCodes: string[];
+  studentDecision: StudentDecision;
+  note: string | null;
+};
+
+export type SimRunsStore = {
+  schemaVersion: 1;
+  entries: SimRunRecord[];
+};
+
+export type PacketExportLogEntry = {
+  week: string;
+  seq: number;
+  digest: string;
+  atISO: string;
+};
+
 export type PrefsStore = {
   locale: Locale;
+  studentId?: string;
+  alias?: string;
+  exportLog?: PacketExportLogEntry[];
 };
 
 export type QuarantineStore = {
@@ -58,6 +162,8 @@ export type BackupPayload = {
     calcHistory?: CalcHistoryStore;
     journal?: JournalStore;
     prefs?: PrefsStore;
+    responses?: ResponsesStore;
+    simRuns?: SimRunsStore;
   };
   legacyV1?: unknown;
 };
@@ -69,7 +175,9 @@ export type DomainKey =
   | "calcHistory"
   | "journal"
   | "prefs"
-  | "quarantine";
+  | "quarantine"
+  | "responses"
+  | "simRuns";
 
 export function storageKey(domain: DomainKey): string {
   return `${SFA_V2_PREFIX}${domain}`;
@@ -91,7 +199,7 @@ export function defaultProgressV2(locale: Locale = "fa"): ProgressV2 {
 }
 
 export function defaultQuiz(): QuizStore {
-  return { answers: {} };
+  return { schemaVersion: QUIZ_DOMAIN_VERSION, attempts: [] };
 }
 
 export function defaultCalcHistory(): CalcHistoryStore {
@@ -100,6 +208,14 @@ export function defaultCalcHistory(): CalcHistoryStore {
 
 export function defaultJournalStore(): JournalStore {
   return { entries: [] };
+}
+
+export function defaultResponses(): ResponsesStore {
+  return { schemaVersion: 1, lessonResponses: [], selfReports: [] };
+}
+
+export function defaultSimRuns(): SimRunsStore {
+  return { schemaVersion: 1, entries: [] };
 }
 
 export function defaultPrefs(locale: Locale = "fa"): PrefsStore {

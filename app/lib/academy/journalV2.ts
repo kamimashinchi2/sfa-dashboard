@@ -59,7 +59,7 @@ function bound(s: string): string {
   return escapeMd(String(s)).slice(0, MAX_STRING);
 }
 
-function escapeMd(s: string): string {
+export function escapeMd(s: string): string {
   return s
     .replace(/[<>]/g, "")
     .replace(/\[([^\]]*)\]\(([^)]*)\)/g, "$1 ($2)");

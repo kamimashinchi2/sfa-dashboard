@@ -17,6 +17,7 @@ import {
   customSpec,
   type CalcHistoryEntry,
   type ContractSpec,
+  type Fact,
   type InstrumentPresetId,
   type RiskInput,
   type RiskResult,
@@ -31,11 +32,14 @@ import {
 import { buildDescriptiveGrid } from "../../lib/academy/grid";
 import { unsafeRiskExample } from "../../lib/academy/fixtures";
 import {
+  calcHistoryToSimRun,
   createPersistedStore,
   defaultCalcHistory,
   deleteCalcHistory,
   makeCalcHistoryEntry,
   pushCalcHistory,
+  pushSimRun,
+  simRunsStore,
   storageKey,
   type CalcHistoryStore,
 } from "../../lib/academy/persist";
@@ -45,6 +49,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onResult?: (result: RiskResult) => void;
+  missionId?: string | null;
 };
 
 const FOCUSABLE =
@@ -78,7 +83,12 @@ function defaultPrices(preset: InstrumentPresetId): {
   return { entry: "2500", stop: "2492", target: "2516" };
 }
 
-export default function RiskGridCalculator({ open, onClose, onResult }: Props) {
+export default function RiskGridCalculator({
+  open,
+  onClose,
+  onResult,
+  missionId = null,
+}: Props) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -91,6 +101,7 @@ export default function RiskGridCalculator({ open, onClose, onResult }: Props) {
   const [conversion, setConversion] = useState("1");
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
   const [stopType, setStopType] = useState<StopType>("HARD_STRUCTURAL");
+  const [preEntry, setPreEntry] = useState<Fact>("UNKNOWN");
   const [equity, setEquity] = useState("10000");
   const [riskPct, setRiskPct] = useState("1");
   const [entry, setEntry] = useState("2500");
@@ -194,7 +205,7 @@ export default function RiskGridCalculator({ open, onClose, onResult }: Props) {
       stopType,
       structuralEvidenceIds:
         stopType === "HARD_STRUCTURAL" ? ["ev-ui-1"] : [],
-      preEntry: "YES",
+      preEntry,
       riskPct: draft.riskPct,
       submittedLots: null,
       costs: {
@@ -222,7 +233,7 @@ export default function RiskGridCalculator({ open, onClose, onResult }: Props) {
       stopType,
       structuralEvidenceIds:
         stopType === "HARD_STRUCTURAL" ? ["ev-ui-1"] : [],
-      preEntry: "YES",
+      preEntry,
       riskPct: draft.riskPct,
       submittedLots: null,
       costs: {
@@ -244,6 +255,7 @@ export default function RiskGridCalculator({ open, onClose, onResult }: Props) {
     conversion,
     direction,
     stopType,
+    preEntry,
   ]);
 
   const persistResult = (evaluated: RiskResult, input: RiskInput) => {
@@ -259,6 +271,9 @@ export default function RiskGridCalculator({ open, onClose, onResult }: Props) {
     });
     const next = pushCalcHistory(calcStore.getSnapshot().entries, entryRow);
     calcStore.set({ entries: next });
+    // Map calc history → sim run (no duplicate engine call)
+    const sim = calcHistoryToSimRun(entryRow, { missionId });
+    simRunsStore.set(pushSimRun(simRunsStore.getSnapshot(), sim));
   };
 
   const runEval = () => {
@@ -448,6 +463,49 @@ export default function RiskGridCalculator({ open, onClose, onResult }: Props) {
             </div>
             <p className="text-xs text-gold-soft">
               {explainStopType(stopType, locale)}
+            </p>
+          </fieldset>
+
+          <fieldset className="space-y-2">
+            <legend className="text-[10px] tracking-[0.16em] text-fog uppercase">
+              {locale === "fa"
+                ? "آیا قبل از ورود، استاپ روی پلتفرم گذاشته شده؟"
+                : "Stop placed on platform before entry?"}
+            </legend>
+            <div
+              className="flex flex-col gap-2"
+              role="radiogroup"
+              aria-label="Pre-entry stop on platform"
+            >
+              {(
+                [
+                  ["YES", locale === "fa" ? "بله" : "Yes"],
+                  ["NO", locale === "fa" ? "خیر" : "No"],
+                  ["UNKNOWN", locale === "fa" ? "نامشخص" : "Unknown"],
+                ] as const
+              ).map(([value, label]) => (
+                <label
+                  key={value}
+                  className="flex min-h-11 items-center gap-3 text-sm text-paper"
+                >
+                  <input
+                    type="radio"
+                    name="preEntry"
+                    value={value}
+                    checked={preEntry === value}
+                    onChange={() => setPreEntry(value)}
+                    className="h-5 w-5"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-fog">
+              {preEntry === "NO"
+                ? "HARD_BLOCK · PRE_ENTRY_NO"
+                : preEntry === "UNKNOWN"
+                  ? "UNVERIFIED · PRE_ENTRY_UNKNOWN"
+                  : ""}
             </p>
           </fieldset>
 

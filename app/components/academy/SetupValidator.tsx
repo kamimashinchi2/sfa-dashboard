@@ -7,6 +7,11 @@ import {
 } from "../../lib/academy/fixtures";
 import { evaluateSetup, validateAnnotations } from "../../lib/academy/setup";
 import { ui, t } from "../../lib/academy/dictionary";
+import {
+  pushSimRun,
+  simRunsStore,
+} from "../../lib/academy/persist";
+import { SETUP_ENGINE_VERSION } from "../../lib/academy/packet/schema";
 import { useProgress } from "./ProgressProvider";
 import ReplayChart from "./ReplayChart";
 
@@ -161,6 +166,33 @@ export default function SetupValidator({
               state: result.state,
               reasons: v.reasons,
             });
+            const runId = `setup-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+            simRunsStore.set(
+              pushSimRun(simRunsStore.getSnapshot(), {
+                runId,
+                tool: "setup-validator",
+                missionId: null,
+                atISO: new Date().toISOString(),
+                engineVersion: SETUP_ENGINE_VERSION,
+                inputs: {
+                  scenarioId: sweepReversalScenario.id,
+                  scenarioVersion: sweepReversalScenario.version,
+                  cursor,
+                  annotations: { markedPdh, markedSweep },
+                  orderType,
+                },
+                outputs: {
+                  state: result.state,
+                  zones: result.evidence?.zones ?? null,
+                  observedFacts: result.evidence?.observedFacts ?? null,
+                  annotationPass: v.pass,
+                },
+                status: v.pass ? "SETUP_ONLY" : "INCOMPLETE",
+                issueCodes: v.reasons,
+                studentDecision: "EXPLORATION",
+                note: null,
+              }),
+            );
           }}
         >
           {locale === "fa" ? "اعتبارسنجی حاشیه" : "Validate annotations"}
