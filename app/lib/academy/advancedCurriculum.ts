@@ -57,7 +57,6 @@ const A6_QUIZ: QuizItem[] = [
       { fa: "فقط XP", en: "XP only" },
       { fa: "هویت منتور", en: "Mentor identity" },
     ],
-    answer: 1,
     rationale: {
       fa: "همه عناصر قبل از reveal قفل می‌شوند.",
       en: "All elements lock before reveal.",
@@ -77,7 +76,6 @@ const A6_QUIZ: QuizItem[] = [
       { fa: "PASS اجباری", en: "Forced PASS" },
       { fa: "حذف TRAIN", en: "Drop TRAIN" },
     ],
-    answer: 1,
     rationale: {
       fa: "آلودگی TEST → EXPLORATORY؛ نیاز به نمونه بکر.",
       en: "TEST contamination → EXPLORATORY; need untouched sample.",
@@ -91,7 +89,6 @@ const A6_QUIZ: QuizItem[] = [
       fa: "TRAIN gross [2,-1,2,-1] cost 0.1 → sum netR؟",
       en: "TRAIN gross [2,-1,2,-1] cost 0.1 → sum netR?",
     },
-    answer: "1.6",
     rationale: {
       fa: "۱٫۹−۱٫۱+۱٫۹−۱٫۱ = ۱٫۶",
       en: "1.9−1.1+1.9−1.1 = 1.6",
@@ -105,7 +102,6 @@ const A6_QUIZ: QuizItem[] = [
       fa: "همان TRAIN → mean netR؟",
       en: "Same TRAIN → mean netR?",
     },
-    answer: "0.4",
     rationale: { fa: "۱٫۶/۴ = ۰٫۴", en: "1.6/4 = 0.4" },
     remediationTopic: "a6-train-mean",
   },
@@ -116,7 +112,6 @@ const A6_QUIZ: QuizItem[] = [
       fa: "TEST gross [-1,-1,2,-1] cost 0.1 → mean netR؟",
       en: "TEST gross [-1,-1,2,-1] cost 0.1 → mean netR?",
     },
-    answer: "-0.35",
     rationale: {
       fa: "net مجموع −۱٫۴؛ میانگین −۰٫۳۵",
       en: "net sum −1.4; mean −0.35",
@@ -136,7 +131,6 @@ const A6_QUIZ: QuizItem[] = [
       { fa: "۰", en: "0" },
       { fa: "۱", en: "1" },
     ],
-    answer: 1,
     rationale: {
       fa: "PF تهی است نه بی‌نهایت.",
       en: "PF is null — not Infinity.",
@@ -156,7 +150,6 @@ const A6_QUIZ: QuizItem[] = [
       { fa: "۱", en: "1" },
       { fa: "نادیده", en: "Ignored" },
     ],
-    answer: 1,
     rationale: {
       fa: "هزینه ناشناخته صفر فرض نمی‌شود.",
       en: "Unknown costs are never coerced to zero.",
@@ -176,7 +169,6 @@ const A6_QUIZ: QuizItem[] = [
       { fa: "فریز پارامتر", en: "Freeze parameters" },
       { fa: "افشای TEST", en: "Reveal TEST" },
     ],
-    answer: [0, 1, 2, 3],
     rationale: {
       fa: "قفل→TRAIN→فریز→TEST",
       en: "Lock→TRAIN→freeze→TEST",
@@ -199,7 +191,6 @@ const A6_QUIZ: QuizItem[] = [
       { fa: "گارانتی سود", en: "Profit guarantee" },
       { fa: "هویت کاربر", en: "User identity" },
     ],
-    answer: 1,
     rationale: {
       fa: "digest سازگاری است نه timestamp معتبر.",
       en: "Digest is consistency, not attested time.",
@@ -217,7 +208,6 @@ const A6_QUIZ: QuizItem[] = [
       { fa: "بله", en: "Yes" },
       { fa: "خیر", en: "No" },
     ],
-    answer: 1,
     rationale: {
       fa: "فیکسچر کوچک ≠ ادعای آماری بادوام.",
       en: "Tiny fixtures forbid durable statistical claims.",
@@ -234,7 +224,6 @@ const A7_QUIZ: QuizItem[] = [
       fa: "10000 با سه بازده −۱٪ → equity پایانی؟",
       en: "10000 with three −1% returns → ending equity?",
     },
-    answer: "9702.99",
     rationale: {
       fa: "۹۹۰۰، ۹۸۰۱، ۹۷۰۲٫۹۹",
       en: "9900, 9801, 9702.99",
@@ -248,7 +237,6 @@ const A7_QUIZ: QuizItem[] = [
       fa: "پس از دو −۱٪ از ۱۰۰۰۰، بودجه ۱٪ بعدی؟",
       en: "After two −1% from 10000, next 1% budget?",
     },
-    answer: "98.01",
     rationale: {
       fa: "equity=۹۸۰۱ → بودجه ۹۸٫۰۱",
       en: "equity=9801 → budget 98.01",
@@ -268,7 +256,6 @@ const A7_QUIZ: QuizItem[] = [
       { fa: "PASS بی‌قید", en: "Unconditional PASS" },
       { fa: "نادیده", en: "Ignore" },
     ],
-    answer: 1,
     rationale: {
       fa: "زیان تحقق‌یافته ≠ طرح؛ برچسب STOP_GAP_LOSS.",
       en: "Realized ≠ plan; label STOP_GAP_LOSS.",
@@ -282,7 +269,6 @@ const A7_QUIZ: QuizItem[] = [
       fa: "برای جبران drawdown ۲۰٪ چند٪ رشد لازم است؟",
       en: "Recovery from 20% drawdown requires what % gain?",
     },
-    answer: "25",
     rationale: {
       fa: "۱/۰٫۸ − ۱ = ۰٫۲۵ → ۲۵٪",
       en: "1/0.8 − 1 = 0.25 → 25%",
@@ -302,7 +288,6 @@ const A7_QUIZ: QuizItem[] = [
       { fa: "۲", en: "2" },
       { fa: "۱۰", en: "10" },
     ],
-    answer: 1,
     rationale: {
       fa: "۳۰۰/۱۰۰۰۰ = ۳٪ — گزارش تمرکز بدون سقف ساختگی.",
       en: "300/10000 = 3% — report concentration; no invented cap.",
@@ -325,7 +310,6 @@ const A7_QUIZ: QuizItem[] = [
       { fa: "reset خاموش", en: "Silent reset" },
       { fa: "دوبرابر lot", en: "Double lots" },
     ],
-    answer: 1,
     rationale: {
       fa: "ورشکستگی آموزشی توقف می‌کند.",
       en: "Educational insolvency stops the path.",
@@ -345,7 +329,6 @@ const A7_QUIZ: QuizItem[] = [
       { fa: "نادیده stop", en: "Ignore stop" },
       { fa: "Infinity R:R", en: "Infinity R:R" },
     ],
-    answer: 1,
     rationale: {
       fa: "هرگز نتیجه مطلوب را خودسرانه انتخاب نکنید.",
       en: "Never pick the favorable outcome unilaterally.",
@@ -365,7 +348,6 @@ const A7_QUIZ: QuizItem[] = [
       { fa: "netRR≥۲", en: "netRR≥2" },
       { fa: "ثبت نتیجه", en: "Record result" },
     ],
-    answer: [0, 1, 2, 3],
     rationale: {
       fa: "ساختار→سقف→R:R→ثبت",
       en: "Structure→cap→R:R→record",
@@ -385,7 +367,6 @@ const A7_QUIZ: QuizItem[] = [
       { fa: "مجوز ۲٪", en: "2% permission" },
       { fa: "حذف XP", en: "XP wipe" },
     ],
-    answer: 1,
     rationale: {
       fa: "رد آگاهانه = موفقیت آموزشی.",
       en: "Conscious rejection = learning success.",
@@ -403,7 +384,6 @@ const A7_QUIZ: QuizItem[] = [
       { fa: "بله همیشه", en: "Yes always" },
       { fa: "خیر — گپ می‌تواند بیشتر کند", en: "No — gaps can exceed it" },
     ],
-    answer: 1,
     rationale: {
       fa: "طرح ۱٪ سقف تحقق را تضمین نمی‌کند.",
       en: "A 1% plan does not guarantee realized cap.",
@@ -426,7 +406,6 @@ const A8_QUIZ: QuizItem[] = [
       { fa: "prior", en: "prior" },
       { fa: "۰", en: "0" },
     ],
-    answer: 1,
     rationale: {
       fa: "پیش از انتشار actual در دسترس نیست.",
       en: "Pre-release actual is null.",
@@ -445,7 +424,6 @@ const A8_QUIZ: QuizItem[] = [
       { fa: "مجاز", en: "Allowed" },
       { fa: "فقط برای طلا", en: "Only for gold" },
     ],
-    answer: 0,
     rationale: {
       fa: "vintage جدا می‌ماند.",
       en: "Keep vintage intact.",
@@ -464,7 +442,6 @@ const A8_QUIZ: QuizItem[] = [
       { fa: "قبول با فرض UTC", en: "Accept as UTC" },
       { fa: "تبدیل خودکار به CET", en: "Auto-convert to CET" },
     ],
-    answer: 0,
     rationale: {
       fa: "ISO با offset الزامی است.",
       en: "Zoned ISO required.",
@@ -478,7 +455,6 @@ const A8_QUIZ: QuizItem[] = [
       fa: "EURUSD 1.1000→1.1011 بازده٪ پنجره ۰–۵؟",
       en: "EURUSD 1.1000→1.1011 return % for 0–5?",
     },
-    answer: "0.1",
     rationale: {
       fa: "(۱٫۱۰۱۱/۱٫۱۰۰۰−۱)×۱۰۰ ≈ ۰٫۱",
       en: "(1.1011/1.1000−1)×100 ≈ 0.1",
@@ -501,7 +477,6 @@ const A8_QUIZ: QuizItem[] = [
       { fa: "درون‌یابی آینده", en: "Future interpolation" },
       { fa: "PASS", en: "PASS" },
     ],
-    answer: 1,
     rationale: {
       fa: "نقطه مفقود = null با دلیل؛ نه صفر.",
       en: "Missing → null with reasons — not zero.",
@@ -520,7 +495,6 @@ const A8_QUIZ: QuizItem[] = [
       { fa: "P&L اجرایی", en: "Executable P&L" },
       { fa: "سیگنال ورود", en: "Entry signal" },
     ],
-    answer: 0,
     rationale: {
       fa: "درصد mid سیگنال اجرا نیست.",
       en: "Mid returns are descriptive only.",
@@ -540,7 +514,6 @@ const A8_QUIZ: QuizItem[] = [
       { fa: "ثبت ضدشواهد", en: "Log counterevidence" },
       { fa: "افشای بسته ۲", en: "Reveal packet 2" },
     ],
-    answer: [0, 1, 2, 3],
     rationale: {
       fa: "قبل از هر افشا فریز کنید.",
       en: "Freeze before each reveal.",
@@ -560,7 +533,6 @@ const A8_QUIZ: QuizItem[] = [
       { fa: "۱۰", en: "10" },
       { fa: "۰", en: "0" },
     ],
-    answer: 1,
     rationale: {
       fa: "حداقل دو بسته — نه کفایت آماری.",
       en: "At least two packets — not statistical sufficiency.",
@@ -579,7 +551,6 @@ const A8_QUIZ: QuizItem[] = [
       { fa: "۱س، ۱ر، ۱م", en: "1h, 1d, 1m" },
       { fa: "فقط سوئینگ", en: "Swing only" },
     ],
-    answer: 0,
     rationale: {
       fa: "بازه‌های تعریف‌شده آموزشی.",
       en: "Authored teaching intervals.",
@@ -598,7 +569,6 @@ const A8_QUIZ: QuizItem[] = [
       { fa: "فقط UTC خام", en: "Raw UTC only" },
       { fa: "وقت محلی دستگاه", en: "Device local time" },
     ],
-    answer: 0,
     rationale: {
       fa: "نمایش آمستردام؛ ذخیره ISO.",
       en: "Display Amsterdam; store ISO.",

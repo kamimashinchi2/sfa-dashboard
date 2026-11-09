@@ -1,7 +1,7 @@
 "use client";
 
 import { Activity, Bot, Shield } from "lucide-react";
-import { stageTitles } from "../../lib/academy/curriculum";
+import { publicStageTitles } from "../../lib/academy/publicCatalog";
 import { resolveBuildStamp } from "../../lib/academy/buildStamp";
 import { t } from "../../lib/academy/dictionary";
 import { earnedStageProgress } from "../../lib/academy/unlock";
@@ -13,7 +13,7 @@ export default function StatusPanel() {
   const earned = earnedStageProgress(progress);
   const stamp = resolveBuildStamp();
   const stageLabel = hydrated
-    ? `${locale === "fa" ? "مشاهده مرحله" : "Viewing Stage"} ${progress.selectedStage}: ${t(stageTitles[progress.selectedStage], locale)} · earned ${earned}`
+    ? `${locale === "fa" ? "مشاهده مرحله" : "Viewing Stage"} ${progress.selectedStage}: ${t(publicStageTitles[progress.selectedStage], locale)} · earned ${earned}`
     : locale === "fa"
       ? "…"
       : "…";

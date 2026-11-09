@@ -2,7 +2,7 @@ import type { JournalDraft } from "./journal";
 import { createEmptyJournalV2, type JournalV2 } from "./journalV2";
 import type { Progress, Attempt } from "./contracts";
 import { archiveLegacyPlaceholderAttempts } from "./unlock";
-import { ASSESSMENT_CRITERIA_VERSION } from "./quizzes";
+import { ASSESSMENT_CRITERIA_VERSION } from "./assessmentVersion";
 
 export type MigrationResult<T> = {
   ok: boolean;

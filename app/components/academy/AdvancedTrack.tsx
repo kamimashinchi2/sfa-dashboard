@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 import type { AdvancedId, Attempt, RiskStatus } from "../../lib/academy/contracts";
-import { getAdvanced } from "../../lib/academy/advancedCurriculum";
-import { ASSESSMENT_CRITERIA_VERSION } from "../../lib/academy/quizzes";
+import { ASSESSMENT_CRITERIA_VERSION } from "../../lib/academy/assessmentVersion";
 import { t } from "../../lib/academy/dictionary";
 import { evaluateReadiness } from "../../lib/academy/grading";
 import { latestValidAttempt, missionPassedForUnlock } from "../../lib/academy/unlock";
+import type { AuthorizedContent } from "../../lib/academy/useAuthorizedContent";
+import ContentGate from "./ContentGate";
 import MicroLesson from "./MicroLesson";
 import QuizGate from "./QuizGate";
 import ResearchLab from "./ResearchLab";
@@ -15,19 +16,16 @@ import CrossAssetCapstone from "./CrossAssetCapstone";
 import PerformanceCard from "./PerformanceCard";
 import { useProgress } from "./ProgressProvider";
 
-export default function AdvancedTrack({ moduleId }: { moduleId: string }) {
-  const mod = getAdvanced(moduleId);
+function AdvancedBody({ content }: { content: AuthorizedContent }) {
+  const mod = content;
   const { progress, recordAttempt, completeLesson } = useProgress();
   const locale = progress.locale;
 
   const assessedEnabled = Boolean(progress.advancedAssessedEnabled);
-  // Transparent practice gate: need M5 pass for assessed advanced; else preview
   const prereqOk = missionPassedForUnlock(progress, "M5");
   const readOnly = !assessedEnabled || !prereqOk;
 
-  const saved = mod
-    ? latestValidAttempt(progress, mod.id as AdvancedId)
-    : null;
+  const saved = latestValidAttempt(progress, mod.id as AdvancedId);
 
   const [lessonDone, setLessonDone] = useState(Boolean(saved));
   const [quizScore, setQuizScore] = useState<number | null>(saved?.quizScore ?? null);
@@ -45,21 +43,14 @@ export default function AdvancedTrack({ moduleId }: { moduleId: string }) {
     });
   }, [quizScore, taskComplete, lessonDone]);
 
-  if (!mod) {
-    return (
-      <div className="mx-auto max-w-3xl px-6 py-16">
-        <h1 className="font-display text-3xl text-paper">Advanced module not found</h1>
-        <p className="mt-4 text-fog">Valid: A6, A7, A8</p>
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10 px-6 py-10 sm:px-8">
       <header>
         <p className="text-[10px] tracking-[0.22em] text-teal-bright uppercase">
           {mod.id} · stages {mod.stages.join(", ")} ·{" "}
           {readOnly ? "READ_ONLY_PREVIEW / feature-flagged" : "ASSESSED"}
+          {" · entitlement "}
+          {content.entitlement.unlockedStage}
         </p>
         {readOnly ? (
           <p
@@ -75,21 +66,6 @@ export default function AdvancedTrack({ moduleId }: { moduleId: string }) {
           {t(mod.title, locale)}
         </h1>
         <p className="mt-3 max-w-3xl text-fog">{t(mod.summary, locale)}</p>
-        <p className="mt-2 text-xs text-gold-soft">
-          Advanced completion is feature-flagged until tests and mentor content review
-          pass. Five intro missions never imply graduation. Interactive labs are
-          practice-only while the flag is off — no implied completion.
-          {!prereqOk
-            ? " Complete M5 assessed practice before advanced assessed attempts."
-            : ""}
-          {!assessedEnabled ? " Flag advancedAssessedEnabled is off." : ""}
-        </p>
-        {progress.selectedStage >= 6 ? (
-          <p className="mt-1 text-xs text-fog">
-            Viewing Stage {progress.selectedStage} (preview) — separate from earned
-            stage progress.
-          </p>
-        ) : null}
       </header>
 
       <div className="space-y-8">
@@ -145,7 +121,7 @@ export default function AdvancedTrack({ moduleId }: { moduleId: string }) {
           });
           const attempt: Attempt = {
             id: `${mod.id}-v${ASSESSMENT_CRITERIA_VERSION}-latest`,
-            missionId: mod.id,
+            missionId: mod.id as AdvancedId,
             scenarioVersion: 1,
             quizScore: score,
             numericPass: gate.numericPass,
@@ -175,5 +151,13 @@ export default function AdvancedTrack({ moduleId }: { moduleId: string }) {
         riskStatus={riskStatus}
       />
     </div>
+  );
+}
+
+export default function AdvancedTrack({ moduleId }: { moduleId: string }) {
+  return (
+    <ContentGate moduleId={moduleId}>
+      {(content) => <AdvancedBody content={content} />}
+    </ContentGate>
   );
 }

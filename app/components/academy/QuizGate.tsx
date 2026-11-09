@@ -10,8 +10,7 @@ import {
   type QuizAnswer,
 } from "../../lib/academy/grading";
 import { buildDisplayedQuiz, displayToCanonicalMc } from "../../lib/academy/quizShuffle";
-import { itemHash } from "../../lib/academy/quizHash";
-import { ASSESSMENT_CRITERIA_VERSION } from "../../lib/academy/quizzes";
+import { ASSESSMENT_CRITERIA_VERSION } from "../../lib/academy/assessmentVersion";
 import { resolveBuildStamp } from "../../lib/academy/buildStamp";
 import {
   prefsStore,
@@ -19,7 +18,22 @@ import {
   quizStore,
   type QuizAttemptRecord,
 } from "../../lib/academy/persist";
+import {
+  consentStore,
+  enqueueQuizResult,
+  outboxStore,
+} from "../../lib/academy/persist/outbox";
+import {
+  buildQuizResultV2,
+  serializeQuizResultV2,
+  validateQuizResultV2Shape,
+} from "../../lib/academy/quizResultV2";
+import { scheduleOutboxFlush } from "../../lib/academy/outboxFlush";
+import { STUDENT_ID_RE, ALIAS_RE } from "../../lib/academy/packet/schema";
 import { useProgress } from "./ProgressProvider";
+import type { PublicQuizItem } from "../../lib/academy/useAuthorizedContent";
+
+export type { PublicQuizItem };
 
 export type QuizScoredPayload = {
   score: number;
@@ -39,6 +53,24 @@ function formatAmsterdam(iso: string): string {
   }
 }
 
+function formatCanonicalAnswer(
+  kind: QuizItem["kind"],
+  canonical: unknown,
+  touched: boolean,
+  locale: "fa" | "en",
+): string {
+  if (!touched || canonical === null || canonical === undefined) {
+    return locale === "fa" ? "بدون پاسخ" : "not answered";
+  }
+  if (kind === "mc" && typeof canonical === "number") {
+    return `opt#${canonical}`;
+  }
+  if (kind === "order" && Array.isArray(canonical)) {
+    return canonical.join("→");
+  }
+  return String(canonical);
+}
+
 export default function QuizGate({
   items,
   quizId,
@@ -48,7 +80,7 @@ export default function QuizGate({
   readOnly,
   mode,
 }: {
-  items: QuizItem[];
+  items: PublicQuizItem[];
   quizId: string;
   onScored: (score: number, weakTopics: string[], attempt: QuizAttemptRecord) => void;
   initialAnswers?: Record<string, QuizAnswer>;
@@ -78,9 +110,11 @@ export default function QuizGate({
   const studentId = prefs.studentId?.trim() || "S00";
   const shuffleSeed = `${studentId}:${quizId}:${attemptNonce}`;
 
+  const asQuizItems = items as QuizItem[];
+
   const displayed = useMemo(
-    () => buildDisplayedQuiz(items, shuffleSeed),
-    [items, shuffleSeed],
+    () => buildDisplayedQuiz(asQuizItems, shuffleSeed),
+    [asQuizItems, shuffleSeed],
   );
 
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>(
@@ -88,13 +122,27 @@ export default function QuizGate({
   );
   const [touched, setTouched] = useState<Set<string>>(() => new Set());
   const [skipped, setSkipped] = useState<Set<string>>(() => new Set());
-  const [result, setResult] = useState<ReturnType<typeof scoreQuiz> | null>(
-    null,
-  );
+  const [result, setResult] = useState<{
+    score: number;
+    correct: number;
+    total: number;
+    weakTopics: string[];
+    perItem: {
+      id: string;
+      pass: boolean;
+      unanswered: boolean;
+      skipped: boolean;
+      remediationTopic: string;
+      kind: QuizItem["kind"];
+      rationale?: QuizItem["rationale"];
+    }[];
+    allAnswered: boolean;
+  } | null>(null);
   const [lastAttempt, setLastAttempt] = useState<QuizAttemptRecord | null>(null);
   const [scoring, setScoring] = useState(false);
+  const [persistError, setPersistError] = useState<string | null>(null);
+  const [outboxNote, setOutboxNote] = useState<string | null>(null);
 
-  // Latest persisted attempt for this quiz (read from store snapshot — no effect sync)
   const priorAttempt =
     lastAttempt ??
     quizSnap.attempts.find((a) => a.quizId === quizId) ??
@@ -126,11 +174,80 @@ export default function QuizGate({
 
   const scoreAndPersist = async () => {
     setScoring(true);
+    setPersistError(null);
+    setOutboxNote(null);
     try {
-      const scored = scoreQuiz(items, answers, {
-        touchedIds: touched,
-        skippedIds: skipped,
-      });
+      const hasLocalAnswers = asQuizItems.every((i) => i.answer !== undefined);
+      let scored: {
+        score: number;
+        correct: number;
+        total: number;
+        weakTopics: string[];
+        perItem: {
+          id: string;
+          pass: boolean;
+          unanswered: boolean;
+          skipped: boolean;
+          remediationTopic: string;
+          kind: QuizItem["kind"];
+          rationale?: QuizItem["rationale"];
+          itemHash?: string;
+        }[];
+        allAnswered: boolean;
+      };
+
+      if (hasLocalAnswers) {
+        const local = scoreQuiz(asQuizItems, answers, {
+          touchedIds: touched,
+          skippedIds: skipped,
+        });
+        scored = {
+          ...local,
+          perItem: local.perItem.map((p) => ({
+            ...p,
+            rationale: asQuizItems.find((i) => i.id === p.id)?.rationale,
+          })),
+        };
+      } else {
+        const res = await fetch("/api/mentor/quiz-score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            quizId,
+            answers,
+            touchedIds: [...touched],
+            skippedIds: [...skipped],
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(
+            typeof (err as { error?: string }).error === "string"
+              ? (err as { error: string }).error
+              : `SCORE_HTTP_${res.status}`,
+          );
+        }
+        const body = (await res.json()) as {
+          score: number;
+          correct: number;
+          total: number;
+          weakTopics: string[];
+          allAnswered: boolean;
+          perItem: {
+            id: string;
+            pass: boolean;
+            unanswered: boolean;
+            skipped: boolean;
+            remediationTopic: string;
+            kind: QuizItem["kind"];
+            itemHash: string;
+            rationale: QuizItem["rationale"];
+          }[];
+        };
+        scored = body;
+      }
+
       setResult(scored);
 
       const submittedAt = new Date();
@@ -155,9 +272,16 @@ export default function QuizGate({
           } else if (item.kind === "numeric") {
             canonical = raw == null ? null : String(raw);
           }
+          const hashFromServer =
+            "itemHash" in per && typeof per.itemHash === "string"
+              ? per.itemHash
+              : items.find((i) => i.id === item.id)?.itemHash;
+          if (!hashFromServer || !/^[0-9a-f]{64}$/.test(hashFromServer)) {
+            throw new Error(`ITEM_HASH_REQUIRED:${item.id}`);
+          }
           return {
             itemId: item.id,
-            itemHash: await itemHash(item),
+            itemHash: hashFromServer,
             kind: item.kind,
             displayedOrder:
               item.kind === "mc"
@@ -194,9 +318,80 @@ export default function QuizGate({
       };
 
       const nextStore = pushQuizAttempt(quizStore.getSnapshot(), attempt);
-      quizStore.set(nextStore);
+      const write = quizStore.set(nextStore);
+      if (!write.ok) {
+        setPersistError(
+          locale === "fa"
+            ? `ذخیره نشد — همگام‌سازی ادعا نمی‌شود (${write.error ?? "STORAGE"})`
+            : `Persist failed — not claiming sync (${write.error ?? "STORAGE"})`,
+        );
+        return;
+      }
+
       setLastAttempt(attempt);
       onScored(scored.score, scored.weakTopics, attempt);
+
+      // Enqueue ONLY after successful persist + consent + matching identity
+      if (assessmentMode === "ASSESSED") {
+        const consent = consentStore.getSnapshot();
+        const sid = prefs.studentId?.trim() ?? "";
+        const alias = prefs.alias?.trim() ?? "";
+        if (!consent.quizTransportConsent) {
+          setOutboxNote(
+            locale === "fa"
+              ? "رضایت ارسال خاموش است — نتیجه محلی ماند."
+              : "Transport consent OFF — result kept local only.",
+          );
+        } else if (!STUDENT_ID_RE.test(sid) || !ALIAS_RE.test(alias)) {
+          setOutboxNote(
+            locale === "fa"
+              ? "هویت معتبر نیست — صف ارسال نشده."
+              : "Identity invalid — not enqueued.",
+          );
+        } else {
+          try {
+            const topics: Record<string, string> = {};
+            for (const it of items) topics[it.id] = it.remediationTopic;
+            const payload = buildQuizResultV2({
+              attempt,
+              studentId: sid,
+              alias,
+              topics,
+            });
+            const shapeErr = validateQuizResultV2Shape(payload);
+            if (shapeErr.length) {
+              setOutboxNote(`OUTBOX_SHAPE:${shapeErr.join(",")}`);
+            } else {
+              const enq = enqueueQuizResult(outboxStore.getSnapshot(), {
+                attemptId: attempt.attemptId,
+                ownerStudentId: sid,
+                payloadJson: serializeQuizResultV2(payload),
+              });
+              if (enq.ok) {
+                outboxStore.set(enq.store);
+                scheduleOutboxFlush(200);
+                setOutboxNote(
+                  locale === "fa" ? "در صف ارسال Echo قرار گرفت." : "Queued for Echo transport.",
+                );
+              } else {
+                setOutboxNote(`OUTBOX:${enq.error}`);
+              }
+            }
+          } catch (e) {
+            setOutboxNote(
+              e instanceof Error ? e.message : "OUTBOX_ENQUEUE_FAIL",
+            );
+          }
+        }
+      }
+    } catch (e) {
+      setPersistError(
+        e instanceof Error
+          ? e.message
+          : locale === "fa"
+            ? "خطای نمره‌دهی"
+            : "Scoring failed",
+      );
     } finally {
       setScoring(false);
     }
@@ -223,7 +418,6 @@ export default function QuizGate({
           allAnswered: displayAttempt.items.every((it) => it.touched),
         }
       : null);
-  // Only this-session result locks the form; prior attempts remain visible after reload.
   const formLocked = readOnly || !!result || scoring;
 
   return (
@@ -238,8 +432,8 @@ export default function QuizGate({
       </h3>
       <p className="text-xs text-fog">
         {locale === "fa"
-          ? "نمرات سمت کلاینت CLAIM هستند — تا مرور منتور UNVERIFIED."
-          : "Client scores are CLAIMS — UNVERIFIED until mentor review."}
+          ? "نمرات سمت کلاینت CLAIM هستند — تا مرور Echo/منتور UNVERIFIED. تأیید آزمون درس بعدی را باز نمی‌کند."
+          : "Client scores are CLAIMS — UNVERIFIED until Echo/mentor review. Quiz approval never unlocks the next lesson."}
       </p>
 
       {displayed.map(({ item, optionMap, initialOrder }) => {
@@ -365,7 +559,13 @@ export default function QuizGate({
                     ? "نادرست / بدون پاسخ (ادعای کلاینت)"
                     : "Wrong / unanswered (client claim)"}
                 {" · "}
-                {t(item.rationale, locale)}
+                {(() => {
+                  const row = showResult.perItem.find((p) => p.id === item.id) as
+                    | { rationale?: QuizItem["rationale"] }
+                    | undefined;
+                  const r = row?.rationale ?? item.rationale;
+                  return r ? t(r, locale) : "";
+                })()}
                 {!showResult.perItem.find((p) => p.id === item.id)?.pass
                   ? ` · remediation: ${item.remediationTopic}`
                   : ""}
@@ -385,6 +585,17 @@ export default function QuizGate({
         {locale === "fa" ? "ثبت نمره" : "Score quiz"}
       </button>
 
+      {persistError ? (
+        <p className="text-sm text-red-300" data-testid="quiz-persist-error" role="alert">
+          {persistError}
+        </p>
+      ) : null}
+      {outboxNote ? (
+        <p className="text-xs text-gold-soft" data-testid="quiz-outbox-note">
+          {outboxNote}
+        </p>
+      ) : null}
+
       {showResult ? (
         <div
           className="space-y-3 border border-line bg-ink/50 p-4"
@@ -400,38 +611,73 @@ export default function QuizGate({
             <span className="text-fog">UNVERIFIED until mentor review</span>
           </p>
           {displayAttempt ? (
-            <p className="font-mono text-xs text-teal-bright" data-testid="attempt-meta">
+            <p className="font-mono text-xs text-teal-bright" data-testid="attempt-meta" dir="ltr">
               attemptId=<bdi dir="ltr">{displayAttempt.attemptId}</bdi>
               {" · "}
               {formatAmsterdam(displayAttempt.submittedAtISO)} (Europe/Amsterdam)
               {" · "}
-              build={resolveBuildStamp().label}
+              build=<bdi dir="ltr">{displayAttempt.buildCommit ?? resolveBuildStamp().label}</bdi>
             </p>
           ) : null}
-          <table className="w-full text-left text-xs text-fog" data-testid="per-item-table">
-            <thead>
-              <tr className="text-teal-bright">
-                <th className="py-1">item</th>
-                <th>result</th>
-                <th>topic</th>
-              </tr>
-            </thead>
-            <tbody>
-              {showResult.perItem.map((p) => (
-                <tr key={p.id} className="border-t border-line/40">
-                  <td className="py-1 font-mono">{p.id}</td>
-                  <td>
-                    {p.unanswered
-                      ? "not answered"
-                      : p.pass
-                        ? "correct"
-                        : "wrong"}
-                  </td>
-                  <td>{p.remediationTopic}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-fog" data-testid="per-item-table">
+              <thead>
+                <tr className="text-teal-bright">
+                  <th className="py-1">item</th>
+                  <th>{locale === "fa" ? "پاسخ شما" : "Your answer"}</th>
+                  <th>result</th>
+                  <th>topic</th>
+                  <th>attempt</th>
+                  <th>time (Europe/Amsterdam)</th>
+                  <th>build</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {showResult.perItem.map((p) => {
+                  const rec = displayAttempt?.items.find((i) => i.itemId === p.id);
+                  return (
+                    <tr key={p.id} className="border-t border-line/40">
+                      <td className="py-1 font-mono">
+                        <bdi dir="ltr">{p.id}</bdi>
+                      </td>
+                      <td className="font-mono">
+                        <bdi dir="ltr">
+                          {formatCanonicalAnswer(
+                            p.kind,
+                            rec?.answer.canonical,
+                            rec?.touched ?? !p.unanswered,
+                            locale,
+                          )}
+                        </bdi>
+                      </td>
+                      <td>
+                        {p.unanswered
+                          ? "not answered"
+                          : p.pass
+                            ? "correct"
+                            : "wrong"}
+                      </td>
+                      <td>{p.remediationTopic}</td>
+                      <td className="font-mono">
+                        <bdi dir="ltr">{displayAttempt?.attemptId ?? "—"}</bdi>
+                      </td>
+                      <td>
+                        {displayAttempt
+                          ? formatAmsterdam(displayAttempt.submittedAtISO)
+                          : "—"}
+                      </td>
+                      <td className="font-mono">
+                        <bdi dir="ltr">
+                          {displayAttempt?.buildCommit ??
+                            resolveBuildStamp().label}
+                        </bdi>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           <p className="text-xs text-fog">
             <a className="text-gold-soft underline" href="/submit">
               {locale === "fa"

@@ -4,7 +4,7 @@ import {
   archiveLegacyPlaceholderAttempts,
   resolveMissionAccess,
 } from "./unlock";
-import { ASSESSMENT_CRITERIA_VERSION } from "./quizzes";
+import { ASSESSMENT_CRITERIA_VERSION } from "./assessmentVersion";
 import { getMission } from "./curriculum";
 import { scoreQuiz } from "./grading";
 
@@ -51,16 +51,18 @@ describe("unlock gates & assessment version", () => {
     expect(archived[0]!.readiness).toBe("REMEDIATION");
   });
 
-  it("replacement quizzes have no answer-revealing labels and score 100 when correct", () => {
+  it("replacement quizzes have no answer-revealing labels and score 100 when correct", async () => {
+    const { withAnswers } = await import("./hydrateAnswers");
     for (const id of ["M2", "M3", "M4", "M5"] as const) {
       const m = getMission(id)!;
-      expect(m.quiz).toHaveLength(10);
-      for (const q of m.quiz) {
+      const quiz = withAnswers(m.quiz);
+      expect(quiz).toHaveLength(10);
+      for (const q of quiz) {
         const blob = JSON.stringify(q.options ?? []);
         expect(blob).not.toMatch(/Correct option|گزینه درست|Incorrect A/i);
       }
       const answers = Object.fromEntries(
-        m.quiz.map((item) => [
+        quiz.map((item) => [
           item.id,
           item.kind === "order"
             ? item.answer
@@ -69,7 +71,7 @@ describe("unlock gates & assessment version", () => {
               : item.answer,
         ]),
       );
-      expect(scoreQuiz(m.quiz, answers as never).score).toBe(100);
+      expect(scoreQuiz(quiz, answers as never).score).toBe(100);
     }
   });
 });

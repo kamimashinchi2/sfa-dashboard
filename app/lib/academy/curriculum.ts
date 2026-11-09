@@ -1,11 +1,5 @@
 import type { Lesson, MissionId, StageId, Text } from "./contracts";
-import {
-  ASSESSMENT_CRITERIA_VERSION,
-  M2_QUIZ,
-  M3_QUIZ,
-  M4_QUIZ,
-  M5_QUIZ,
-} from "./quizzes";
+import { M2_QUIZ, M3_QUIZ, M4_QUIZ, M5_QUIZ } from "./quizzes";
 
 export type QuizItem = {
   id: string;
@@ -13,13 +7,17 @@ export type QuizItem = {
   prompt: Text;
   /** For MC: options; for order: items to order */
   options?: Text[];
-  /** Correct option index, numeric string, or ordered option indices */
-  answer: number | string | number[];
+  /**
+   * Correct option index, numeric string, or ordered option indices.
+   * Client-safe banks omit this — answers live in server/answerKeyData.
+   * Server hydration and unit fixtures may set it.
+   */
+  answer?: number | string | number[];
   rationale: Text;
   remediationTopic: string;
 };
 
-export { ASSESSMENT_CRITERIA_VERSION };
+export { ASSESSMENT_CRITERIA_VERSION } from "./assessmentVersion";
 
 export type MissionDef = {
   id: MissionId;
@@ -169,7 +167,6 @@ export const missions: MissionDef[] = [
           { fa: "تأیید MSS", en: "MSS confirmation" },
           { fa: "هدف سود", en: "A profit target" },
         ],
-        answer: 1,
         rationale: {
           fa: "اسپرد فاصله bid/ask و هزینه اجراست.",
           en: "Spread is the bid/ask gap — an execution cost.",
@@ -183,7 +180,6 @@ export const missions: MissionDef[] = [
           fa: "اگر ریسک ۱٪ روی ۱۰٬۰۰۰ باشد، بودجه چند دلار است؟",
           en: "At 1% risk on 10,000 equity, what is the dollar budget?",
         },
-        answer: "100",
         rationale: {
           fa: "۱۰۰۰۰ × ۰٫۰۱ = ۱۰۰",
           en: "10000 × 0.01 = 100",
@@ -203,7 +199,6 @@ export const missions: MissionDef[] = [
           { fa: "نرخ بهره فدرال", en: "Fed funds rate" },
           { fa: "حداقل lot", en: "Minimum lot size" },
         ],
-        answer: 1,
         rationale: {
           fa: "هم‌پوشانی اوج مشارکت و نقدینگی را می‌آورد.",
           en: "Overlap concentrates participation and liquidity.",
@@ -223,7 +218,6 @@ export const missions: MissionDef[] = [
           { fa: "100", en: "100" },
           { fa: "1000", en: "1000" },
         ],
-        answer: 2,
         rationale: {
           fa: "مشخصات آموزشی: ۱۰۰ oz/lot.",
           en: "Educational spec: 100 oz/lot.",
@@ -255,7 +249,6 @@ export const missions: MissionDef[] = [
             en: "Futures means no margin",
           },
         ],
-        answer: 1,
         rationale: {
           fa: "فیوچرز مشخصات، سررسید و مدل تحویل دارد.",
           en: "Futures embed specs, expiry and delivery models.",
@@ -275,7 +268,6 @@ export const missions: MissionDef[] = [
           { fa: "محاسبه lot", en: "Compute lots" },
           { fa: "ارسال سفارش", en: "Send order" },
         ],
-        answer: [0, 1, 2, 3],
         rationale: {
           fa: "بودجه → stop → lot → اجرا.",
           en: "Budget → stop → lots → execution.",
@@ -293,7 +285,6 @@ export const missions: MissionDef[] = [
           { fa: "بله", en: "Yes" },
           { fa: "خیر — به مشخصات قرارداد بستگی دارد", en: "No — depends on contract specs" },
         ],
-        answer: 1,
         rationale: {
           fa: "باید tickSize قرارداد را بخوانید.",
           en: "Read the contract tickSize.",
@@ -307,7 +298,6 @@ export const missions: MissionDef[] = [
           fa: "اگر tickSize طلا ۰٫۰۱ و فاصله stop برابر ۸ باشد، چند tick است؟",
           en: "Gold tickSize 0.01 and stop distance 8 → how many ticks?",
         },
-        answer: "800",
         rationale: {
           fa: "۸ / ۰٫۰۱ = ۸۰۰",
           en: "8 / 0.01 = 800",
@@ -331,7 +321,6 @@ export const missions: MissionDef[] = [
             en: "Risk budget is built from equity and risk%",
           },
         ],
-        answer: 1,
         rationale: {
           fa: "بودجه = equity × risk%/100",
           en: "Budget = equity × risk%/100",
@@ -349,7 +338,6 @@ export const missions: MissionDef[] = [
           { fa: "تاریخی تأییدشده", en: "Verified historical" },
           { fa: "SYNTHETIC / شبیه‌سازی‌شده", en: "SYNTHETIC / شبیه‌سازی‌شده" },
         ],
-        answer: 1,
         rationale: {
           fa: "همه فیکسچرها آموزشی و synthetic هستند.",
           en: "All fixtures are educational and synthetic.",

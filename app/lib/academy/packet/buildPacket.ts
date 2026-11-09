@@ -1,6 +1,6 @@
 import { RISK_ENGINE_VERSION } from "../contracts";
 import { APP_RELEASE_LABEL, resolveBuildStamp } from "../buildStamp";
-import { ASSESSMENT_CRITERIA_VERSION } from "../quizzes";
+import { ASSESSMENT_CRITERIA_VERSION } from "../assessmentVersion";
 import type { JournalV2 } from "../journalV2";
 import type {
   LessonResponseRecord,

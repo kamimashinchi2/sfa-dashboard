@@ -1,5 +1,5 @@
 import type { AdvancedId, Attempt, MissionId, Progress } from "./contracts";
-import { ASSESSMENT_CRITERIA_VERSION } from "./quizzes";
+import { ASSESSMENT_CRITERIA_VERSION } from "./assessmentVersion";
 
 const MISSION_ORDER: MissionId[] = ["M1", "M2", "M3", "M4", "M5"];
 

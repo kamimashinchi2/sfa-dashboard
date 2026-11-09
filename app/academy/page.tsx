@@ -1,8 +1,10 @@
 import AcademyShell from "../components/academy/AcademyShell";
 import StageMap from "../components/academy/StageMap";
 import Link from "next/link";
-import { missions } from "../lib/academy/curriculum";
-import { advancedModules } from "../lib/academy/advancedCurriculum";
+import {
+  publicAdvanced,
+  publicMissions,
+} from "../lib/academy/publicCatalog";
 import { resolveBuildStamp } from "../lib/academy/buildStamp";
 
 export default function AcademyPage() {
@@ -18,9 +20,9 @@ export default function AcademyPage() {
             Bilingual academy · M1–M5 + A6–A8 labs
           </h1>
           <p className="mt-4 max-w-2xl text-fog">
-            Browse all eight stages as PREVIEW. Unlock assessed practice with
-            objective score ≥80, completed tasks, and no unresolved risk hold.
-            Advanced labs are feature-flagged. Data are SYNTHETIC.
+            Browse stage outlines publicly. Lesson and quiz bodies require mentor
+            session entitlements. Practical approval (after admin delivery) unlocks
+            the next lesson — quiz approval never does. Data are SYNTHETIC.
           </p>
         </section>
 
@@ -29,7 +31,7 @@ export default function AcademyPage() {
         <section>
           <h2 className="font-display text-3xl text-paper">Pilot missions</h2>
           <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-            {missions.map((m) => (
+            {publicMissions.map((m) => (
               <li key={m.id} className="border border-line bg-ink/40 p-4">
                 <Link
                   href={m.href}
@@ -47,7 +49,7 @@ export default function AcademyPage() {
             Advanced labs (Stages 6–8)
           </h2>
           <ul className="mt-6 grid gap-3 sm:grid-cols-3">
-            {advancedModules.map((m) => (
+            {publicAdvanced.map((m) => (
               <li key={m.id} className="border border-line bg-ink/40 p-4">
                 <Link
                   href={m.href}

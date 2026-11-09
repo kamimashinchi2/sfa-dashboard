@@ -4,7 +4,6 @@ import { Suspense, useMemo, useState, useSyncExternalStore } from "react";
 import AcademyShell from "../components/academy/AcademyShell";
 import { copyTextToClipboard } from "../lib/academy/copyClipboard";
 import { downloadTextFile } from "../lib/academy/download";
-import { getAllQuizBanksHash } from "../lib/academy/quizHash";
 import {
   buildPacket,
   currentAndPreviousIsoWeeks,
@@ -191,7 +190,20 @@ function SubmitInner() {
       .filter((e) => e.week === activeWeek)
       .sort((a, b) => b.seq - a.seq)[0];
     const packetSeq = (prior?.seq ?? 0) + 1;
-    const quizBankHash = await getAllQuizBanksHash();
+    let quizBankHash: string;
+    try {
+      const res = await fetch("/api/meta/quiz-bank-hash", { cache: "no-store" });
+      if (!res.ok) throw new Error(`QUIZ_BANK_HASH_HTTP_${res.status}`);
+      const body = (await res.json()) as { quizBankHash?: string };
+      if (!body.quizBankHash || !/^[0-9a-f]{64}$/.test(body.quizBankHash)) {
+        throw new Error("QUIZ_BANK_HASH_INVALID");
+      }
+      quizBankHash = body.quizBankHash;
+    } catch (e) {
+      throw new Error(
+        e instanceof Error ? e.message : "QUIZ_BANK_HASH_UNAVAILABLE",
+      );
+    }
 
     const packet = await buildPacket({
       domains: {
@@ -246,11 +258,22 @@ function SubmitInner() {
     setLastPacket(packet);
   };
 
+  const bilingualDigestError = (raw: string) => {
+    const fa =
+      "ساخت بسته ناموفق بود (احتمالاً digest). می‌توانید متن را کپی کنید یا بعداً با HTTPS دوباره تلاش کنید.";
+    const en =
+      "Packet build failed (likely digest). You can copy selectable text, or retry over HTTPS.";
+    return `${locale === "fa" ? fa : en} · ${raw}`;
+  };
+
   const onDownload = async () => {
     setBusy(true);
     setError(null);
     try {
       const { packet, md, filename } = await build();
+      if (!packet.integrity?.digest) {
+        throw new Error("DIGEST_MISSING");
+      }
       downloadTextFile({
         filename,
         content: md,
@@ -259,7 +282,8 @@ function SubmitInner() {
       });
       afterExport(packet);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "EXPORT_FAIL");
+      const msg = e instanceof Error ? e.message : "EXPORT_FAIL";
+      setError(bilingualDigestError(msg));
     } finally {
       setBusy(false);
     }
@@ -270,10 +294,14 @@ function SubmitInner() {
     setError(null);
     try {
       const { packet, md } = await build();
+      if (!packet.integrity?.digest) {
+        throw new Error("DIGEST_MISSING");
+      }
       await copyTextToClipboard(md);
       afterExport(packet);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "COPY_FAIL");
+      const msg = e instanceof Error ? e.message : "COPY_FAIL";
+      setError(bilingualDigestError(msg));
     } finally {
       setBusy(false);
     }

@@ -4,7 +4,7 @@
  * APP_RELEASE_LABEL is the single release name used across pages.
  */
 
-export const APP_RELEASE_LABEL = "Iteration 4";
+export const APP_RELEASE_LABEL = "Iteration 5";
 
 export type BuildStamp = {
   label: string;

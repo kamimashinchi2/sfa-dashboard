@@ -1,0 +1,215 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "schemaVersion",
+    "studentId",
+    "alias",
+    "attemptId",
+    "quizId",
+    "missionId",
+    "stage",
+    "submittedAtISO",
+    "buildCommit",
+    "score",
+    "correct",
+    "total",
+    "readiness",
+    "weakTopics",
+    "items",
+    "telegramLinkStatus"
+  ],
+  "properties": {
+    "format": {
+      "const": "sfa-quiz-result",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 2,
+      "type": "integer"
+    },
+    "studentId": {
+      "type": "string",
+      "pattern": "^S\\d{2,4}$"
+    },
+    "alias": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9-]{2,23}$"
+    },
+    "attemptId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,160}$"
+    },
+    "quizId": {
+      "enum": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "A6",
+        "A7",
+        "A8"
+      ]
+    },
+    "missionId": {
+      "enum": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "A6",
+        "A7",
+        "A8"
+      ]
+    },
+    "stage": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8
+    },
+    "submittedAtISO": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "buildCommit": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,40}$"
+        }
+      ]
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "correct": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "readiness": {
+      "enum": [
+        "READY",
+        "REMEDIATION"
+      ]
+    },
+    "weakTopics": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "maxItems": 100,
+      "minItems": 0
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "itemId",
+          "itemHash",
+          "kind",
+          "studentAnswer",
+          "touched",
+          "clientCorrect",
+          "topic",
+          "reflection"
+        ],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,160}$"
+          },
+          "itemHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "kind": {
+            "enum": [
+              "mc",
+              "numeric",
+              "order"
+            ]
+          },
+          "studentAnswer": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000
+                },
+                "maxItems": 100,
+                "minItems": 0
+              }
+            ]
+          },
+          "touched": {
+            "type": "boolean"
+          },
+          "clientCorrect": {
+            "type": "boolean"
+          },
+          "topic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "reflection": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              }
+            ]
+          }
+        }
+      },
+      "maxItems": 100,
+      "minItems": 1
+    },
+    "telegramLinkStatus": {
+      "enum": [
+        "UNKNOWN",
+        "UNLINKED",
+        "LINKED"
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Structural schema; contracts.py also enforces target binding, scores, full item set, all prior stages, unresolved drills, privacy and configurable verdict thresholds."
+}
