@@ -2,13 +2,24 @@
 
 import Link from "next/link";
 import type { StageId } from "../../lib/academy/contracts";
-import { advancedForStage } from "../../lib/academy/advancedCurriculum";
-import { missionsForStage, stageTitles } from "../../lib/academy/curriculum";
+import {
+  publicAdvanced,
+  publicMissions,
+  publicStageTitles,
+} from "../../lib/academy/publicCatalog";
 import { t, ui } from "../../lib/academy/dictionary";
 import { earnedStageProgress } from "../../lib/academy/unlock";
 import { useProgress } from "./ProgressProvider";
 
 const STAGES = [1, 2, 3, 4, 5, 6, 7, 8] as StageId[];
+
+function missionsForStage(stage: StageId) {
+  return publicMissions.filter((m) => m.stages.includes(stage));
+}
+
+function advancedForStage(stage: StageId) {
+  return publicAdvanced.filter((a) => a.stages.includes(stage));
+}
 
 export default function StageMap() {
   const { progress, setSelectedStage } = useProgress();
@@ -26,8 +37,8 @@ export default function StageMap() {
         </h2>
         <p className="mt-2 text-xs text-fog">
           {locale === "fa"
-            ? `پیشرفت کسب‌شده: ${earned} مأموریت · Viewing Stage ${progress.selectedStage} جدا از پیشرفت کسب‌شده است.`
-            : `Earned progression: ${earned} mission(s) · Viewing Stage ${progress.selectedStage} is separate from earned progress.`}
+            ? `پیشرفت کسب‌شده: ${earned} مأموریت · Viewing Stage ${progress.selectedStage} جدا از پیشرفت کسب‌شده است. باز شدن درس بعدی فقط پس از تأیید تمرین عملی است.`
+            : `Earned progression: ${earned} mission(s) · Viewing Stage ${progress.selectedStage} is separate from earned progress. Next lesson unlocks only after practical approval.`}
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:gap-3">
@@ -52,7 +63,7 @@ export default function StageMap() {
                 {active ? " · VIEWING" : ""}
               </span>
               <span className="mt-1.5 block font-display text-sm leading-snug">
-                {t(stageTitles[id], locale)}
+                {t(publicStageTitles[id], locale)}
               </span>
               <span className="mt-2 block text-[11px] text-fog">
                 {[...linked.map((m) => m.id), ...adv.map((a) => a.id)].join(", ") ||

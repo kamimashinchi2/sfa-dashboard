@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { scoreQuiz, numericAnswersEqual } from "./grading";
 import { buildDisplayedQuiz } from "./quizShuffle";
-import { listQuizBanks } from "./quizHash";
+import { listQuizBanksPublic } from "./quizHash";
+import { withAnswers } from "./hydrateAnswers";
 
 describe("P0-1 quiz shuffle + scoring", () => {
   it("always-second-option cannot recover the old ≥90 exploit; mean ≤30 over 100 seeds", () => {
-    const banks = listQuizBanks();
+    const banks = listQuizBanksPublic().map((b) => ({
+      ...b,
+      items: withAnswers(b.items),
+    }));
     expect(banks.length).toBe(8);
     for (const bank of banks) {
       const scores: number[] = [];
@@ -38,9 +42,9 @@ describe("P0-1 quiz shuffle + scoring", () => {
   });
 
   it("untouched order scores wrong / unanswered", () => {
-    const bank = listQuizBanks().find((b) =>
-      b.items.some((i) => i.kind === "order"),
-    )!;
+    const bank = listQuizBanksPublic()
+      .map((b) => ({ ...b, items: withAnswers(b.items) }))
+      .find((b) => b.items.some((i) => i.kind === "order"))!;
     const orderItem = bank.items.find((i) => i.kind === "order")!;
     const scored = scoreQuiz(bank.items, {}, { touchedIds: [] });
     const per = scored.perItem.find((p) => p.id === orderItem.id)!;
@@ -55,7 +59,10 @@ describe("P0-1 quiz shuffle + scoring", () => {
   });
 
   it("same seed → same displayed order", () => {
-    const bank = listQuizBanks()[0]!;
+    const bank = {
+      ...listQuizBanksPublic()[0]!,
+      items: withAnswers(listQuizBanksPublic()[0]!.items),
+    };
     const a = buildDisplayedQuiz(bank.items, "S07:M1:aaaa");
     const b = buildDisplayedQuiz(bank.items, "S07:M1:aaaa");
     expect(a.map((d) => d.optionMap)).toEqual(b.map((d) => d.optionMap));

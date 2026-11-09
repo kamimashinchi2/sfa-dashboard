@@ -14,6 +14,9 @@ export type CanonicalQuizItem = {
 };
 
 export function toCanonicalQuizItem(item: QuizItem): CanonicalQuizItem {
+  if (item.answer === undefined) {
+    throw new Error(`ITEM_ANSWER_REQUIRED:${item.id}`);
+  }
   return {
     id: item.id,
     kind: item.kind,
@@ -40,7 +43,8 @@ export type QuizBankRef = {
   items: QuizItem[];
 };
 
-export function listQuizBanks(): QuizBankRef[] {
+/** Public bank listing WITHOUT answers (client-safe). */
+export function listQuizBanksPublic(): QuizBankRef[] {
   const out: QuizBankRef[] = [];
   for (const m of missions) {
     out.push({ quizId: m.id, items: m.quiz });
@@ -51,6 +55,11 @@ export function listQuizBanks(): QuizBankRef[] {
   return out;
 }
 
+/** @deprecated Use listQuizBanksPublic or server listPrivateQuizBanks */
+export function listQuizBanks(): QuizBankRef[] {
+  return listQuizBanksPublic();
+}
+
 export function getQuizBank(quizId: string): QuizItem[] | null {
   const m = getMission(quizId);
   if (m) return m.quiz;
@@ -59,32 +68,38 @@ export function getQuizBank(quizId: string): QuizItem[] | null {
   return null;
 }
 
-/** Memoized bank hashes — computed once per process. */
+/** Memoized bank hashes — computed once per process (requires hydrated answers). */
 const bankHashCache = new Map<string, string>();
 let allBanksHash: string | null = null;
 
-export async function getQuizBankHashCached(quizId: string): Promise<string> {
+export async function getQuizBankHashCached(
+  quizId: string,
+  items?: QuizItem[],
+): Promise<string> {
   const hit = bankHashCache.get(quizId);
   if (hit) return hit;
-  const items = getQuizBank(quizId);
-  if (!items) throw new Error(`UNKNOWN_QUIZ:${quizId}`);
-  const h = await quizBankHash(items);
+  const bank = items ?? getQuizBank(quizId);
+  if (!bank) throw new Error(`UNKNOWN_QUIZ:${quizId}`);
+  const h = await quizBankHash(bank);
   bankHashCache.set(quizId, h);
   return h;
 }
 
-export async function getAllQuizBanksHash(): Promise<string> {
-  if (allBanksHash) return allBanksHash;
-  const banks = listQuizBanks();
+export async function getAllQuizBanksHash(
+  banks?: QuizBankRef[],
+): Promise<string> {
+  if (allBanksHash && !banks) return allBanksHash;
+  const list = banks ?? listQuizBanksPublic();
   const pairs = await Promise.all(
-    banks.map(async (b) => ({
+    list.map(async (b) => ({
       quizId: b.quizId,
-      hash: await getQuizBankHashCached(b.quizId),
+      hash: await getQuizBankHashCached(b.quizId, b.items),
     })),
   );
   pairs.sort((a, b) => (a.quizId < b.quizId ? -1 : 1));
-  allBanksHash = await sha256Hex(canon(pairs));
-  return allBanksHash;
+  const hash = await sha256Hex(canon(pairs));
+  if (!banks) allBanksHash = hash;
+  return hash;
 }
 
 /** Export for build-time / packet versions.quizBank */

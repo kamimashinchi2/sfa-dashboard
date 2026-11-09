@@ -1,0 +1,216 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "week",
+    "stage",
+    "title",
+    "coreTasks",
+    "weaknessDrills",
+    "spiralReview",
+    "riskRules",
+    "deliverables",
+    "dueAtISO"
+  ],
+  "properties": {
+    "week": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "stage": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8
+    },
+    "title": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fa",
+        "en"
+      ],
+      "properties": {
+        "fa": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "en": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      }
+    },
+    "coreTasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fa",
+          "en"
+        ],
+        "properties": {
+          "fa": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "en": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          }
+        }
+      },
+      "maxItems": 20,
+      "minItems": 1
+    },
+    "weaknessDrills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "weaknessId",
+          "task"
+        ],
+        "properties": {
+          "weaknessId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,160}$"
+          },
+          "task": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fa",
+              "en"
+            ],
+            "properties": {
+              "fa": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1200
+              },
+              "en": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1200
+              }
+            }
+          }
+        }
+      },
+      "maxItems": 50,
+      "minItems": 0
+    },
+    "spiralReview": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stage",
+          "skill",
+          "task"
+        ],
+        "properties": {
+          "stage": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "skill": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "task": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fa",
+              "en"
+            ],
+            "properties": {
+              "fa": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1200
+              },
+              "en": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1200
+              }
+            }
+          }
+        }
+      },
+      "maxItems": 40,
+      "minItems": 0
+    },
+    "riskRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxRiskPct",
+        "hardStructuralStop",
+        "minNetRR",
+        "noSignals"
+      ],
+      "properties": {
+        "maxRiskPct": {
+          "const": "1",
+          "type": "string"
+        },
+        "hardStructuralStop": {
+          "const": true,
+          "type": "boolean"
+        },
+        "minNetRR": {
+          "const": "2",
+          "type": "string"
+        },
+        "noSignals": {
+          "const": true,
+          "type": "boolean"
+        }
+      }
+    },
+    "deliverables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fa",
+          "en"
+        ],
+        "properties": {
+          "fa": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "en": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          }
+        }
+      },
+      "maxItems": 20,
+      "minItems": 1
+    },
+    "dueAtISO": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Structural schema; contracts.py also enforces target binding, scores, full item set, all prior stages, unresolved drills, privacy and configurable verdict thresholds."
+}

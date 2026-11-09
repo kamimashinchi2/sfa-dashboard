@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { Attempt, MissionId, RiskStatus } from "../../lib/academy/contracts";
-import { getMission } from "../../lib/academy/curriculum";
-import { ASSESSMENT_CRITERIA_VERSION } from "../../lib/academy/quizzes";
+import { ASSESSMENT_CRITERIA_VERSION } from "../../lib/academy/assessmentVersion";
 import { t } from "../../lib/academy/dictionary";
 import { evaluateReadiness } from "../../lib/academy/grading";
 import {
@@ -14,6 +13,8 @@ import {
   pushSelfReport,
   responsesStore,
 } from "../../lib/academy/persist";
+import type { AuthorizedContent } from "../../lib/academy/useAuthorizedContent";
+import ContentGate from "./ContentGate";
 import MicroLesson from "./MicroLesson";
 import QuizGate from "./QuizGate";
 import SetupValidator from "./SetupValidator";
@@ -23,27 +24,22 @@ import JournalBuilder from "./JournalBuilder";
 import PerformanceCard from "./PerformanceCard";
 import { useProgress } from "./ProgressProvider";
 
-export default function MissionWorkspace({ missionId }: { missionId: string }) {
-  const mission = getMission(missionId);
+function MissionBody({
+  content,
+}: {
+  content: AuthorizedContent;
+  refresh: () => void;
+}) {
+  const mission = content;
   const { progress, recordAttempt, completeLesson } = useProgress();
   const locale = progress.locale;
 
-  const access = useMemo(
-    () =>
-      mission
-        ? resolveMissionAccess(progress, mission.id as MissionId)
-        : { mode: "READ_ONLY_PREVIEW" as const, reason: "UNKNOWN" },
-    [mission, progress],
-  );
+  const access = resolveMissionAccess(progress, mission.id as MissionId);
   const readOnly = access.mode === "READ_ONLY_PREVIEW";
 
-  const saved = mission
-    ? latestValidAttempt(progress, mission.id as MissionId)
-    : null;
+  const saved = latestValidAttempt(progress, mission.id as MissionId);
 
-  const [lessonDone, setLessonDone] = useState(
-    () => Boolean(saved) || false,
-  );
+  const [lessonDone, setLessonDone] = useState(() => Boolean(saved) || false);
   const [quizScore, setQuizScore] = useState<number | null>(
     () => saved?.quizScore ?? null,
   );
@@ -63,20 +59,6 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
   const [weakTopics, setWeakTopics] = useState<string[]>(
     () => saved?.weakTopics ?? [],
   );
-
-  if (!mission) {
-    return (
-      <div className="mx-auto max-w-3xl px-6 py-16">
-        <h1 className="font-display text-3xl text-paper">Mission not found</h1>
-        <p className="mt-4 text-fog">
-          Valid ids: M1, M2, M3, M4, M5.{" "}
-          <a className="text-gold-soft" href="/academy">
-            Back to academy
-          </a>
-        </p>
-      </div>
-    );
-  }
 
   const needsRisk = mission.id === "M1" || mission.id === "M3";
   const effectiveRisk = needsRisk ? riskStatus : null;
@@ -108,13 +90,11 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
       freeTextSubmitted: freeTextSubmitted || lessonDone,
       missionRequiresRisk: needsRisk,
     });
-    // Keep a single unlock-driving attempt id per mission for progress facade.
-    // Detailed per-item evidence lives in sfa.v2.quiz (QuizAttemptRecord).
     const { id: _ignoredId, ...restOverrides } = overrides ?? {};
     void _ignoredId;
     const attempt: Attempt = {
       id: `${mission.id}-v${ASSESSMENT_CRITERIA_VERSION}-latest`,
-      missionId: mission.id,
+      missionId: mission.id as MissionId,
       scenarioVersion: 1,
       quizScore: score,
       numericPass: gate.numericPass,
@@ -136,6 +116,8 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
         <p className="text-[10px] tracking-[0.22em] text-teal-bright uppercase">
           {mission.id} · stages {mission.stages.join(", ")} ·{" "}
           {readOnly ? "READ_ONLY_PREVIEW" : "ASSESSED"} · {access.reason}
+          {" · "}
+          entitlement stage {content.entitlement.unlockedStage}
         </p>
         <h1 className="mt-2 font-display text-4xl text-paper">
           {t(mission.title, locale)}
@@ -144,8 +126,8 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
         {readOnly ? (
           <p className="mt-3 border border-line bg-ink/40 p-3 text-sm text-gold-soft">
             {locale === "fa"
-              ? "پیش‌نمایش فقط‌خواندنی — برای تلاش assessed پیش‌نیاز را کامل کنید. Viewing preview جدا از پیشرفت کسب‌شده است."
-              : "Read-only preview — complete prerequisites for assessed attempts. Viewing preview is separate from earned progress."}
+              ? "پیش‌نمایش فقط‌خواندنی — برای تلاش assessed پیش‌نیاز را کامل کنید."
+              : "Read-only preview — complete prerequisites for assessed attempts."}
           </p>
         ) : null}
         {saved ? (
@@ -235,11 +217,6 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
           {locale === "fa"
             ? "خودبررسی (نمره‌دهی نشده): تمرین کامل شد"
             : "Self-check (not graded): Mark practical complete"}
-          {mission.id === "M2"
-            ? locale === "fa"
-              ? " (پس از اعتبارسنجی حاشیه)"
-              : " (after annotation validation)"
-            : ""}
         </label>
       </section>
 
@@ -259,8 +236,8 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
       {saved?.archivedLegacy ? (
         <p className="border border-line bg-ink/40 p-3 text-sm text-gold-soft">
           {locale === "fa"
-            ? "تلاش بایگانی‌شدهٔ قدیمی — نیاز به ارزیابی مجدد. بدون نشان نمره."
-            : "Archived legacy attempt, reassessment required. No score badge."}
+            ? "تلاش بایگانی‌شدهٔ قدیمی — نیاز به ارزیابی مجدد."
+            : "Archived legacy attempt, reassessment required."}
         </p>
       ) : null}
 
@@ -269,14 +246,9 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
           <p className="font-mono text-sm text-gold-soft">
             numericPass={String(readiness.numericPass)} · readiness=
             {readiness.readiness}
-            {readiness.ownerReviewRequired ? " · OWNER_REVIEW_REQUIRED" : ""}
-            {readiness.readiness === "MENTOR_PENDING" ||
-            readiness.readiness === "PENDING_REVIEW"
-              ? " · (local readiness — not sent)"
-              : ""}
+            {" · UNVERIFIED claim — quiz does not unlock next lesson"}
           </p>
           <p className="mt-2 text-xs text-fog">
-            No certification awarded. Client scores are UNVERIFIED until mentor review.
             Assessment criteria v{ASSESSMENT_CRITERIA_VERSION}.{" "}
             <a className="text-gold-soft underline" href="/submit">
               {locale === "fa" ? "بستهٔ ارسال" : "Submission packet"}
@@ -306,5 +278,15 @@ export default function MissionWorkspace({ missionId }: { missionId: string }) {
         }}
       />
     </div>
+  );
+}
+
+export default function MissionWorkspace({ missionId }: { missionId: string }) {
+  return (
+    <ContentGate missionId={missionId}>
+      {(content, refresh) => (
+        <MissionBody content={content} refresh={refresh} />
+      )}
+    </ContentGate>
   );
 }
