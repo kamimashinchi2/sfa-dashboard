@@ -46,20 +46,34 @@ export function scoreQuiz(
 /**
  * Practice unlock: score >= 80, tasks complete, no unresolved practical risk hold.
  * Passing score + HARD_BLOCK retains numeric pass but holds readiness.
+ * A null risk result for a non-risk task is not failure.
+ * MENTOR_PENDING / PENDING_REVIEW are distinct from REMEDIATION.
  */
 export function evaluateReadiness(input: {
   quizScore: number;
   taskComplete: boolean;
   riskStatus: RiskStatus | null;
   freeTextSubmitted: boolean;
+  missionRequiresRisk?: boolean;
 }): Pick<Attempt, "numericPass" | "readiness" | "riskStatus"> & {
   ownerReviewRequired: boolean;
 } {
   const numericPass = input.quizScore >= 80;
+  const requiresRisk = input.missionRequiresRisk === true;
   const riskHold =
-    input.riskStatus === "HARD_BLOCK" ||
-    input.riskStatus === "UNVERIFIED" ||
-    input.riskStatus === "NO_VALID_SIZE";
+    requiresRisk &&
+    (input.riskStatus === "HARD_BLOCK" ||
+      input.riskStatus === "UNVERIFIED" ||
+      input.riskStatus === "NO_VALID_SIZE");
+
+  if (!numericPass) {
+    return {
+      numericPass: false,
+      riskStatus: input.riskStatus,
+      readiness: "REMEDIATION",
+      ownerReviewRequired: false,
+    };
+  }
 
   if (!input.taskComplete || !input.freeTextSubmitted) {
     return {
@@ -70,7 +84,7 @@ export function evaluateReadiness(input: {
     };
   }
 
-  if (numericPass && input.riskStatus === "HARD_BLOCK") {
+  if (requiresRisk && input.riskStatus === "HARD_BLOCK") {
     return {
       numericPass: true,
       riskStatus: input.riskStatus,
@@ -79,26 +93,30 @@ export function evaluateReadiness(input: {
     };
   }
 
-  if (numericPass && !riskHold && input.riskStatus === "PASS_SIMULATION") {
+  if (
+    requiresRisk &&
+    !riskHold &&
+    input.riskStatus === "PASS_SIMULATION"
+  ) {
     return {
       numericPass: true,
       riskStatus: input.riskStatus,
-      readiness: "READY",
+      readiness: "MENTOR_PENDING",
       ownerReviewRequired: false,
     };
   }
 
-  if (numericPass && input.riskStatus === null) {
-    // Missions without practical risk still need pending mentor for free text
+  if (!requiresRisk && input.riskStatus === null) {
+    // Non-risk mission: null risk is not failure — mentor pending for free text
     return {
       numericPass: true,
       riskStatus: null,
-      readiness: "PENDING_REVIEW",
+      readiness: "MENTOR_PENDING",
       ownerReviewRequired: false,
     };
   }
 
-  if (input.riskStatus === "UNVERIFIED") {
+  if (requiresRisk && input.riskStatus === "UNVERIFIED") {
     return {
       numericPass,
       riskStatus: input.riskStatus,
@@ -107,10 +125,19 @@ export function evaluateReadiness(input: {
     };
   }
 
+  if (requiresRisk && input.riskStatus === null) {
+    return {
+      numericPass,
+      riskStatus: null,
+      readiness: "REMEDIATION",
+      ownerReviewRequired: false,
+    };
+  }
+
   return {
     numericPass,
     riskStatus: input.riskStatus,
-    readiness: numericPass ? "PENDING_REVIEW" : "REMEDIATION",
+    readiness: "MENTOR_PENDING",
     ownerReviewRequired: false,
   };
 }

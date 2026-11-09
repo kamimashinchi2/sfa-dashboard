@@ -17,8 +17,41 @@ export const sweepReversalScenario: SetupScenario = {
   assumptions: [
     "Authored scenario thresholds — not verified Academy doctrine",
     "TOUCH/CLOSE policy per packet",
+    "FVG/OB bounds are authored evidence, not live detectors",
   ],
-  evidenceIds: ["ev-htf-1", "ev-sweep-1", "ev-mss-1", "ev-disp-1"],
+  evidenceIds: ["ev-htf-1", "ev-sweep-1", "ev-mss-1", "ev-disp-1", "ev-fvg-1", "ev-pdh-1"],
+  displacementThresholds: {
+    minBody: "3",
+    minBodyToRange: "0.4",
+  },
+  zones: [
+    {
+      id: "zone-pdh-1",
+      kind: "PDH",
+      low: "2498",
+      high: "2498",
+      knownAtFrame: 0,
+      evidenceIds: ["ev-pdh-1"],
+    },
+    {
+      id: "zone-fvg-1",
+      kind: "FVG",
+      low: "2498",
+      high: "2501",
+      knownAtFrame: 3,
+      evidenceIds: ["ev-fvg-1"],
+      direction: "BULLISH",
+    },
+    {
+      id: "zone-ob-1",
+      kind: "OB",
+      low: "2494",
+      high: "2500",
+      knownAtFrame: 3,
+      evidenceIds: ["ev-ob-1"],
+      direction: "BULLISH",
+    },
+  ],
 };
 
 /** Synthetic OHLC — inspectable educational fixture. */
@@ -30,6 +63,10 @@ export const sweepReversalFrames: OhlcFrame[] = [
     low: "2492",
     close: "2496",
     closed: true,
+    timeframe: "M5",
+    openAt: "2024-01-02T08:00:00.000Z",
+    closeAt: "2024-01-02T08:05:00.000Z",
+    availableAt: "2024-01-02T08:05:00.000Z",
     facts: { HTF_BIAS: "YES" },
   },
   {
@@ -39,6 +76,10 @@ export const sweepReversalFrames: OhlcFrame[] = [
     low: "2489",
     close: "2490",
     closed: true,
+    timeframe: "M5",
+    openAt: "2024-01-02T08:05:00.000Z",
+    closeAt: "2024-01-02T08:10:00.000Z",
+    availableAt: "2024-01-02T08:10:00.000Z",
     facts: { SWEEP: "YES" },
   },
   {
@@ -48,6 +89,10 @@ export const sweepReversalFrames: OhlcFrame[] = [
     low: "2489",
     close: "2500",
     closed: true,
+    timeframe: "M5",
+    openAt: "2024-01-02T08:10:00.000Z",
+    closeAt: "2024-01-02T08:15:00.000Z",
+    availableAt: "2024-01-02T08:15:00.000Z",
     facts: { MSS_CLOSED: "YES" },
   },
   {
@@ -57,6 +102,10 @@ export const sweepReversalFrames: OhlcFrame[] = [
     low: "2499",
     close: "2505",
     closed: true,
+    timeframe: "M5",
+    openAt: "2024-01-02T08:15:00.000Z",
+    closeAt: "2024-01-02T08:20:00.000Z",
+    availableAt: "2024-01-02T08:20:00.000Z",
     facts: { DISPLACEMENT: "YES" },
   },
   {
@@ -66,6 +115,10 @@ export const sweepReversalFrames: OhlcFrame[] = [
     low: "2496",
     close: "2497",
     closed: true,
+    timeframe: "M5",
+    openAt: "2024-01-02T08:20:00.000Z",
+    closeAt: "2024-01-02T08:25:00.000Z",
+    availableAt: "2024-01-02T08:25:00.000Z",
     facts: {},
   },
   {
@@ -75,9 +128,44 @@ export const sweepReversalFrames: OhlcFrame[] = [
     low: "2496",
     close: "2518",
     closed: true,
+    timeframe: "M5",
+    openAt: "2024-01-02T08:25:00.000Z",
+    closeAt: "2024-01-02T08:30:00.000Z",
+    availableAt: "2024-01-02T08:30:00.000Z",
     facts: {},
   },
 ];
+
+/** SHORT mirror fixture for state coverage. */
+export const sweepReversalShortScenario: SetupScenario = {
+  ...sweepReversalScenario,
+  id: "SYN-SWEEP-REV-SHORT-1",
+  direction: "SHORT",
+  path: "HTF_BEAR → SWEEP_HIGHS → CLOSED_MSS → DISPLACEMENT",
+  momentumBand: { low: "2492", high: "2498" },
+  retracementZone: { low: "2500", high: "2506" },
+  chaseBoundary: "2485",
+  invalidationLevel: "2512",
+  zones: [
+    {
+      id: "zone-pdl-1",
+      kind: "PDL",
+      low: "2502",
+      high: "2502",
+      knownAtFrame: 0,
+      evidenceIds: ["ev-pdl-1"],
+    },
+    {
+      id: "zone-fvg-s1",
+      kind: "FVG",
+      low: "2499",
+      high: "2502",
+      knownAtFrame: 3,
+      evidenceIds: ["ev-fvg-s1"],
+      direction: "BEARISH",
+    },
+  ],
+};
 
 export const cpiMacroAlternatives: MacroAlternative[] = [
   {
@@ -86,7 +174,8 @@ export const cpiMacroAlternatives: MacroAlternative[] = [
       { from: "DATA", to: "SURPRISE_PRICED_IN", condition: "NOT_PRICED" },
       { from: "SURPRISE_PRICED_IN", to: "FED_REPRICING", condition: "HAWKISH_SHIFT" },
       { from: "FED_REPRICING", to: "US2Y", condition: "YIELDS_UP" },
-      { from: "US2Y", to: "DXY", condition: "USD_BID" },
+      { from: "US2Y", to: "TIPS_REAL_YIELDS", condition: "REAL_YIELDS_UP" },
+      { from: "TIPS_REAL_YIELDS", to: "DXY", condition: "USD_BID" },
       { from: "DXY", to: "GOLD", condition: "GOLD_PRESSURED" },
     ],
     assumptions: [
@@ -106,6 +195,32 @@ export const cpiMacroAlternatives: MacroAlternative[] = [
     ],
     assumptions: ["Print largely anticipated"],
     conclusions: ["Muted transmission", "No automatic gold entry"],
+  },
+  {
+    id: "ALT_CONTRA_HOT_GOLD_DOWN",
+    edges: [
+      { from: "DATA", to: "SURPRISE_PRICED_IN", condition: "NOT_PRICED" },
+      { from: "SURPRISE_PRICED_IN", to: "FED_REPRICING", condition: "HAWKISH_SHIFT" },
+      { from: "FED_REPRICING", to: "US2Y", condition: "YIELDS_UP" },
+      { from: "US2Y", to: "TIPS_REAL_YIELDS", condition: "TIPS_UP" },
+      { from: "TIPS_REAL_YIELDS", to: "DXY", condition: "DXY_UP" },
+      { from: "DXY", to: "GOLD", condition: "GOLD_DOWN" },
+    ],
+    assumptions: ["Hot CPI with rising real yields"],
+    conclusions: ["Conditional gold pressure", "No automatic entry"],
+  },
+  {
+    id: "ALT_CONTRA_HOT_GOLD_UP",
+    edges: [
+      { from: "DATA", to: "SURPRISE_PRICED_IN", condition: "NOT_PRICED" },
+      { from: "SURPRISE_PRICED_IN", to: "FED_REPRICING", condition: "HAWKISH_SHIFT" },
+      { from: "FED_REPRICING", to: "US2Y", condition: "YIELDS_UP" },
+      { from: "US2Y", to: "TIPS_REAL_YIELDS", condition: "TIPS_DOWN" },
+      { from: "TIPS_REAL_YIELDS", to: "DXY", condition: "DXY_FLAT" },
+      { from: "DXY", to: "GOLD", condition: "GOLD_UP" },
+    ],
+    assumptions: ["Hot CPI with falling real yields / flat DXY"],
+    conclusions: ["Conditional gold support window", "Requires counterevidence log"],
   },
 ];
 

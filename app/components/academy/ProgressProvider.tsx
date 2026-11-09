@@ -16,6 +16,7 @@ import {
   readProgressFromStorage,
   writeProgressToStorage,
 } from "../../lib/academy/progress";
+import { archiveLegacyPlaceholderAttempts } from "../../lib/academy/unlock";
 
 type Ctx = {
   progress: Progress;
@@ -68,7 +69,12 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   const [bootWarning] = useState(() => {
     if (typeof window === "undefined") return null;
     const loaded = readProgressFromStorage(window.localStorage);
-    memoryProgress = loaded.progress;
+    // Archive legacy placeholder assessment passes without silent promotion
+    memoryProgress = {
+      ...loaded.progress,
+      attempts: archiveLegacyPlaceholderAttempts(loaded.progress.attempts),
+      advancedAssessedEnabled: loaded.progress.advancedAssessedEnabled ?? false,
+    };
     memoryWarning = loaded.warning ?? null;
     return memoryWarning;
   });

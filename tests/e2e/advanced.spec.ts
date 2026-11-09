@@ -1,0 +1,57 @@
+import { expect, test } from "@playwright/test";
+
+test.describe("Iteration 2 advanced + gates", () => {
+  test("M2 direct URL is read-only preview at XP0", async ({ page }) => {
+    await page.goto("/academy/missions/M2");
+    await expect(page.getByText(/READ_ONLY_PREVIEW/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Score quiz|ثبت نمره/i })).toBeDisabled();
+  });
+
+  test("M2 quiz has no answer-revealing labels", async ({ page }) => {
+    await page.goto("/academy/missions/M2");
+    await expect(page.getByText(/Correct option|Incorrect A/i)).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(/M2/i);
+    await expect(page.getByText(/sweep|سوئیپ/i).first()).toBeVisible();
+  });
+
+  test("setup validator exposes FVG/OB evidence", async ({ page }) => {
+    await page.goto("/simulators/setup-validator");
+    // Advance to displacement bar
+    for (let i = 0; i < 3; i++) {
+      await page.getByRole("button", { name: /^Next$/i }).click();
+    }
+    await expect(page.getByText(/MOMENTUM_ENTRY_ACTIVE|ARMED_LONG/i)).toBeVisible();
+    await expect(page.getByText(/FVG|ZONE:/i).first()).toBeVisible();
+    await expect(page.getByText(/Evidence & boundaries|شواهد و مرزها/i).first()).toBeVisible();
+  });
+
+  test("macro preset earns no assessed credit; GOLD→DATA explained", async ({
+    page,
+  }) => {
+    await page.goto("/simulators/macro-chain");
+    await page.getByRole("button", { name: /Load answer-key preset/i }).click();
+    await expect(page.getByText(/DEMO_ONLY|assessedCredit=false/i).first()).toBeVisible();
+    await page.getByRole("button", { name: /Clear edges/i }).click();
+    await page.locator("select").nth(0).selectOption("GOLD");
+    await page.locator("select").nth(1).selectOption("DATA");
+    await page.getByRole("button", { name: /Add edge/i }).click();
+    await expect(page.getByText(/GOLD→DATA|UNSUPPORTED_EDGE/i).first()).toBeVisible();
+  });
+
+  test("A6 research lab loads as preview", async ({ page }) => {
+    await page.goto("/academy/advanced/A6");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(/A6|Research/i);
+    await expect(page.getByText(/READ_ONLY_PREVIEW/i).first()).toBeVisible();
+  });
+
+  test("journal markdown download reports completion", async ({ page }) => {
+    await page.goto("/journal/builder");
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByTestId("export-markdown").click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("sfa-journal.md");
+    const path = await download.path();
+    expect(path).toBeTruthy();
+    await expect(page.getByTestId("download-status")).toContainText(/DOWNLOAD_OK/);
+  });
+});

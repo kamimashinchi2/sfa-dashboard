@@ -24,13 +24,20 @@ const NODES: MacroNodeId[] = [
   "US30",
 ];
 
-export default function MacroTransmissionBuilder() {
+export default function MacroTransmissionBuilder({
+  onAssessedScore,
+  readOnly,
+}: {
+  onAssessedScore?: (score: number | null, assessedCredit: boolean) => void;
+  readOnly?: boolean;
+}) {
   const { progress } = useProgress();
   const locale = progress.locale;
   const [from, setFrom] = useState<MacroNodeId>("DATA");
   const [to, setTo] = useState<MacroNodeId>("SURPRISE_PRICED_IN");
   const [condition, setCondition] = useState("NOT_PRICED");
   const [edges, setEdges] = useState<MacroEdge[]>([]);
+  const [fromPreset, setFromPreset] = useState(false);
   const [assumptions, setAssumptions] = useState("Surprise not priced in");
   const [conclusions, setConclusions] = useState(
     "Conditional USD bid window\nGold bias unproven without TIPS/DXY evidence completeness",
@@ -41,12 +48,19 @@ export default function MacroTransmissionBuilder() {
       scoreMacroGraph(
         {
           edges,
-          assumptions: assumptions.split("\n").map((s) => s.trim()).filter(Boolean),
-          conclusions: conclusions.split("\n").map((s) => s.trim()).filter(Boolean),
+          assumptions: assumptions
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          conclusions: conclusions
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          fromAnswerKeyPreset: fromPreset,
         },
         cpiMacroAlternatives,
       ),
-    [edges, assumptions, conclusions],
+    [edges, assumptions, conclusions, fromPreset],
   );
 
   return (
@@ -66,6 +80,7 @@ export default function MacroTransmissionBuilder() {
           <select
             className="mt-1 min-h-11 border border-line bg-ink px-2 text-paper"
             value={from}
+            disabled={readOnly}
             onChange={(e) => setFrom(e.target.value as MacroNodeId)}
           >
             {NODES.map((n) => (
@@ -80,6 +95,7 @@ export default function MacroTransmissionBuilder() {
           <select
             className="mt-1 min-h-11 border border-line bg-ink px-2 text-paper"
             value={to}
+            disabled={readOnly}
             onChange={(e) => setTo(e.target.value as MacroNodeId)}
           >
             {NODES.map((n) => (
@@ -94,24 +110,44 @@ export default function MacroTransmissionBuilder() {
           <input
             className="mt-1 min-h-11 border border-line bg-ink px-2 font-mono text-paper"
             value={condition}
+            disabled={readOnly}
             onChange={(e) => setCondition(e.target.value)}
           />
         </label>
         <button
           type="button"
           className="min-h-11 self-end border border-gold/50 px-3 text-sm text-gold-soft"
-          onClick={() =>
-            setEdges((prev) => [...prev, { from, to, condition }])
-          }
+          disabled={readOnly}
+          onClick={() => {
+            setFromPreset(false);
+            setEdges((prev) => [...prev, { from, to, condition }]);
+          }}
         >
           Add edge
         </button>
         <button
           type="button"
           className="min-h-11 self-end border border-line px-3 text-sm text-fog"
-          onClick={() => setEdges(cpiMacroAlternatives[0].edges)}
+          disabled={readOnly}
+          onClick={() => {
+            setEdges(cpiMacroAlternatives[0].edges);
+            setFromPreset(true);
+            setAssumptions(cpiMacroAlternatives[0].assumptions.join("\n"));
+            setConclusions(cpiMacroAlternatives[0].conclusions.join("\n"));
+          }}
         >
-          Load accepted ALT_SURPRISE_HOT_USD
+          Load answer-key preset (demo — no assessed credit)
+        </button>
+        <button
+          type="button"
+          className="min-h-11 self-end border border-line px-3 text-sm text-fog"
+          disabled={readOnly}
+          onClick={() => {
+            setFromPreset(false);
+            setEdges([]);
+          }}
+        >
+          Clear edges
         </button>
       </div>
 
@@ -128,7 +164,11 @@ export default function MacroTransmissionBuilder() {
         <textarea
           className="mt-1 min-h-20 w-full border border-line bg-ink px-3 py-2 text-sm text-paper"
           value={assumptions}
-          onChange={(e) => setAssumptions(e.target.value)}
+          disabled={readOnly}
+          onChange={(e) => {
+            setFromPreset(false);
+            setAssumptions(e.target.value);
+          }}
         />
       </label>
       <label className="block text-xs text-fog">
@@ -136,13 +176,41 @@ export default function MacroTransmissionBuilder() {
         <textarea
           className="mt-1 min-h-20 w-full border border-line bg-ink px-3 py-2 text-sm text-paper"
           value={conclusions}
-          onChange={(e) => setConclusions(e.target.value)}
+          disabled={readOnly}
+          onChange={(e) => {
+            setFromPreset(false);
+            setConclusions(e.target.value);
+          }}
         />
       </label>
 
       <p className="font-mono text-sm text-gold-soft" aria-live="polite">
-        {scored.status} · score {scored.score ?? "—"} · best {scored.bestAlternativeId ?? "—"}
+        {scored.status} · score {scored.score ?? "—"} · best{" "}
+        {scored.bestAlternativeId ?? "—"} · assessedCredit=
+        {String(scored.assessedCredit)}
       </p>
+      {scored.edgeFeedback.length ? (
+        <ul className="space-y-1 text-xs text-fog">
+          {scored.edgeFeedback.map((f) => (
+            <li key={`${f.edge}-${f.status}`} className="font-mono">
+              [{f.status}] {f.edge}: {f.reason}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <button
+        type="button"
+        className="min-h-11 border border-gold/50 px-3 text-sm text-gold-soft"
+        disabled={readOnly}
+        onClick={() =>
+          onAssessedScore?.(
+            scored.assessedCredit ? scored.score : null,
+            scored.assessedCredit,
+          )
+        }
+      >
+        {locale === "fa" ? "ثبت نمره assessed" : "Commit assessed score"}
+      </button>
     </div>
   );
 }
