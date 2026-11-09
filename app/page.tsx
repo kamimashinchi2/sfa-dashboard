@@ -1,5 +1,5 @@
-import AcademyPortal from "./components/AcademyPortal";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <AcademyPortal />;
+  redirect("/academy");
 }
