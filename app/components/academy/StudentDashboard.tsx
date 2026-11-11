@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import PracticalUpload from "./PracticalUpload";
+import SupportPath from "./SupportPath";
 import { SafeMarkdown } from "../../lib/academy/safeMarkdown";
 import { maybeLegacyImport } from "../../lib/academy/legacyImport";
+import { formatDualTime, nextStep, noticeLabel, statusLabel } from "../../lib/academy/studentCopy";
 
 type Text = { fa: string; en: string };
 
@@ -55,17 +57,9 @@ type DecisionView = {
   };
 };
 
-function amsterdam(isoOrUnix: string | number): string {
-  const date = typeof isoOrUnix === "number" ? new Date(isoOrUnix * 1000) : new Date(isoOrUnix);
-  try {
-    return new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/Amsterdam",
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(date);
-  } catch {
-    return String(isoOrUnix);
-  }
+function when(isoOrUnix: string | number): string {
+  const both = formatDualTime(isoOrUnix);
+  return `${both.amsterdam} Europe/Amsterdam · ${both.local} local`;
 }
 
 function text(value: Text | undefined, locale: "fa" | "en"): string {
@@ -83,15 +77,24 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
   const [reportMd, setReportMd] = useState<string>("");
   const [legacyNote, setLegacyNote] = useState<string | null>(null);
   const [telegramMsg, setTelegramMsg] = useState<string | null>(null);
+  const [loadState, setLoadState] = useState<"loading" | "anon" | "ready" | "error">("loading");
 
   useEffect(() => {
     let cancel = false;
     const load = async () => {
       const meRes = await fetch("/api/mentor/me", { credentials: "same-origin", cache: "no-store" });
-      if (!meRes.ok) return;
+      if (meRes.status === 401) {
+        if (!cancel) setLoadState("anon");
+        return;
+      }
+      if (!meRes.ok) {
+        if (!cancel) setLoadState("error");
+        return;
+      }
       const profile = (await meRes.json()) as Me;
       if (cancel) return;
       setMe(profile);
+      setLoadState("ready");
       const imported = await maybeLegacyImport(profile.studentId);
       if (imported.status === "quarantine") {
         setLegacyNote(
@@ -125,7 +128,9 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
         }
       }
     };
-    void load();
+    void load().catch(() => {
+      if (!cancel) setLoadState("error");
+    });
     return () => {
       cancel = true;
     };
@@ -189,11 +194,44 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
   };
 
   const unread = notes.filter((note) => !note.isRead).length;
-  const latest = decisions.find((row) => row.body?.verdict);
+  const latest = [...decisions].reverse().find((row) => row.body?.verdict);
   const awaitingSenior = me?.status === "AWAITING_SENIOR_MENTOR" || weekStatus === "AWAITING_SENIOR_MENTOR";
+  const step = nextStep({
+    signedIn: loadState === "ready" && me != null,
+    status: weekStatus ?? me?.status ?? null,
+    stage: me?.unlockedStage ?? 1,
+    locale,
+  });
 
   return (
     <div className="space-y-6" data-testid="student-dashboard">
+      <section className="space-y-2 border border-gold/50 bg-ink/60 p-4" data-testid="next-step">
+        <p className="text-[10px] tracking-[0.18em] text-gold-soft uppercase">
+          {locale === "fa" ? "قدم بعدی" : "What to do next"}
+        </p>
+        {loadState === "loading" ? (
+          <h2 className="font-display text-2xl text-paper" data-testid="dashboard-loading" aria-busy="true">
+            {locale === "fa" ? "در حال خواندن وضعیت حساب…" : "Loading your account…"}
+          </h2>
+        ) : (
+          <>
+            <h2 className="font-display text-2xl text-paper">{step.heading}</h2>
+            <p className="text-sm text-fog">{step.body}</p>
+            {step.href && step.cta ? (
+              <a className="inline-flex min-h-11 items-center border border-gold/50 px-3 text-sm text-gold-soft" href={step.href} data-testid="next-step-link">
+                {step.cta}
+              </a>
+            ) : null}
+          </>
+        )}
+      </section>
+      {loadState === "error" ? (
+        <p className="text-sm text-gold-soft" role="alert" data-testid="dashboard-error">
+          {locale === "fa"
+            ? "وضعیت حساب خوانده نشد. اتصال را بررسی کنید و صفحه را تازه کنید."
+            : "Your account status could not be loaded. Check the connection and refresh."}
+        </p>
+      ) : null}
       <section className="space-y-2 border border-line bg-ink/40 p-4" data-testid="entitlements-panel">
         <h2 className="font-display text-xl text-paper">
           {locale === "fa" ? "وضعیت حساب" : "Account status"}
@@ -206,16 +244,18 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
             <div>
               {locale === "fa" ? "هفته" : "week"}: {me.currentWeek}
             </div>
-            <div>status: {me.status}</div>
+            <div data-testid="week-status">
+              {locale === "fa" ? "وضعیت" : "status"}: {statusLabel(me.status, locale)}
+            </div>
           </dl>
-        ) : (
+        ) : loadState === "anon" ? (
           <p className="text-sm text-fog">
             {locale === "fa" ? "برای دیدن درس‌ها وارد شوید." : "Sign in to see your lessons."}{" "}
             <a className="text-gold-soft underline" href="/login">
               {locale === "fa" ? "ورود" : "Log in"}
             </a>
           </p>
-        )}
+        ) : null}
         <p className="text-xs text-fog">
           {locale === "fa"
             ? "تأیید آزمون فقط تمرین را مجاز می‌کند. درس بعدی فقط با تمرین عملی مثبت باز می‌شود. بررسی Echo زمان تضمین‌شده ندارد."
@@ -265,8 +305,8 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
           {notes.map((note) => (
             <li key={note.id} className="border border-line/50 p-3">
               <p>
-                {note.body.kind ?? "notice"}
-                {note.body.verdict ? ` · ${note.body.verdict}` : ""} · {amsterdam(note.created)}
+                {noticeLabel(note.body.kind, locale)}
+                {note.body.verdict ? ` · ${note.body.verdict}` : ""} · {when(note.created)}
               </p>
               {!note.isRead ? (
                 <button type="button" className="mt-2 min-h-11 border border-line px-3 text-xs" onClick={() => void markRead(note.id)}>
@@ -296,7 +336,7 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
           <div className="space-y-3 text-sm text-fog">
             <h3 className="text-paper">{text(assignment.title, locale)}</h3>
             <p className="font-mono text-xs text-teal-bright" data-testid="assignment-due">
-              {locale === "fa" ? "موعد" : "Due"} {amsterdam(assignment.dueAtISO)} (Europe/Amsterdam)
+              {locale === "fa" ? "موعد" : "Due"} {when(assignment.dueAtISO)}
             </p>
             <ul className="list-disc space-y-1 ps-5">
               {assignment.coreTasks.map((task, idx) => (
@@ -357,7 +397,16 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
         ) : null}
       </section>
 
-      {me ? <PracticalUpload locale={locale} /> : null}
+      {me && (weekStatus === "ASSIGNMENT_ISSUED" || weekStatus === "REMEDIAL_ISSUED" || me.status === "ASSIGNMENT_ISSUED" || me.status === "REMEDIAL_ISSUED") ? (
+        <PracticalUpload locale={locale} />
+      ) : me ? (
+        <p className="text-sm text-fog" data-testid="practical-closed">
+          {locale === "fa"
+            ? "بارگذاری تمرین بعد از تأیید یا تأیید نسبی آزمون باز می‌شود. الان همان قدم بالای صفحه را انجام دهید."
+            : "The practical upload opens after the quiz is approved or partially approved. Do the step at the top of this page first."}
+        </p>
+      ) : null}
+      <SupportPath locale={locale} />
 
       {reportMd ? (
         <section className="space-y-2 border border-line bg-ink/40 p-4" data-testid="report-panel">

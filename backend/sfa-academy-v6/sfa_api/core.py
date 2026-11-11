@@ -59,7 +59,7 @@ class CoreService:
     def new_submission(self,student):
         with self.db.tx() as c:
             w=self._week(c,student['student'])
-            require(w['state'] in ('ASSIGNMENT_ISSUED','REMEDIAL_ISSUED'),'A quiz-approved personalized assignment is required before practical intake')
+            require(w['state'] in ('ASSIGNMENT_ISSUED','REMEDIAL_ISSUED'),'ASSIGNMENT_REQUIRED')
             r=c.execute("SELECT id FROM submissions WHERE student=? AND state='DRAFT' AND week=?",(student['student'],w['week'])).fetchone()
             if r: return r['id']
             sid=uuid.uuid4().hex
@@ -69,9 +69,9 @@ class CoreService:
         with self.db.tx() as c:
             w=self._week(c,student['student']); require(w['state'] in ('ASSIGNMENT_ISSUED','REMEDIAL_ISSUED'),'Practical not open')
             r=c.execute("SELECT * FROM submissions WHERE student=? AND state='DRAFT' AND week=?",(student['student'],w['week'])).fetchone()
-            require(r is not None,'Start /new and upload evidence first')
+            require(r is not None,'DRAFT_REQUIRED')
             files=c.execute('SELECT * FROM files WHERE submission=?',(r['id'],)).fetchall()
-            require(any(Path(f['name']).suffix.lower() in ('.pdf','.docx','.txt','.md') for f in files),'A practical document is required, not screenshots alone')
+            require(any(Path(f['name']).suffix.lower() in ('.pdf','.docx','.txt','.md') for f in files),'DOCUMENT_REQUIRED')
             c.execute("UPDATE submissions SET state='QUEUED' WHERE id=?",(r['id'],))
             self._transition(c,student['student'],w['week'],'PRACTICAL_SUBMITTED',{'submissionId':r['id']})
         return r['id']

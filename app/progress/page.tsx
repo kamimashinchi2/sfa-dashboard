@@ -40,9 +40,21 @@ function ProgressBody() {
           {locale === "fa" ? "بسته شواهد محلی" : "Local evidence packet"}
         </a>
       </p>
-      <p className="text-sm text-fog">
-        localStorage practice only — not entitlement. Hydrated: {String(hydrated)}
-      </p>
+      <details className="text-sm text-fog" data-testid="local-practice-debug">
+        <summary className="min-h-11 cursor-pointer">
+          {locale === "fa" ? "جزئیات تمرین محلی (درس را باز نمی‌کند)" : "Local practice details (does not unlock lessons)"}
+        </summary>
+        <p className="mt-2">localStorage practice only — not entitlement. Hydrated: {String(hydrated)}</p>
+        {!hydrated ? null : (
+          <dl className="mt-2 space-y-2 font-mono text-sm text-gold-soft">
+            <div>locale: {progress.locale}</div>
+            <div>selectedStage: {progress.selectedStage}</div>
+            <div>xp: {xp}</div>
+            <div>lessons: {progress.completedLessonIds.join(", ") || "—"}</div>
+            <div>attempts: {progress.attempts.length}</div>
+          </dl>
+        )}
+      </details>
       {warning ? <p className="text-xs text-gold-soft">{warning}</p> : null}
       {storageError ? <p className="text-xs text-red-400">{storageError}</p> : null}
       {quotaExceeded ? (
@@ -58,20 +70,6 @@ function ProgressBody() {
           Quarantine: {quarantine.key} · {quarantine.reason}.
         </div>
       ) : null}
-
-      {!hydrated ? (
-        <div className="animate-pulse space-y-2" aria-busy>
-          <div className="h-6 w-40 bg-line" />
-        </div>
-      ) : (
-        <dl className="space-y-2 font-mono text-sm text-gold-soft">
-          <div>locale: {progress.locale}</div>
-          <div>selectedStage: {progress.selectedStage}</div>
-          <div>xp: {xp}</div>
-          <div>lessons: {progress.completedLessonIds.join(", ") || "—"}</div>
-          <div>attempts: {progress.attempts.length}</div>
-        </dl>
-      )}
 
       <div className="flex flex-wrap gap-2">
         <button

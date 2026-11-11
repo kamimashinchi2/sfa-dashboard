@@ -42,11 +42,11 @@ test.describe("Academy pilot", () => {
     await expect(dialog).toHaveCount(0);
   });
 
-  test("mission M1 walkthrough smoke", async ({ page }) => {
+  test("mission M1 stays locked without a session", async ({ page }) => {
     await page.goto("/academy/missions/M1");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(/M1/i);
-    await page.getByRole("button", { name: /Mark lesson reviewed|درس را علامت|Self-check|خودبررسی/i }).first().click();
-    await page.getByRole("button", { name: /Score quiz|ثبت نمره/i }).click();
-    await expect(page.getByText(/Score \d+\/100/i)).toBeVisible();
+    await expect(page.getByTestId("content-auth")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("quiz-gate")).toHaveCount(0);
+    const body = await page.locator("body").innerText();
+    expect(body).not.toMatch(/correctAnswer|answer key|کلید پاسخ/);
   });
 });

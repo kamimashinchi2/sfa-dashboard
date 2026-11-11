@@ -1,38 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-async function scoreM1(page: import("@playwright/test").Page) {
-  await page.goto("/academy/missions/M1");
-  await expect(page.getByTestId("quiz-gate")).toBeVisible({ timeout: 30_000 });
-  const quiz = page.getByTestId("quiz-gate");
-  const radios = quiz.locator('input[type="radio"]');
-  const count = await radios.count();
-  const seen = new Set<string>();
-  for (let i = 0; i < count; i++) {
-    const name = await radios.nth(i).getAttribute("name");
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    await radios.nth(i).check();
-  }
-  const numInputs = quiz.locator("input.font-mono");
-  const n = await numInputs.count();
-  for (let i = 0; i < n; i++) {
-    await numInputs.nth(i).fill("999");
-  }
-  await quiz.getByTestId("score-quiz").click();
-  await expect(quiz.getByTestId("quiz-results")).toBeVisible({ timeout: 20_000 });
-}
-
 test.describe("Iteration 5", () => {
-  test("persisted quiz table includes Your answer + attempt meta", async ({
+  test("M1 without a session does not show a persisted quiz table", async ({
     page,
   }) => {
-    await scoreM1(page);
-    const table = page.getByTestId("per-item-table");
-    await expect(table).toContainText(/Your answer|پاسخ شما/);
-    await expect(page.getByTestId("attempt-meta")).toContainText("Europe/Amsterdam");
-    await page.reload();
-    await expect(page.getByTestId("quiz-gate")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("per-item-table")).toBeVisible({ timeout: 15_000 });
+    await page.goto("/academy/missions/M1");
+    await expect(page.getByTestId("content-auth")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("per-item-table")).toHaveCount(0);
+    await expect(page.getByTestId("quiz-gate")).toHaveCount(0);
   });
 
   test("future stage locked without entitlement beyond unlock", async ({
@@ -78,17 +53,13 @@ test.describe("Iteration 5", () => {
     expect(scroll).toBeLessThanOrEqual(1);
   });
 
-  test("consent off does not enqueue network quiz-results", async ({ page }) => {
-    const hits: string[] = [];
-    page.on("request", (req) => {
-      if (req.url().includes("/api/mentor/quiz-results")) hits.push(req.url());
-    });
+  test("retired quiz-results route is not part of the dashboard", async ({ page }) => {
     await page.goto("/progress");
-    // ensure consent off
-    const toggle = page.getByTestId("consent-toggle");
-    if (await toggle.isChecked()) await toggle.uncheck();
-    await scoreM1(page);
-    await page.waitForTimeout(800);
-    expect(hits).toEqual([]);
+    await expect(page.getByTestId("consent-toggle")).toHaveCount(0);
+    const response = await page.request.post("/api/mentor/quiz-results", {
+      data: {},
+      headers: { origin: "http://127.0.0.1:3000", "content-type": "application/json" },
+    });
+    expect(response.status()).toBe(410);
   });
 });

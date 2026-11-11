@@ -17,56 +17,21 @@ function canon(value: unknown): string {
   throw new Error("bad");
 }
 
-async function scoreM1DeliberatelyWrong(page: import("@playwright/test").Page) {
-  await page.goto("/academy/missions/M1");
-  // Answer MC with first option when possible; leave order untouched; fill numeric wrong
-  const quiz = page.getByTestId("quiz-gate");
-  await expect(quiz).toBeVisible();
-  const radios = quiz.locator('input[type="radio"]');
-  const count = await radios.count();
-  const seen = new Set<string>();
-  for (let i = 0; i < count; i++) {
-    const name = await radios.nth(i).getAttribute("name");
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    await radios.nth(i).check();
-  }
-  // numeric inputs use font-mono class in QuizGate
-  const numInputs = quiz.locator("input.font-mono");
-  const n = await numInputs.count();
-  for (let i = 0; i < n; i++) {
-    await numInputs.nth(i).fill("999");
-  }
-  await quiz.getByTestId("score-quiz").click();
-  await expect(quiz.getByTestId("quiz-results")).toBeVisible();
-  await expect(quiz.getByTestId("per-item-table")).toBeVisible();
-  await expect(quiz.getByTestId("attempt-meta")).toBeVisible();
-}
-
 test.describe("Iteration 4", () => {
-  test("M1 per-item results persist across reload", async ({ page }) => {
-    await scoreM1DeliberatelyWrong(page);
-    const attemptText = await page.getByTestId("attempt-meta").innerText();
-    expect(attemptText).toMatch(/attemptId=/);
-    await page.reload();
-    await expect(page.getByTestId("quiz-results")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("per-item-table")).toBeVisible();
+  test("M1 does not score a quiz without a session", async ({ page }) => {
+    await page.goto("/academy/missions/M1");
+    await expect(page.getByTestId("content-auth")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("quiz-gate")).toHaveCount(0);
+    await expect(page.getByTestId("quiz-results")).toHaveCount(0);
   });
 
-  test("lesson response saves without PENDING_REVIEW / mentor submit", async ({ page }) => {
+  test("locked lesson has no mentor-submit or answer key", async ({ page }) => {
     await page.goto("/academy/missions/M1");
+    await expect(page.getByTestId("content-auth")).toBeVisible({ timeout: 15_000 });
     const body = await page.locator("body").innerText();
     expect(body).not.toMatch(/Submit for mentor review/);
     expect(body).not.toMatch(/ثبت برای مرور منتور/);
-    const prompt = page.getByTestId("socratic-prompt").first();
-    await prompt.getByTestId("socratic-text").fill(
-      "I assumed a sweep alone was enough; next time I will wait for closed MSS.",
-    );
-    await prompt.getByTestId("add-to-packet").click();
-    await expect(prompt.getByTestId("response-saved")).toBeVisible();
-    await expect(prompt.getByTestId("response-saved")).toContainText(/Not sent yet|هنوز ارسال نشده/);
-    await page.reload();
-    await expect(page.getByTestId("response-saved").first()).toBeVisible();
+    expect(body).not.toMatch(/correctAnswer/);
   });
 
   test("risk grid PASS + mental HARD_BLOCK record sim runs; submit export", async ({
@@ -94,9 +59,7 @@ test.describe("Iteration 4", () => {
     // Escape close
     await page.keyboard.press("Escape");
 
-    await scoreM1DeliberatelyWrong(page);
-
-    // Fill reflections needed on /submit
+    // Local packet export does not require an unlocked lesson.
     await page.goto("/submit");
     await page.getByTestId("student-id").fill("S07");
     await page.getByTestId("alias").fill("Falcon-07");

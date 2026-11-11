@@ -47,7 +47,7 @@ export function useAuthorizedContent(
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      setState({ status: "loading" });
+      setState((prev) => (prev.status === "ready" ? prev : { status: "loading" }));
       const q = opts.missionId
         ? `missionId=${encodeURIComponent(opts.missionId)}`
         : opts.moduleId
@@ -58,10 +58,14 @@ export function useAuthorizedContent(
         return;
       }
       try {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), 8000);
         const res = await fetch(`/api/mentor/content?${q}`, {
           credentials: "same-origin",
           cache: "no-store",
+          signal: controller.signal,
         });
+        window.clearTimeout(timer);
         const body = (await res.json()) as Record<string, unknown>;
         if (cancelled) return;
         if (res.status === 401) {

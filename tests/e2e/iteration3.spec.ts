@@ -24,12 +24,11 @@ test.describe("Iteration 3 P0/P1", () => {
     await expect(dialog.getByText("MENTAL_STOP")).toBeVisible();
   });
 
-  test("Setup Scout title and no ENTRY_ACTIVE label", async ({ page }) => {
+  test("M3 direct URL does not open the scout without a session", async ({ page }) => {
     await page.goto("/academy/missions/M3");
-    await expect(page.getByText(/Market Maker Scout v3\.0/)).toBeVisible();
-    // Advance replay enough to hit momentum if practical is present
+    await expect(page.getByTestId("content-auth")).toBeVisible({ timeout: 15_000 });
     const body = await page.locator("body").innerText();
-    expect(body).not.toMatch(/MOMENTUM_ENTRY_ACTIVE|RETRACEMENT_ENTRY_ACTIVE/);
+    expect(body).not.toMatch(/MOMENTUM_ENTRY_ACTIVE|RETRACEMENT_ENTRY_ACTIVE|correctAnswer/);
   });
 
   test("journal stage matches mission registry", async ({ page }) => {
@@ -55,16 +54,16 @@ test.describe("Iteration 3 P0/P1", () => {
     expect(text).toMatch(/Stage:\s*6/);
   });
 
-  test("advanced A6 shows preview banner when flag off", async ({ page }) => {
+  test("advanced A6 does not use the removed content bypass", async ({ page }) => {
     await page.goto("/academy/advanced/A6");
-    await expect(page.getByTestId("advanced-preview-banner")).toBeVisible();
+    await expect(page.getByTestId("content-auth")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("advanced-preview-banner")).toHaveCount(0);
   });
 
-  test("progress page shows device-only notice", async ({ page }) => {
+  test("progress page says local storage cannot unlock a lesson", async ({ page }) => {
     await page.goto("/progress");
-    await expect(
-      page.getByText(/Saved on this device only, not an account/i),
-    ).toBeVisible();
+    await expect(page.getByTestId("next-step")).toBeVisible();
+    await expect(page.getByTestId("progress-page")).toContainText(/cannot unlock a lesson|درس را باز نمی‌کند/i);
   });
 });
 
@@ -106,6 +105,7 @@ test.describe("storage cross-tab", () => {
     // Give storage event a beat
     await pageB.waitForTimeout(500);
     await pageB.reload();
+    await pageB.getByTestId("local-practice-debug").locator("summary").click();
     const localeLine = pageB.locator("text=locale:");
     await expect(localeLine).toBeVisible();
     await context.close();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { QuizItem } from "../../lib/academy/curriculum";
 import { t } from "../../lib/academy/dictionary";
 import {
@@ -105,10 +105,12 @@ export default function QuizGate({
     [asQuizItems, shuffleSeed],
   );
 
+  const draftKey = `sfa-quiz-draft:${quizId}`;
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>(
     () => initialAnswers ?? {},
   );
   const [touched, setTouched] = useState<Set<string>>(() => new Set());
+  const [draftReady, setDraftReady] = useState(false);
   const [skipped, setSkipped] = useState<Set<string>>(() => new Set());
   const [result, setResult] = useState<{
     score: number;
@@ -135,6 +137,31 @@ export default function QuizGate({
     lastAttempt ??
     quizSnap.attempts.find((a) => a.quizId === quizId) ??
     null;
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(draftKey) || "null") as {
+        answers?: Record<string, QuizAnswer>;
+        touched?: string[];
+      } | null;
+      // Restore a same-tab draft after hydration. The server render must stay empty.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sessionStorage is not available during SSR
+      if (!initialAnswers && saved?.answers) setAnswers(saved.answers);
+      if (Array.isArray(saved?.touched)) setTouched(new Set(saved.touched));
+    } catch {
+      sessionStorage.removeItem(draftKey);
+    }
+    setDraftReady(true);
+  }, [draftKey, initialAnswers]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    if (result) {
+      sessionStorage.removeItem(draftKey);
+      return;
+    }
+    sessionStorage.setItem(draftKey, JSON.stringify({ answers, touched: [...touched] }));
+  }, [answers, touched, result, draftKey, draftReady]);
 
   const markTouched = (id: string) => {
     setTouched((prev) => {
@@ -508,8 +535,19 @@ export default function QuizGate({
         data-testid="score-quiz"
         onClick={() => void scoreAndPersist()}
       >
-        {locale === "fa" ? "ثبت نمره" : "Score quiz"}
+        {scoring
+          ? locale === "fa"
+            ? "در حال ثبت…"
+            : "Submitting…"
+          : locale === "fa"
+            ? "ثبت آزمون"
+            : "Submit quiz"}
       </button>
+      <p className="text-xs text-fog">
+        {locale === "fa"
+          ? "اگر صفحه را تازه کنید، پاسخ‌های همین آزمون روی این دستگاه می‌ماند تا ثبت شود. درس بعدی با این آزمون باز نمی‌شود."
+          : "If you refresh, answers for this quiz stay on this device until you submit. This quiz does not open the next lesson."}
+      </p>
 
       {persistError ? (
         <p className="text-sm text-red-300" data-testid="quiz-persist-error" role="alert">

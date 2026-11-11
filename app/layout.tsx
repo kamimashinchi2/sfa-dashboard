@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Sora, JetBrains_Mono } from "next/font/google";
+import { Fraunces, Sora, JetBrains_Mono, Vazirmatn } from "next/font/google";
 import "./globals.css";
 
 const display = Fraunces({
@@ -18,6 +18,11 @@ const mono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
+const persian = Vazirmatn({
+  variable: "--font-fa",
+  subsets: ["arabic", "latin"],
+});
+
 export const metadata: Metadata = {
   title: "Smart Financial Academy — Iteration 6",
   description:
@@ -30,7 +35,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${display.variable} ${sans.variable} ${mono.variable} h-full antialiased`}
+      className={`${display.variable} ${sans.variable} ${mono.variable} ${persian.variable} h-full antialiased`}
     >
       <body className="min-h-dvh flex flex-col font-sans text-paper">
         {children}

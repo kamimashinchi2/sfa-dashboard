@@ -27,6 +27,16 @@ const FA: Record<string, string> = {
   NAME_REQUIRED: "نام نمایشی لازم است.",
   RESET_EXPIRED_OR_INVALID: "پیوند بازیابی منقضی یا استفاده‌شده است.",
   ADMIN_REQUIRED: "این بخش فقط برای مدیر است.",
+  FILE_TYPE_REJECTED: "این نوع فایل پذیرفته نمی‌شود. PDF، DOCX، TXT، MD، PNG یا JPG بفرستید. عکس HEIC را JPEG کنید.",
+  FILE_MAGIC_REJECTED: "محتوای فایل با پسوند آن یکی نیست.",
+  FILE_TOO_LARGE: "هر فایل حداکثر ۲۰ مگابایت است.",
+  EMPTY_FILE: "فایل خالی است.",
+  MAX_12_FILES: "حداکثر ۱۲ فایل برای هر تمرین.",
+  TEXT_MUST_BE_UTF8: "فایل متنی باید UTF-8 باشد.",
+  INVALID_FILENAME: "نام فایل قابل قبول نیست.",
+  DOCUMENT_REQUIRED: "فقط تصویر کافی نیست. یک سند PDF، DOCX، TXT یا MD هم بفرستید.",
+  DRAFT_REQUIRED: "اول یک فایل بارگذاری کنید، بعد ثبت نهایی.",
+  ASSIGNMENT_REQUIRED: "تمرین عملی بعد از تأیید آزمون باز می‌شود.",
 };
 
 const EN: Record<string, string> = {
@@ -57,6 +67,16 @@ const EN: Record<string, string> = {
   NAME_REQUIRED: "Display name is required.",
   RESET_EXPIRED_OR_INVALID: "This recovery link is expired or already used.",
   ADMIN_REQUIRED: "This section is for an admin session.",
+  FILE_TYPE_REJECTED: "That file type is not accepted. Use PDF, DOCX, TXT, MD, PNG, or JPG. Export HEIC photos as JPEG.",
+  FILE_MAGIC_REJECTED: "The file contents do not match its extension.",
+  FILE_TOO_LARGE: "Each file must be 20 MiB or smaller.",
+  EMPTY_FILE: "That file is empty.",
+  MAX_12_FILES: "A practical can include at most 12 files.",
+  TEXT_MUST_BE_UTF8: "Text files must be UTF-8.",
+  INVALID_FILENAME: "That filename is not accepted.",
+  DOCUMENT_REQUIRED: "Screenshots alone are not enough. Include a PDF, DOCX, TXT, or MD document.",
+  DRAFT_REQUIRED: "Upload a file before the final submit.",
+  ASSIGNMENT_REQUIRED: "The practical opens after the quiz is approved.",
 };
 
 export function bilingual(code: string): { fa: string; en: string } {
