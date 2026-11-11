@@ -5,6 +5,15 @@ from .service import Service,email_value,now
 from .contracts import require
 from .legacy import import_sqlite
 
+def setup_required(missing):
+    print('run install.sh to finish setup (missing %s)'%missing, file=__import__('sys').stderr)
+    raise SystemExit(1)
+def load_config():
+    env=Path('/etc/sfa/sfa.env')
+    if not env.is_file(): setup_required('/etc/sfa/sfa.env')
+    try: return Config.env()
+    except KeyError as exc: setup_required(exc.args[0] if exc.args else '/etc/sfa/sfa.env')
+    except OSError: setup_required('/etc/sfa/sfa.env')
 def main():
     p=argparse.ArgumentParser(prog='sfa'); sp=p.add_subparsers(dest='command',required=True)
     sp.add_parser('migrate'); sp.add_parser('status'); sp.add_parser('backup-now'); sp.add_parser('show-echo-key')
@@ -17,9 +26,11 @@ def main():
     a=p.parse_args()
     if a.command=='show-echo-key':
         require(os.geteuid()==0,'Run sudo sfa show-echo-key only in a private terminal; never paste into chat/logs.')
-        print(Path('/etc/sfa/echo-api-key').read_text().strip()); return
+        key=Path('/etc/sfa/echo-api-key')
+        if not key.is_file(): setup_required('/etc/sfa/echo-api-key')
+        print(key.read_text().strip()); return
     if a.command=='backup-now': subprocess.run(['/opt/sfa/backup.sh'],check=True); return
-    s=Service(Config.env())
+    s=Service(load_config())
     if a.command=='migrate': print('Schema ready')
     elif a.command=='invite': print(s.invite(a.days,a.max_uses))
     elif a.command=='make-admin':

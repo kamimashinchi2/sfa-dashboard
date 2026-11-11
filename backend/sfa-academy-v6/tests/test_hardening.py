@@ -84,7 +84,9 @@ def test_installer_static_safety():
     assert '0.0.0.0:8081' not in s
     assert 'next.config.ts' in s and '$ROOT/../..' in s
     assert 'header_up X-SFA-Client-IP {http.request.remote.host}' in s
-    assert 'X-Forwarded-For' not in s
+    assert 'proxy_set_header X-SFA-Client-IP' in s
+    # nginx overwrites the client address; it must not append a client-supplied chain.
+    assert 'proxy_add_x_forwarded_for' not in s
     assert 'set -eEuo pipefail' in s and "trap 'on_err $? $LINENO' ERR" in s
     assert 'stdbuf -oL' in s and 'BASH_XTRACEFD=4' in s and '--verbose' in s
     assert s.index("exec /opt/sfa/.venv/bin/python -m sfa_api.cli") < s.index('discover "$APP_DIR"')

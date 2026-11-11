@@ -10,6 +10,7 @@ DOMAIN=92-5-230-55.sslip.io
 APP_DIR=''
 REBUILD=1
 VERBOSE=0
+PROXY=auto
 SFA_LOG=''
 SFA_IN_ERR=0
 KEY_TMP=''
@@ -86,6 +87,67 @@ check_node() {
   echo "Node ${ver} at ${bin} (PM2 user ${PM2_USER})"
 }
 
+nginx_holds_443() {
+  ss -ltnpH 2>/dev/null | grep -E '[:.]443([^0-9]|$)' | grep -q nginx
+}
+
+choose_proxy() {
+  case $PROXY in
+    nginx|caddy) return;;
+    auto) ;;
+    *) die "Unknown --proxy ${PROXY} (use caddy, nginx, or auto)";;
+  esac
+  if systemctl is-active --quiet nginx 2>/dev/null || nginx_holds_443; then
+    PROXY=nginx
+  else
+    PROXY=caddy
+  fi
+}
+
+render_nginx_site() {
+  local cert=${CERT_DIR:-/etc/letsencrypt/live/$DOMAIN}
+  cat <<NGX
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+    location ^~ /.well-known/acme-challenge/ { root /var/www/sfa-acme; }
+    location / { return 301 https://\$host\$request_uri; }
+}
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name ${DOMAIN};
+    ssl_certificate     ${cert}/fullchain.pem;
+    ssl_certificate_key ${cert}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    server_tokens off;
+    client_max_body_size 250m;
+    client_body_timeout 300s;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy no-referrer always;
+
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Host \$host;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$remote_addr;
+    proxy_set_header Connection "";
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+
+    location ^~ /api/v1/ { return 404; }
+    location ^~ /echo/ { proxy_pass http://127.0.0.1:8081; }
+    location / {
+        proxy_set_header X-SFA-Client-IP \$remote_addr;
+        proxy_pass http://127.0.0.1:3000;
+    }
+}
+NGX
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --domain) DOMAIN=$2; shift 2;;
@@ -93,11 +155,22 @@ while [[ $# -gt 0 ]]; do
     --rebuild-next) REBUILD=1; shift;;
     --no-rebuild-next) REBUILD=0; shift;;
     --verbose) VERBOSE=1; shift;;
+    --proxy) PROXY=$2; shift 2;;
     *) echo "Unknown option: $1"; exit 2;;
   esac
 done
 [[ $DOMAIN =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]+$ ]] || die 'Invalid hostname'
-# Test-only path. Unset by default; production runs never enter it.
+# Test-only paths. Unset by default; production runs never enter them.
+if [[ ${SFA_INSTALL_TEST_PROXY:-} == 1 ]]; then
+  choose_proxy
+  printf '%s\n' "$PROXY"
+  exit 0
+fi
+if [[ ${SFA_INSTALL_RENDER_NGINX:-} == 1 ]]; then
+  CERT_DIR=${SFA_TEST_CERT_DIR:-/etc/letsencrypt/live/$DOMAIN}
+  render_nginx_site
+  exit 0
+fi
 if [[ ${SFA_INSTALL_TEST_PREFLIGHT:-} == 1 ]]; then
   PM2_USER=${SFA_TEST_PM2_USER:-pm2user}
   PM2_PATH=${SFA_TEST_PM2_PATH:-$PATH}
@@ -175,6 +248,8 @@ if [[ -z ${APP_DIR} ]]; then
   fi
 fi
 /opt/sfa/.venv/bin/python "$HELPER" discover "$APP_DIR"
+# Re-resolve pm2/node in case install-state.json still points at an old Node.
+/opt/sfa/.venv/bin/python "$HELPER" pm2 refresh
 get() {
   local key=$1 val=''
   if ! val=$(/opt/sfa/.venv/bin/python "$HELPER" get "$key"); then
@@ -301,6 +376,68 @@ systemctl enable --now sfa-api sfa-backup.timer
 systemctl restart sfa-api
 if /opt/sfa/.venv/bin/python -c 'from sfa_api.config import Config;import sys;sys.exit(not bool(Config.env().bot_token))'; then systemctl enable --now sfa-bot; systemctl restart sfa-bot; else systemctl disable --now sfa-bot || true; echo 'Telegram is optional and currently disabled (no token found).'; fi
 chown -R sfa:sfa /var/lib/sfa
+stage 'web'
+choose_proxy
+echo "Proxy: $PROXY"
+if [[ $PROXY == nginx ]]; then
+  command -v nginx >/dev/null || die 'nginx is not installed, and --proxy nginx will not install Caddy.'
+  systemctl disable --now caddy >/dev/null 2>&1 || true
+  echo 'Caddy stopped and disabled if it was present.'
+  if [[ -d /etc/nginx/sites-available && -d /etc/nginx/sites-enabled ]]; then
+    SITE=/etc/nginx/sites-available/sfa-academy.conf
+    LINK=/etc/nginx/sites-enabled/sfa-academy.conf
+  else
+    SITE=/etc/nginx/conf.d/sfa-academy.conf
+    LINK=''
+  fi
+  install -d -m 755 /var/www/sfa-acme
+  enable_site() { if [[ -n $LINK ]]; then ln -sfn "$SITE" "$LINK"; fi; }
+  backup_site() { if [[ -f $SITE ]]; then cp -a "$SITE" "$SITE.bak-$(date +%Y%m%d-%H%M%S)"; fi; }
+  rollback_site() {
+    local latest=''
+    latest=$(find "$(dirname "$SITE")" -maxdepth 1 -name "$(basename "$SITE").bak-*" | sort | tail -n1 || true)
+    if [[ -n $latest ]]; then cp -a "$latest" "$SITE"; else rm -f "$SITE"; if [[ -n $LINK ]]; then rm -f "$LINK"; fi; fi
+  }
+  apply_nginx() {
+    if ! nginx -t; then
+      echo 'nginx config test failed; restoring the previous academy site file. Other sites were not edited.'
+      rollback_site
+      nginx -t || true
+      die 'nginx -t failed; academy site rolled back.'
+    fi
+    systemctl reload nginx
+  }
+  CERT_DIR=/etc/letsencrypt/live/$DOMAIN
+  if [[ ! -f $CERT_DIR/fullchain.pem ]]; then
+    backup_site
+    cat > "$SITE" <<NGX
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+    location ^~ /.well-known/acme-challenge/ { root /var/www/sfa-acme; }
+    location / { return 301 https://\$host\$request_uri; }
+}
+NGX
+    enable_site
+    apply_nginx
+    if ! command -v certbot >/dev/null 2>&1; then
+      apt-get update -qq
+      apt-get install -y certbot
+    fi
+    if ! certbot certonly --webroot -w /var/www/sfa-acme -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --deploy-hook 'systemctl reload nginx'; then
+      die "Certificate request failed for ${DOMAIN}. An existing certificate is reused when fullchain.pem is already present."
+    fi
+  else
+    echo 'Reusing the existing certificate.'
+  fi
+  backup_site
+  CERT_DIR=/etc/letsencrypt/live/$DOMAIN
+  render_nginx_site > "$SITE"
+  enable_site
+  apply_nginx
+  echo 'nginx site installed.'
+else
 stage 'caddy'
 # Official Caddy apt repository; no curl | shell. Replace any existing key/list in place.
 caddy_key=$(mktemp)
@@ -347,6 +484,7 @@ $DOMAIN {
 }
 CADDY
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+fi
 stage 'firewall'
 # Preserve existing firewall chains. Insert allow rules before Oracle's terminal REJECT.
 for port in 80 443; do
@@ -355,8 +493,13 @@ for port in 80 443; do
 done
 install -d -m 755 /etc/iptables
 iptables-save > /etc/iptables/rules.v4
-systemctl enable --now caddy
-systemctl reload caddy
+if [[ $PROXY == nginx ]]; then
+  systemctl enable --now nginx
+  systemctl reload nginx
+else
+  systemctl enable --now caddy
+  systemctl reload caddy
+fi
 stage 'build'
 # Rebuild as app owner, not root. Build output could contain app-generated secrets: keep private, not installer log.
 if [[ $REBUILD == 1 ]]; then

@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -215,6 +216,120 @@ def test_install_preflight_missing_node_and_new_enough_node(tmp_path):
     assert "\n+" not in combined and not combined.startswith("+")
 
 
+def test_echo_key_is_created_once_and_kept(tmp_path):
+    mod = load_configure()
+    first = mod.ensure_echo_key(tmp_path, chown_root=False)
+    path = tmp_path / "echo-api-key"
+    assert path.is_file() and path.read_text().strip() == first
+    assert path.stat().st_mode & 0o777 == 0o600
+    path.write_text(first + "\n")
+    second = mod.ensure_echo_key(tmp_path, chown_root=False)
+    assert second == first
+    assert not (tmp_path / "echo-api-key.new").exists()
+
+
+def test_pm2_env_does_not_leak_root_environment(tmp_path):
+    mod = load_configure()
+    state = {"user": "app", "uid": 1000, "gid": 1000, "home": str(tmp_path), "path": "/usr/bin:/bin", "app": "/srv/app", "pm2": "/usr/bin/pm2"}
+    secret = "s" * 48
+    proc = mod.pm2_process_env(state, {"SFA_BRIDGE_SECRET": secret, "SFA_SITE_ORIGIN": "https://92-5-230-55.sslip.io", "AWS_SECRET_ACCESS_KEY": "should-not-copy"})
+    assert "AWS_SECRET_ACCESS_KEY" not in proc
+    assert set(proc) == {"HOME", "USER", "LOGNAME", "PATH", "PM2_HOME", "SFA_BRIDGE_URL", "SFA_SITE_ORIGIN", "SFA_BRIDGE_SECRET", "SFA_ALLOW_INSECURE_PILOT", "SFA_ALLOW_CONTENT_BYPASS"}
+    argv = mod.runuser_argv(state, tmp_path / "pm2.env", ["restart", "sfa-dashboard", "--update-env"])
+    joined = " ".join(argv)
+    assert "--preserve-environment" not in joined
+    assert secret not in joined
+    assert "AWS_SECRET_ACCESS_KEY" not in joined
+    assert state["app"] in argv
+    stale = tmp_path / "old" / "pm2"
+    fresh = tmp_path / "usr" / "bin" / "pm2"
+    fresh.parent.mkdir(parents=True)
+    fresh.write_text("#!/bin/sh\n")
+    bins = mod.pm2_candidates(tmp_path, str(fresh), "")
+    chosen = mod.choose_pm2(bins, {str(fresh): "22.14.0", str(stale): "18.19.1"})
+    assert chosen == fresh
+
+
+def test_proxy_autodetect(tmp_path):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    systemctl = bindir / "systemctl"
+    ss = bindir / "ss"
+    def write(path, body):
+        path.write_text(body)
+        path.chmod(0o755)
+    def invoke(active, holds):
+        code = "0" if active else "3"
+        write(systemctl, "#!/bin/sh\nif [ \"$1\" = is-active ]; then\n  for a in \"$@\"; do [ \"$a\" = nginx ] && exit %s; done\nfi\nexit 3\n" % code)
+        if holds:
+            write(ss, "#!/bin/sh\necho '0.0.0.0:443 users:((\"nginx\",pid=1,fd=6))'\n")
+        else:
+            write(ss, "#!/bin/sh\nexit 0\n")
+        env = os.environ.copy()
+        env["PATH"] = str(bindir) + os.pathsep + "/usr/bin:/bin"
+        env["SFA_INSTALL_TEST_PROXY"] = "1"
+        return subprocess.run(["/bin/bash", str(ROOT / "install.sh"), "--domain", "92-5-230-55.sslip.io", "--proxy", "auto"], capture_output=True, text=True, env=env)
+    nginx = invoke(True, False)
+    assert nginx.returncode == 0 and nginx.stdout.strip() == "nginx"
+    held = invoke(False, True)
+    assert held.returncode == 0 and held.stdout.strip() == "nginx", held.stderr
+    caddy = invoke(False, False)
+    assert caddy.returncode == 0 and caddy.stdout.strip() == "caddy"
+
+
+def test_nginx_site_passes_nginx_t(tmp_path):
+    nginx = shutil.which("nginx")
+    if not nginx:
+        import pytest
+        pytest.skip("nginx is not installed")
+    cert = tmp_path / "cert"
+    cert.mkdir()
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", str(cert / "privkey.pem"), "-out", str(cert / "fullchain.pem"), "-days", "1", "-nodes", "-subj", "/CN=92-5-230-55.sslip.io"], check=True, capture_output=True)
+    env = os.environ.copy()
+    env["SFA_INSTALL_RENDER_NGINX"] = "1"
+    env["SFA_TEST_CERT_DIR"] = str(cert)
+    rendered = subprocess.run(["/bin/bash", str(ROOT / "install.sh"), "--domain", "92-5-230-55.sslip.io"], capture_output=True, text=True, env=env)
+    assert rendered.returncode == 0, rendered.stderr
+    site = rendered.stdout
+    assert "location ^~ /api/v1/" in site and "return 404" in site
+    assert "proxy_pass http://127.0.0.1:8081" in site
+    assert "proxy_set_header X-SFA-Client-IP $remote_addr" in site
+    assert "client_max_body_size 250m" in site
+    assert "listen 443 ssl http2;" in site
+    site = (
+        site.replace("listen 80;", "listen 127.0.0.1:8080;")
+        .replace("listen [::]:80;", "listen [::1]:8080;")
+        .replace("listen 443 ssl http2;", "listen 127.0.0.1:8443 ssl;")
+        .replace("listen [::]:443 ssl http2;", "listen [::1]:8443 ssl;")
+    )
+    conf = tmp_path / "nginx.conf"
+    available = tmp_path / "sites"
+    available.mkdir()
+    (available / "sfa-academy.conf").write_text(site)
+    for name in ("body", "proxy", "fastcgi", "uwsgi", "scgi"):
+        (tmp_path / name).mkdir()
+    conf.write_text(
+        "worker_processes 1;\nerror_log %s/error.log;\npid %s/nginx.pid;\nevents { worker_connections 16; }\n"
+            "http {\n  access_log %s/access.log;\n  client_body_temp_path %s/body;\n  proxy_temp_path %s/proxy;\n  fastcgi_temp_path %s/fastcgi;\n"
+        "  uwsgi_temp_path %s/uwsgi;\n  scgi_temp_path %s/scgi;\n  include %s/*.conf;\n}\n"
+            % (tmp_path, tmp_path, tmp_path, tmp_path, tmp_path, tmp_path, tmp_path, tmp_path, available)
+    )
+    checked = subprocess.run([nginx, "-t", "-c", str(conf)], capture_output=True, text=True)
+    assert checked.returncode == 0, checked.stderr
+
+
+def test_sfa_missing_config_is_a_clear_message():
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT)
+    for key in ("DATABASE_URL", "SFA_BRIDGE_SECRET", "ECHO_API_KEY_HASH", "SFA_SITE_ORIGIN", "SFA_ENV"):
+        env.pop(key, None)
+    result = subprocess.run([PY, "-m", "sfa_api.cli", "status"], cwd=ROOT, capture_output=True, text=True, env=env)
+    assert result.returncode != 0
+    assert "run install.sh to finish setup (missing /etc/sfa/sfa.env)" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert "KeyError" not in result.stderr
+
+
 def test_sfa_help_does_not_read_server_config():
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT)
@@ -223,8 +338,8 @@ def test_sfa_help_does_not_read_server_config():
     result = subprocess.run([PY, "-m", "sfa_api.cli", "--help"], cwd=ROOT, capture_output=True, text=True, env=env)
     assert result.returncode == 0
     assert "migrate" in result.stdout
-    source = (ROOT / "sfa_api" / "cli.py").read_text()
-    assert source.index("parse_args()") < source.index("Config.env()")
+    main = (ROOT / "sfa_api" / "cli.py").read_text().split("def main()", 1)[1]
+    assert main.index("parse_args()") < main.index("load_config()")
 
 
 def test_answer_key_extractor_usage_and_repo_smoke():
