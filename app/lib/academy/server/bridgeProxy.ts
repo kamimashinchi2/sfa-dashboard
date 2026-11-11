@@ -1,5 +1,5 @@
 import "server-only";
-import { loadBridgeConfig } from "./bridgeConfig";
+import { loadBridgeConfig, logBridgeFailure } from "./bridgeConfig";
 import { buildSignedHeaders } from "./hmac";
 
 export type BridgeProxyResult = {
@@ -25,6 +25,11 @@ export function checkRateLimit(key: string): boolean {
   if (cur.count >= RATE_MAX) return false;
   cur.count += 1;
   return true;
+}
+
+/** Test-only: clear in-process rate buckets. */
+export function resetRateLimitForTests(): void {
+  hits.clear();
 }
 
 export async function proxyToBridge(input: {
@@ -71,10 +76,10 @@ export async function proxyToBridge(input: {
       method: input.method,
       headers,
       body:
-        input.method === "GET"
-          ? undefined
-          : Buffer.from(bodyBytes),
+        input.method === "GET" ? undefined : Buffer.from(bodyBytes),
       signal: controller.signal,
+      cache: "no-store",
+      redirect: "error",
     });
     const rawText = await res.text();
     let body: unknown = null;
@@ -86,10 +91,12 @@ export async function proxyToBridge(input: {
     return { ok: true, result: { status: res.status, body, rawText } };
   } catch (e) {
     const aborted = e instanceof Error && e.name === "AbortError";
+    const code = aborted ? "BRIDGE_TIMEOUT" : "BRIDGE_UNREACHABLE";
+    logBridgeFailure(code, aborted ? "TIMEOUT" : "FETCH_FAILED");
     return {
       ok: false,
-      status: 504,
-      code: aborted ? "BRIDGE_TIMEOUT" : "BRIDGE_NETWORK",
+      status: 503,
+      code,
       message: aborted ? "timeout" : "network",
     };
   } finally {
@@ -105,17 +112,11 @@ export function requireJsonOrigin(
     return { ok: false, status: 415, code: "UNSUPPORTED_MEDIA" };
   }
 
-  // Local E2E / operator bypass may score without a live bridge.
-  if (
-    process.env.SFA_ALLOW_CONTENT_BYPASS === "1" &&
-    process.env.SFA_CONTENT_BYPASS_STAGE
-  ) {
-    return { ok: true };
-  }
-
+  // Origin/config for mutations is never bypassed (SFA_ALLOW_CONTENT_BYPASS
+  // remains content-entitlement only; it must not skip Exact Origin).
   const cfg = loadBridgeConfig();
   if (!cfg.ok) {
-    return { ok: false, status: 503, code: "BRIDGE_UNAVAILABLE" };
+    return { ok: false, status: 503, code: cfg.code };
   }
   const origin = req.headers.get("origin");
   if (req.method !== "GET") {

@@ -1,9 +1,9 @@
-import { noStoreJson, requireJsonOrigin } from "../../../lib/academy/server/bridgeProxy";
+import { noStoreJson, requireJsonOrigin } from "@/app/lib/academy/server/bridgeProxy";
 import {
   authorizeStage,
   resolveEntitlement,
-} from "../../../lib/academy/server/entitlements";
-import { getPrivateQuizBank, stageForQuizId } from "../../../lib/academy/server/privateQuizBanks";
+} from "@/app/lib/academy/server/entitlements";
+import { getPrivateQuizBank, stageForQuizId } from "@/app/lib/academy/server/privateQuizBanks";
 import { scoreQuiz, type QuizAnswer } from "../../../lib/academy/grading";
 import { itemHash } from "../../../lib/academy/quizHash";
 import { claimReadiness } from "../../../lib/academy/thresholds";

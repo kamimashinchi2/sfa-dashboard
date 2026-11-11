@@ -1,6 +1,10 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { SESSION_COOKIE, SESSION_MAX_AGE } from "./bridgeConfig";
+import {
+  SESSION_COOKIE,
+  SESSION_MAX_AGE,
+  loadBridgeConfig,
+} from "./bridgeConfig";
 
 export async function readSessionToken(): Promise<string | null> {
   const jar = await cookies();
@@ -10,9 +14,7 @@ export async function readSessionToken(): Promise<string | null> {
 
 export async function setSessionCookie(token: string): Promise<void> {
   const jar = await cookies();
-  const secure =
-    process.env.NODE_ENV === "production" &&
-    !(process.env.SFA_ALLOW_INSECURE_COOKIE === "1");
+  const secure = !insecurePilotEnabled();
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure,
@@ -26,27 +28,31 @@ export async function clearSessionCookie(): Promise<void> {
   const jar = await cookies();
   jar.set(SESSION_COOKIE, "", {
     httpOnly: true,
-    secure: true,
+    secure: !insecurePilotEnabled(),
     sameSite: "strict",
     path: "/",
     maxAge: 0,
   });
 }
 
-/** Production over HTTP/IP must not set Secure cookies insecurely. */
-export function httpsRequiredForLogin(req: Request): boolean {
-  if (process.env.NODE_ENV !== "production") return false;
-  if (process.env.SFA_ALLOW_INSECURE_COOKIE === "1") return false;
-  const host = req.headers.get("host") ?? "";
-  const proto =
-    req.headers.get("x-forwarded-proto") ??
-    (host.startsWith("localhost") || host.startsWith("127.0.0.1")
-      ? "http"
-      : "https");
-  const isLocal =
-    host.startsWith("localhost") ||
-    host.startsWith("127.0.0.1") ||
-    host.startsWith("[::1]");
-  if (isLocal) return false;
-  return proto !== "https";
+/**
+ * Explicit temporary risk acceptance, OFF by default, never a public env.
+ * When enabled, Secure is dropped so plain-HTTP pilots can store the cookie.
+ * Credential/session traffic is then sniffable — do not enable on production
+ * servers that terminate TLS or are reachable beyond loopback.
+ * Replaces legacy SFA_ALLOW_INSECURE_COOKIE (removed).
+ */
+function insecurePilotEnabled(): boolean {
+  return process.env.SFA_ALLOW_INSECURE_PILOT === "1";
+}
+
+/**
+ * Canonical public origin defines the operator's TLS-termination contract.
+ * Do not infer HTTPS from a non-local Host or arbitrary forwarded headers.
+ */
+export function httpsRequiredForLogin(_req: Request): boolean {
+  if (insecurePilotEnabled()) return false;
+  const cfg = loadBridgeConfig();
+  if (!cfg.ok) return true;
+  return new URL(cfg.config.siteOrigin).protocol !== "https:";
 }

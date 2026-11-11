@@ -2,8 +2,8 @@ import {
   checkRateLimit,
   noStoreJson,
   proxyToBridge,
-} from "../../../lib/academy/server/bridgeProxy";
-import { readSessionToken } from "../../../lib/academy/server/sessionCookie";
+} from "@/app/lib/academy/server/bridgeProxy";
+import { readSessionToken } from "@/app/lib/academy/server/sessionCookie";
 
 
 /** GET → bridge GET /api/link-status with Bearer cookie. */

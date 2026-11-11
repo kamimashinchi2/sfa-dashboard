@@ -1,18 +1,18 @@
-import { noStoreJson } from "../../../lib/academy/server/bridgeProxy";
+import { noStoreJson } from "@/app/lib/academy/server/bridgeProxy";
 import {
   authorizeStage,
   resolveEntitlement,
-} from "../../../lib/academy/server/entitlements";
+} from "@/app/lib/academy/server/entitlements";
 import {
   getPrivateAdvanced,
   getPrivateMission,
   getPrivateQuizBank,
   stageForQuizId,
-} from "../../../lib/academy/server/privateQuizBanks";
+} from "@/app/lib/academy/server/privateQuizBanks";
 import {
   hydrateQuizAnswers,
   toPublicQuizItem,
-} from "../../../lib/academy/server/hydrateQuiz";
+} from "@/app/lib/academy/server/hydrateQuiz";
 import { itemHash } from "../../../lib/academy/quizHash";
 import { stageNumberForId } from "../../../lib/academy/publicCatalog";
 
