@@ -20,9 +20,9 @@ export default function AcademyPage() {
             Bilingual academy · M1–M5 + A6–A8 labs
           </h1>
           <p className="mt-4 max-w-2xl text-fog">
-            Browse stage outlines publicly. Lesson and quiz bodies require mentor
-            session entitlements. Practical approval (after admin delivery) unlocks
-            the next lesson — quiz approval never does. Data are SYNTHETIC.
+            Browse stage outlines publicly. Lesson and quiz bodies require an
+            account session. A positive practical unlocks the next lesson — quiz
+            approval never does. Data are SYNTHETIC.
           </p>
         </section>
 

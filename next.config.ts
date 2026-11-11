@@ -40,6 +40,18 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: "/login",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+      {
+        source: "/join/:token",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+      {
+        source: "/reset/:token",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+      {
         source: "/schemas/:path*",
         headers: [
           {

@@ -1,0 +1,709 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "schemaVersion",
+    "decisionId",
+    "studentId",
+    "week",
+    "stage",
+    "verdict",
+    "feedback",
+    "weaknessUpdates",
+    "habitChecklist",
+    "echoNotes",
+    "submissionId",
+    "scores",
+    "finalHardBlock",
+    "flaws",
+    "unlockNext",
+    "nextAssignment",
+    "remedialAssignment"
+  ],
+  "properties": {
+    "format": {
+      "const": "sfa-practical-decision",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 2,
+      "type": "integer"
+    },
+    "decisionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,160}$"
+    },
+    "studentId": {
+      "type": "string",
+      "pattern": "^S\\d{2,12}$"
+    },
+    "week": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "stage": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8
+    },
+    "verdict": {
+      "enum": [
+        "APPROVED",
+        "PARTIALLY_APPROVED",
+        "NOT_APPROVED"
+      ]
+    },
+    "feedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fa",
+        "en"
+      ],
+      "properties": {
+        "fa": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2400
+        },
+        "en": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2400
+        }
+      }
+    },
+    "weaknessUpdates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "skill",
+          "evidenceRefs",
+          "demonstratedClean",
+          "drilled"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,160}$"
+          },
+          "skill": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "maxItems": 20,
+            "minItems": 1
+          },
+          "demonstratedClean": {
+            "type": "boolean"
+          },
+          "drilled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "maxItems": 50,
+      "minItems": 0
+    },
+    "habitChecklist": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "skill",
+          "adhered",
+          "evidenceRef"
+        ],
+        "properties": {
+          "skill": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "adhered": {
+            "type": "boolean"
+          },
+          "evidenceRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        }
+      },
+      "maxItems": 30,
+      "minItems": 0
+    },
+    "echoNotes": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "submissionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,160}$"
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "risk",
+        "technicalMacro",
+        "journalPsychology"
+      ],
+      "properties": {
+        "risk": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 40
+        },
+        "technicalMacro": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 40
+        },
+        "journalPsychology": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        }
+      }
+    },
+    "finalHardBlock": {
+      "type": "boolean"
+    },
+    "flaws": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      },
+      "maxItems": 30,
+      "minItems": 0
+    },
+    "unlockNext": {
+      "type": "boolean"
+    },
+    "nextAssignment": {
+      "type": "null"
+    },
+    "remedialAssignment": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "week",
+            "stage",
+            "title",
+            "coreTasks",
+            "weaknessDrills",
+            "spiralReview",
+            "riskRules",
+            "deliverables",
+            "dueAtISO"
+          ],
+          "properties": {
+            "week": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "stage": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            },
+            "title": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "fa",
+                "en"
+              ],
+              "properties": {
+                "fa": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                },
+                "en": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              }
+            },
+            "coreTasks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "fa",
+                  "en"
+                ],
+                "properties": {
+                  "fa": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1200
+                  },
+                  "en": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1200
+                  }
+                }
+              },
+              "maxItems": 20,
+              "minItems": 1
+            },
+            "weaknessDrills": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "weaknessId",
+                  "task"
+                ],
+                "properties": {
+                  "weaknessId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,160}$"
+                  },
+                  "task": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "fa",
+                      "en"
+                    ],
+                    "properties": {
+                      "fa": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      },
+                      "en": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      }
+                    }
+                  }
+                }
+              },
+              "maxItems": 50,
+              "minItems": 0
+            },
+            "spiralReview": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "stage",
+                  "skill",
+                  "task"
+                ],
+                "properties": {
+                  "stage": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7
+                  },
+                  "skill": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "task": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "fa",
+                      "en"
+                    ],
+                    "properties": {
+                      "fa": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      },
+                      "en": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      }
+                    }
+                  }
+                }
+              },
+              "maxItems": 40,
+              "minItems": 0
+            },
+            "riskRules": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "maxRiskPct",
+                "hardStructuralStop",
+                "minNetRR",
+                "noSignals"
+              ],
+              "properties": {
+                "maxRiskPct": {
+                  "const": "1",
+                  "type": "string"
+                },
+                "hardStructuralStop": {
+                  "const": true,
+                  "type": "boolean"
+                },
+                "minNetRR": {
+                  "const": "2",
+                  "type": "string"
+                },
+                "noSignals": {
+                  "const": true,
+                  "type": "boolean"
+                }
+              }
+            },
+            "deliverables": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "fa",
+                  "en"
+                ],
+                "properties": {
+                  "fa": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1200
+                  },
+                  "en": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1200
+                  }
+                }
+              },
+              "maxItems": 20,
+              "minItems": 1
+            },
+            "dueAtISO": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "NOT_APPROVED",
+            "type": "string"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "unlockNext": {
+            "const": false,
+            "type": "boolean"
+          },
+          "remedialAssignment": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "week",
+              "stage",
+              "title",
+              "coreTasks",
+              "weaknessDrills",
+              "spiralReview",
+              "riskRules",
+              "deliverables",
+              "dueAtISO"
+            ],
+            "properties": {
+              "week": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "stage": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
+              },
+              "title": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "fa",
+                  "en"
+                ],
+                "properties": {
+                  "fa": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "en": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  }
+                }
+              },
+              "coreTasks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "fa",
+                    "en"
+                  ],
+                  "properties": {
+                    "fa": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1200
+                    },
+                    "en": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1200
+                    }
+                  }
+                },
+                "maxItems": 20,
+                "minItems": 1
+              },
+              "weaknessDrills": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "weaknessId",
+                    "task"
+                  ],
+                  "properties": {
+                    "weaknessId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_.:-]{1,160}$"
+                    },
+                    "task": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "fa",
+                        "en"
+                      ],
+                      "properties": {
+                        "fa": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1200
+                        },
+                        "en": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1200
+                        }
+                      }
+                    }
+                  }
+                },
+                "maxItems": 50,
+                "minItems": 0
+              },
+              "spiralReview": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "stage",
+                    "skill",
+                    "task"
+                  ],
+                  "properties": {
+                    "stage": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 7
+                    },
+                    "skill": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "task": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "fa",
+                        "en"
+                      ],
+                      "properties": {
+                        "fa": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1200
+                        },
+                        "en": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1200
+                        }
+                      }
+                    }
+                  }
+                },
+                "maxItems": 40,
+                "minItems": 0
+              },
+              "riskRules": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "maxRiskPct",
+                  "hardStructuralStop",
+                  "minNetRR",
+                  "noSignals"
+                ],
+                "properties": {
+                  "maxRiskPct": {
+                    "const": "1",
+                    "type": "string"
+                  },
+                  "hardStructuralStop": {
+                    "const": true,
+                    "type": "boolean"
+                  },
+                  "minNetRR": {
+                    "const": "2",
+                    "type": "string"
+                  },
+                  "noSignals": {
+                    "const": true,
+                    "type": "boolean"
+                  }
+                }
+              },
+              "deliverables": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "fa",
+                    "en"
+                  ],
+                  "properties": {
+                    "fa": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1200
+                    },
+                    "en": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1200
+                    }
+                  }
+                },
+                "maxItems": 20,
+                "minItems": 1
+              },
+              "dueAtISO": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "remedialAssignment": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": 8,
+            "type": "integer"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "unlockNext": {
+            "const": false,
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "finalHardBlock": {
+            "const": true,
+            "type": "boolean"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "const": "NOT_APPROVED",
+            "type": "string"
+          },
+          "unlockNext": {
+            "const": false,
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Structural schema; contracts.py also enforces target binding, scores, full item set, all prior stages, unresolved drills, privacy and configurable verdict thresholds."
+}

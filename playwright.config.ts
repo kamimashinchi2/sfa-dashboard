@@ -16,9 +16,8 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       ...process.env,
-      // Local E2E only — never enable in production operators' live hosts.
-      SFA_ALLOW_CONTENT_BYPASS: "1",
-      SFA_CONTENT_BYPASS_STAGE: "8",
+      SFA_BRIDGE_URL: process.env.SFA_BRIDGE_URL ?? "http://127.0.0.1:8081",
+      SFA_BRIDGE_SECRET: process.env.SFA_BRIDGE_SECRET ?? "e2e-bridge-secret-not-for-production!!",
       SFA_SITE_ORIGIN: "http://127.0.0.1:3000",
     },
   },

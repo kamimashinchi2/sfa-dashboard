@@ -61,5 +61,6 @@ export function loadBridgeConfig(): BridgeConfigResult {
   return { ok: true, config: { url: parsed.origin, secret, siteOrigin } };
 }
 
-export const SESSION_COOKIE = "sfa_mentor_session";
+/** __Host- prefix: Secure, Path=/, no Domain. sslip.io is not a public suffix. */
+export const SESSION_COOKIE = "__Host-sfa_session";
 export const SESSION_MAX_AGE = 604_800;

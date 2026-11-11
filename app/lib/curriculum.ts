@@ -15,10 +15,6 @@ export type Stage = {
   audioNote: string;
 };
 
-/** 02_Student_Submissions — Google Drive */
-export const JOURNAL_URL =
-  "https://drive.google.com/drive/folders/1cTzdyCZWhywRVCbv2_vPg1CWGps51FVC";
-
 export const ESSENTIAL_LINKS: ReadingLink[] = [
   {
     label: "BabyPips — School of Pipsology",
@@ -58,7 +54,7 @@ export const stages: Stage[] = [
       "Submit one practice journal entry with thesis + risk fields complete",
     ],
     mission:
-      "Map one London–NY overlap session: annotate quote convention, spread, and a hypothetical 1.0% risk size for EUR/USD and XAU/USD. Submit the annotated journal to Drive.",
+      "Map one London–NY overlap session: annotate quote convention, spread, and a hypothetical 1.0% risk size for EUR/USD and XAU/USD. Upload the annotated journal on the academy dashboard.",
     audioTitle: "FX Mechanics Desk Briefing",
     audioNote:
       "NotebookLM audio overview covering pip math, sessions, and order hygiene. Placeholder until the stage recording is published.",
@@ -126,7 +122,7 @@ export const stages: Stage[] = [
       "Score R:R ≥ 1:2 on a hypothetical entry from a marked level",
     ],
     mission:
-      "Capture three price-action examples this week. Each must include entry logic, hard stop, and a target that clears 1:2. Submit screenshots to the student Drive folder.",
+      "Capture three price-action examples this week. Each must include entry logic, hard stop, and a target that clears 1:2. Upload the screenshots with the weekly practical on the academy dashboard.",
     audioTitle: "Price Action Narrative Briefing",
     audioNote:
       "NotebookLM audio on impulse, rejection, and continuation literacy. Placeholder embed.",
@@ -232,7 +228,7 @@ export const stages: Stage[] = [
       "Write a one-page verdict: keep, refine, or retire the setup",
     ],
     mission:
-      "Run a mini research sprint on one setup. Deliver tags, expectancy, and a keep/refine/retire verdict. Upload the notebook page to Drive.",
+      "Run a mini research sprint on one setup. Deliver tags, expectancy, and a keep/refine/retire verdict. Upload the notebook page with the weekly practical.",
     audioTitle: "Research Hygiene Briefing",
     audioNote:
       "NotebookLM briefing on expectancy math and sample humility. Audio placeholder.",
@@ -270,7 +266,7 @@ export const stages: Stage[] = [
       "Complete a simulation sheet using the Institutional Position Sizer",
     ],
     mission:
-      "Use the Institutional Position Sizing Calculator on six hypothetical trades (3 FX, 3 gold). Screenshot results that pass 1:2 and one that fails. Submit the pack to Drive.",
+      "Use the Institutional Position Sizing Calculator on six hypothetical trades (3 FX, 3 gold). Screenshot results that pass 1:2 and one that fails. Upload the pack with the weekly practical.",
     audioTitle: "Simulation Math Briefing",
     audioNote:
       "NotebookLM audio covering academy lot formulas and R:R gates. Placeholder file.",
@@ -302,7 +298,7 @@ export const stages: Stage[] = [
       "Present findings with Echo and a clear pass/fail self-score",
     ],
     mission:
-      "Ship your capstone notebook this week: macro bias, structure map, sized plan (≤1.0%), and review metrics. Submit to Drive, then discuss with Echo.",
+      "Ship your capstone notebook this week: macro bias, structure map, sized plan (≤1.0%), and review metrics. Upload it with the weekly practical, then discuss with Echo.",
     audioTitle: "Capstone Synthesis Briefing",
     audioNote:
       "NotebookLM wrap-up for assembling the mentor-ready notebook. Placeholder audio.",

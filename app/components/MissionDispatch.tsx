@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, MessageCircle } from "lucide-react";
-import { JOURNAL_URL, type Stage } from "../lib/curriculum";
+import type { Stage } from "../lib/curriculum";
 
 type Props = {
   stage: Stage;
@@ -35,12 +35,10 @@ export default function MissionDispatch({ stage }: Props) {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <a
-          href={JOURNAL_URL}
-          target="_blank"
-          rel="noopener noreferrer"
+          href="/submit"
           className="cta-pulse inline-flex items-center gap-2 bg-gold px-5 py-3 text-sm font-semibold tracking-wide text-ink transition-[transform,background-color] duration-200 hover:translate-y-[-1px] hover:bg-gold-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
         >
-          Submit Trade Journal (Google Drive)
+          Upload weekly practical
           <ExternalLink className="h-4 w-4" aria-hidden strokeWidth={1.75} />
         </a>
         <button

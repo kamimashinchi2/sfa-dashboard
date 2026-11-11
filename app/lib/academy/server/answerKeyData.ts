@@ -1,6 +1,8 @@
+import "server-only";
+
 /**
  * Private answer key values — MUST NOT be imported from client components.
- * Imported by server scoring, extract_answer_key.mjs (via dynamic), and unit tests.
+ * Imported by server scoring, extract_answer_key.mjs (sentinel stripped), and unit tests.
  * Client bundles must never reference this module.
  */
 export type QuizAnswerValue = number | string | number[];

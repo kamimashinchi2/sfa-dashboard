@@ -26,6 +26,7 @@ import {
 } from "../lib/academy/persist";
 import { useProgress } from "../components/academy/ProgressProvider";
 import { resolveBuildStamp, APP_RELEASE_LABEL } from "../lib/academy/buildStamp";
+import PracticalUpload from "../components/academy/PracticalUpload";
 
 function SubmitInner() {
   const { progress } = useProgress();
@@ -325,10 +326,12 @@ function SubmitInner() {
         </h1>
         <p className="text-sm text-fog">
           {locale === "fa"
-            ? "شواهد روی این دستگاه ذخیره می‌شود. فایل را در Drive خودتان آپلود کنید. هیچ ارسالی در شبکه انجام نمی‌شود."
-            : "Evidence stays on this device. Upload the file to your own Drive. No network submission."}
+            ? "تمرین هفتگی را همین‌جا بارگذاری کنید. بستهٔ زیر فقط شواهد آموزشی روی همین دستگاه است و درس را باز نمی‌کند."
+            : "Upload the weekly practical here. The packet below is local educational evidence and does not unlock a lesson."}
         </p>
       </header>
+
+      <PracticalUpload locale={locale} />
 
       <section className="space-y-3 border border-line bg-ink/40 p-4">
         <h2 className="font-display text-xl text-paper">
@@ -638,10 +641,9 @@ function SubmitInner() {
             </bdi>
           </p>
           <p className="text-xs text-fog">
-            Open your folder{" "}
-            <bdi dir="ltr">02_Student_Submissions/Student_&lt;NN&gt;_&lt;Alias&gt;/</bdi>{" "}
-            in Google Drive → New → File upload → choose the .md. Do not open it with Google
-            Docs or convert it. Then paste your Result Code in the chat.
+            {locale === "fa"
+              ? "این فایل شواهد محلی است. تمرین هفتگی را با بخش بارگذاری بالا بفرستید، نه از جای دیگری."
+              : "This file is local evidence. Send the weekly practical with the uploader above."}
           </p>
           <p className="font-mono text-xs text-gold-soft" data-testid="result-code">
             <bdi dir="ltr">{lastPacket.integrity.resultCode}</bdi>

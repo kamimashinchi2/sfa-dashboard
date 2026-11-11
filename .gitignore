@@ -48,3 +48,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# vendored backend local environments
+__pycache__/
+*.pyc
+.venv/

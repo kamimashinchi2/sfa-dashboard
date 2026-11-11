@@ -31,7 +31,7 @@ export function renderMarkdown(packet: SubmissionPacket): string {
   );
   body.push(`**Generated:** ${packet.generatedAtISO} (${packet.timezone})`);
   body.push(
-    `**Upload target:** Google Drive → \`02_Student_Submissions/Student_<NN>_<Alias>/\` → New → File upload → \`${filename}\` (do not open with Google Docs).`,
+    `**Upload target:** Academy dashboard practical upload → \`${filename}\` (local packet is evidence only; it does not unlock a lesson).`,
   );
   body.push(`**Build:** ${packet.build.label}`);
   body.push("");

@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+DOMAIN=92-5-230-55.sslip.io
+APP_DIR=''
+REBUILD=1
+for arg in "$@"; do : "$arg"; done
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --domain) DOMAIN=$2; shift 2;;
+    --app-dir) APP_DIR=$2; shift 2;;
+    --rebuild-next) REBUILD=1; shift;;
+    --no-rebuild-next) REBUILD=0; shift;;
+    *) echo "Unknown option: $1"; exit 2;;
+  esac
+done
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo bash install.sh'; exit 1; }
+[[ $DOMAIN =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]+$ ]] || { echo 'Invalid hostname'; exit 1; }
+# shellcheck source=/dev/null
+source /etc/os-release
+[[ $ID == ubuntu && ( $VERSION_ID == 22.04 || $VERSION_ID == 24.04 ) ]] || { echo 'Supported: Ubuntu 22.04 or 24.04 only'; exit 1; }
+case "$(dpkg --print-architecture)" in amd64|arm64) ;; *) echo 'Supported CPU: amd64/arm64'; exit 1;; esac
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+mkdir -p /etc/sfa /var/log
+chmod 700 /etc/sfa
+exec 3>&1
+exec > >(tee -a /var/log/sfa-install.log) 2>&1
+chmod 600 /var/log/sfa-install.log
+echo 'SFA v6 installer: no secret values are printed. No git pull is performed.'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y ca-certificates curl gnupg debian-keyring debian-archive-keyring apt-transport-https python3-venv python3-pip postgresql postgresql-client libmagic1 unzip iptables iptables-persistent
+if ! id sfa >/dev/null 2>&1; then useradd --system --home-dir /var/lib/sfa --create-home --shell /usr/sbin/nologin sfa; fi
+install -d -m 750 -o root -g sfa /etc/sfa
+install -d -m 700 -o sfa -g sfa /var/lib/sfa /var/lib/sfa/uploads
+install -d -m 700 /var/backups/sfa
+# Keep prior package for local rollback; no data deletion.
+if [[ -d /opt/sfa/sfa_api ]]; then tar -czf "/var/backups/sfa/package-$(date +%Y%m%d-%H%M%S).tar.gz" -C /opt/sfa --exclude=.venv --exclude=__pycache__ .; fi
+install -d -m 755 /opt/sfa
+cp -a "$ROOT/sfa_api" "$ROOT/tools" "$ROOT/echo_client.py" "$ROOT/backup.sh" "$ROOT/requirements.txt" /opt/sfa/
+cp "$ROOT/"*.schema.json /opt/sfa/
+chown -R root:root /opt/sfa
+python3 -m venv /opt/sfa/.venv
+/opt/sfa/.venv/bin/pip install --disable-pip-version-check -q -r /opt/sfa/requirements.txt
+HELPER=/opt/sfa/tools/configure.py
+# Vendored tree: backend/sfa-academy-v6/install.sh → repository root (the Next app).
+# A standalone zip extract has no next.config.ts two levels up and keeps PM2 cwd discovery.
+if [[ -z ${APP_DIR} ]]; then
+  CANDIDATE=$(cd -- "$ROOT/../.." && pwd)
+  if [[ -f "$CANDIDATE/package.json" && -f "$CANDIDATE/next.config.ts" ]]; then
+    APP_DIR=$CANDIDATE
+  fi
+fi
+/opt/sfa/.venv/bin/python "$HELPER" discover "$APP_DIR"
+get() { /opt/sfa/.venv/bin/python "$HELPER" get "$1"; }
+APP_DIR=$(get app); PM2_USER=$(get user); PM2_PATH=$(get path)
+# Require Cursor integration marker and modern Node BEFORE stopping old services.
+[[ -f "$APP_DIR/.sfa-v6-ready" ]] || { echo 'Apply Cursor prompt, test and pull first (.sfa-v6-ready missing). Old bridge left running.'; exit 1; }
+runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" node -e 'const [a,b]=process.versions.node.split(".").map(Number);if(a<22||(a===22&&b<6))process.exit(1)'
+systemctl enable --now postgresql
+/opt/sfa/.venv/bin/python "$HELPER" configure "$DOMAIN"
+cat > /usr/local/bin/sfa <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH=/opt/sfa
+exec /opt/sfa/.venv/bin/python -m sfa_api.cli "$@"
+SH
+chmod 755 /usr/local/bin/sfa
+export PYTHONPATH=/opt/sfa
+# Current build private answer key (server answerKeyData.ts hydration; never a public asset).
+COMMIT=$(git -C "$APP_DIR" rev-parse HEAD)
+KEY_TMP=$(mktemp /etc/sfa/answer-keys/.key-XXXXXX)
+trap 'rm -f "${KEY_TMP:-}"' EXIT
+if ! runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" node /opt/sfa/tools/extract_answer_key.mjs "$APP_DIR" "$COMMIT" > "$KEY_TMP" 2> /var/log/sfa-key-extract.log; then echo 'Private answer-key extraction failed; old bridge left running. Review /var/log/sfa-key-extract.log privately.'; exit 1; fi
+install -m 640 -o root -g sfa "$KEY_TMP" "/etc/sfa/answer-keys/$COMMIT.json"
+rm -f "$KEY_TMP"
+sfa migrate
+# Snapshot legacy data before stopping processes; SQLite consistent backup is made using its backup API.
+/opt/sfa/.venv/bin/python - <<'PY'
+import json,sqlite3,subprocess,time,tarfile
+from pathlib import Path
+from sfa_api.config import Config
+from sfa_api.service import Service
+from sfa_api.legacy import import_sqlite
+state=json.loads(Path('/etc/sfa/install-state.json').read_text()); svc=Service(Config.env())
+for i,root in enumerate(state.get('legacy_data',[])):
+    root=Path(root); backup=Path('/var/backups/sfa')/('legacy-'+str(int(time.time()))+'-'+str(i)); backup.mkdir(mode=0o700)
+    with sqlite3.connect(str(root/'bridge.sqlite3')) as source, sqlite3.connect(str(backup/'bridge.sqlite3')) as target: source.backup(target)
+    # Preserve complete directory, including attachments. No deletions.
+    with tarfile.open(str(backup)+'.tar.gz','w:gz') as tar: tar.add(root,arcname='legacy')
+    # Import originals read-only while old bot is stopped below, before API starts.
+PY
+# Cut over only identified old academy API/bot PM2 processes after backups.
+/opt/sfa/.venv/bin/python "$HELPER" pm2 stop-legacy
+/opt/sfa/.venv/bin/python - <<'PY'
+import json
+from pathlib import Path
+from sfa_api.config import Config
+from sfa_api.service import Service
+from sfa_api.legacy import import_sqlite
+s=Service(Config.env()); state=json.loads(Path('/etc/sfa/install-state.json').read_text())
+for root in state.get('legacy_data',[]): print(import_sqlite(s,Path(root)/'bridge.sqlite3'))
+PY
+cat > /etc/systemd/system/sfa-api.service <<'UNIT'
+[Unit]
+Description=SFA v6 API (loopback only)
+After=network.target postgresql.service
+Requires=postgresql.service
+[Service]
+User=sfa
+Group=sfa
+WorkingDirectory=/opt/sfa
+EnvironmentFile=/etc/sfa/sfa.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/sfa/.venv/bin/gunicorn --workers 2 --threads 2 --bind 127.0.0.1:8081 --timeout 180 --error-logfile - sfa_api.wsgi:app
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sfa
+[Install]
+WantedBy=multi-user.target
+UNIT
+cat > /etc/systemd/system/sfa-bot.service <<'UNIT'
+[Unit]
+Description=SFA optional Telegram notifications
+After=sfa-api.service network-online.target
+[Service]
+User=sfa
+Group=sfa
+WorkingDirectory=/opt/sfa
+EnvironmentFile=/etc/sfa/sfa.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/sfa/.venv/bin/python -m sfa_api.bot
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sfa
+[Install]
+WantedBy=multi-user.target
+UNIT
+cat > /etc/systemd/system/sfa-backup.service <<'UNIT'
+[Unit]
+Description=SFA root-only consistent local backup
+After=postgresql.service
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/sfa
+Environment=PYTHONPATH=/opt/sfa
+ExecStart=/opt/sfa/backup.sh
+UMask=0077
+UNIT
+cat > /etc/systemd/system/sfa-backup.timer <<'UNIT'
+[Unit]
+Description=SFA nightly backup (Europe/Amsterdam)
+[Timer]
+OnCalendar=*-*-* 03:15:00 Europe/Amsterdam
+Persistent=true
+RandomizedDelaySec=120
+[Install]
+WantedBy=timers.target
+UNIT
+chmod 755 /opt/sfa/backup.sh
+systemctl daemon-reload
+systemctl enable --now sfa-api sfa-backup.timer
+systemctl restart sfa-api
+if /opt/sfa/.venv/bin/python -c 'from sfa_api.config import Config;import sys;sys.exit(not bool(Config.env().bot_token))'; then systemctl enable --now sfa-bot; systemctl restart sfa-bot; else systemctl disable --now sfa-bot || true; echo 'Telegram is optional and currently disabled (no token found).'; fi
+chown -R sfa:sfa /var/lib/sfa
+# Official Caddy apt repository; no curl | shell.
+curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt -o /etc/apt/sources.list.d/caddy-stable.list
+apt-get update -qq && apt-get install -y caddy
+if [[ -f /etc/caddy/Caddyfile && ! -f /etc/caddy/Caddyfile.pre-sfa6 ]]; then cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.pre-sfa6; fi
+cat > /etc/caddy/Caddyfile <<CADDY
+$DOMAIN {
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+        -Server
+    }
+    request_body {
+        max_size 250MB
+    }
+    # API namespace is internal; never proxy it directly from the Internet.
+    handle /api/v1/* {
+        respond 404
+    }
+    handle /echo/* {
+        reverse_proxy 127.0.0.1:8081
+    }
+    handle {
+        # Caddy overwrites this header with the immediate remote host.
+        reverse_proxy 127.0.0.1:3000 {
+            header_up X-SFA-Client-IP {http.request.remote.host}
+        }
+    }
+}
+CADDY
+caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+# Preserve existing firewall chains. Insert allow rules before Oracle's terminal REJECT.
+for port in 80 443; do
+  iptables -C INPUT -p tcp --dport "$port" -m comment --comment sfa6-web -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -p tcp --dport "$port" -m comment --comment sfa6-web -j ACCEPT
+  if command -v ufw >/dev/null 2>&1 && ufw status | python3 -c 'import sys;sys.exit("Status: active" not in sys.stdin.read())'; then ufw allow "$port/tcp"; fi
+done
+install -d -m 755 /etc/iptables
+iptables-save > /etc/iptables/rules.v4
+systemctl enable --now caddy
+systemctl reload caddy
+# Rebuild as app owner, not root. Build output could contain app-generated secrets: keep private, not installer log.
+if [[ $REBUILD == 1 ]]; then
+  # shellcheck disable=SC2016 # $1 is deliberately expanded by the child shell
+  if ! runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" bash -c 'cd "$1" && npm ci && npm run build' _ "$APP_DIR" > /var/log/sfa-next-build.log 2>&1; then echo 'Next build failed; private log /var/log/sfa-next-build.log. Do not send it unreviewed.'; exit 1; fi
+fi
+/opt/sfa/.venv/bin/python "$HELPER" pm2 restart
+python3 - <<'CHECK'
+import subprocess
+rows=subprocess.check_output(['ss','-ltnH'],text=True).splitlines()
+for line in rows:
+    endpoint=line.split()[3]
+    if endpoint.endswith((':3000',':8081')) and endpoint not in ('127.0.0.1:3000','127.0.0.1:8081','[::1]:3000','[::1]:8081'):
+        raise SystemExit('Unsafe public listener. Set PM2 Next start args to --hostname 127.0.0.1, then rerun installer. No HTTP fallback permitted.')
+CHECK
+# Do not imply HTTPS succeeded or weaken cookies if issuance/OCI networking fails.
+HTTPS_OK=0
+for _ in $(seq 1 12); do
+  if curl --fail --silent --max-time 10 "https://$DOMAIN/echo/v1/health" >/dev/null && curl --fail --silent --max-time 10 "https://$DOMAIN/" >/dev/null; then HTTPS_OK=1; break; fi
+  sleep 5
+done
+if [[ $HTTPS_OK == 1 ]]; then
+  # Close old public ports; loopback remains accessible. These rules survive reboot.
+  for port in 3000 8081; do
+    iptables -C INPUT ! -i lo -p tcp --dport "$port" -m comment --comment sfa6-private -j REJECT 2>/dev/null || iptables -I INPUT 1 ! -i lo -p tcp --dport "$port" -m comment --comment sfa6-private -j REJECT
+    if command -v ufw >/dev/null 2>&1 && ufw status | python3 -c 'import sys;sys.exit("Status: active" not in sys.stdin.read())'; then ufw deny "$port/tcp"; fi
+  done
+  iptables-save > /etc/iptables/rules.v4
+  echo 'HTTPS verified; ports 3000/8081 blocked publicly.'
+else
+  echo 'HTTPS NOT VERIFIED: check OCI VCN/NSG TCP 80/443 ingress and Caddy certificate/rate-limit logs. No HTTP login fallback is enabled.'
+fi
+echo "Site: https://$DOMAIN"
+if [[ ! -f /etc/sfa/cohort-invite ]]; then sfa invite > /etc/sfa/cohort-invite; chmod 600 /etc/sfa/cohort-invite; fi
+# FD3 is original terminal, not the installer logfile; never log bearer invite tokens.
+echo 'Cohort invite (private; only share with your cohort):' >&3
+while IFS= read -r line; do printf '%s\n' "$line" >&3; done < /etc/sfa/cohort-invite
+echo 'Invite saved privately in /etc/sfa/cohort-invite (not in installer log).'
+sfa backup-now
+echo 'Echo key: /etc/sfa/echo-api-key. Show once in PRIVATE terminal with sudo sfa show-echo-key; enter only in Echo secure form, never chat.'
+echo 'Apply Cursor prompt before this installer; Next was rebuilt/restarted unless --no-rebuild-next was given.'
+echo 'No email service required. A grading routine still needs to be configured in Echo after secure key setup.'
+if [[ $HTTPS_OK != 1 ]]; then exit 3; fi

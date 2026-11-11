@@ -18,29 +18,10 @@ export type EntitlementResult =
     };
 
 /**
- * Authorize via bridge entitlements. Fail closed.
- * Test-only bypass: NODE_ENV=test + SFA_CONTENT_BYPASS_STAGE=N
+ * Authorize via the account API. There is no content bypass.
+ * Fail closed when the session or bridge is unavailable.
  */
 export async function resolveEntitlement(): Promise<EntitlementResult> {
-  const bypass = process.env.SFA_CONTENT_BYPASS_STAGE;
-  // Operator/test only — never set SFA_ALLOW_CONTENT_BYPASS in production.
-  if (
-    process.env.SFA_ALLOW_CONTENT_BYPASS === "1" &&
-    bypass &&
-    /^\d+$/.test(bypass)
-  ) {
-    const unlockedStage = Math.min(8, Math.max(1, Number(bypass)));
-    return {
-      ok: true,
-      entitlement: {
-        unlockedStage,
-        currentWeek: 1,
-        status: "TEST_BYPASS",
-      },
-      token: "test-bypass",
-    };
-  }
-
   const token = await readSessionToken();
   if (!token) {
     return { ok: false, status: 401, code: "UNAUTHORIZED" };
@@ -48,7 +29,7 @@ export async function resolveEntitlement(): Promise<EntitlementResult> {
 
   const proxied = await proxyToBridge({
     method: "GET",
-    flaskPath: "/api/entitlements",
+    flaskPath: "/api/v1/entitlements",
     bearerToken: token,
   });
   if (!proxied.ok) {
@@ -78,7 +59,6 @@ export async function resolveEntitlement(): Promise<EntitlementResult> {
     8,
     Math.max(1, Math.floor((body as { unlockedStage: number }).unlockedStage)),
   );
-  // Stage 8 never becomes 9
   return {
     ok: true,
     token,

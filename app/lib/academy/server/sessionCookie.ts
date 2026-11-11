@@ -6,6 +6,14 @@ import {
   loadBridgeConfig,
 } from "./bridgeConfig";
 
+const COOKIE_BASE = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "strict" as const,
+  path: "/",
+  // __Host- cookies must not set Domain.
+};
+
 export async function readSessionToken(): Promise<string | null> {
   const jar = await cookies();
   const v = jar.get(SESSION_COOKIE)?.value;
@@ -14,12 +22,8 @@ export async function readSessionToken(): Promise<string | null> {
 
 export async function setSessionCookie(token: string): Promise<void> {
   const jar = await cookies();
-  const secure = !insecurePilotEnabled();
   jar.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure,
-    sameSite: "strict",
-    path: "/",
+    ...COOKIE_BASE,
     maxAge: SESSION_MAX_AGE,
   });
 }
@@ -27,32 +31,33 @@ export async function setSessionCookie(token: string): Promise<void> {
 export async function clearSessionCookie(): Promise<void> {
   const jar = await cookies();
   jar.set(SESSION_COOKIE, "", {
-    httpOnly: true,
-    secure: !insecurePilotEnabled(),
-    sameSite: "strict",
-    path: "/",
+    ...COOKIE_BASE,
     maxAge: 0,
   });
 }
 
-/**
- * Explicit temporary risk acceptance, OFF by default, never a public env.
- * When enabled, Secure is dropped so plain-HTTP pilots can store the cookie.
- * Credential/session traffic is then sniffable — do not enable on production
- * servers that terminate TLS or are reachable beyond loopback.
- * Replaces legacy SFA_ALLOW_INSECURE_COOKIE (removed).
- */
-function insecurePilotEnabled(): boolean {
-  return process.env.SFA_ALLOW_INSECURE_PILOT === "1";
+function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === "127.0.0.1" ||
+    hostname === "localhost" ||
+    hostname === "[::1]" ||
+    hostname === "::1"
+  );
 }
 
 /**
- * Canonical public origin defines the operator's TLS-termination contract.
- * Do not infer HTTPS from a non-local Host or arbitrary forwarded headers.
+ * Public HTTP origins cannot log in. Loopback HTTP is allowed for a local
+ * Next process behind nothing; the cookie stays Secure. There is no pilot flag.
  */
-export function httpsRequiredForLogin(_req: Request): boolean {
-  if (insecurePilotEnabled()) return false;
+export function httpsRequiredForLogin(): boolean {
   const cfg = loadBridgeConfig();
   if (!cfg.ok) return true;
-  return new URL(cfg.config.siteOrigin).protocol !== "https:";
+  let site: URL;
+  try {
+    site = new URL(cfg.config.siteOrigin);
+  } catch {
+    return true;
+  }
+  if (site.protocol === "https:") return false;
+  return !isLoopbackHost(site.hostname);
 }

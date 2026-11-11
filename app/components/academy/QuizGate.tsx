@@ -5,10 +5,9 @@ import type { QuizItem } from "../../lib/academy/curriculum";
 import { t } from "../../lib/academy/dictionary";
 import {
   makeAttemptNonce4,
-  makeQuizAttemptId,
-  scoreQuiz,
   type QuizAnswer,
 } from "../../lib/academy/grading";
+import { buildQuizSubmission, normalizeBuildCommit } from "../../lib/academy/quizSubmit";
 import { buildDisplayedQuiz, displayToCanonicalMc } from "../../lib/academy/quizShuffle";
 import { ASSESSMENT_CRITERIA_VERSION } from "../../lib/academy/assessmentVersion";
 import { resolveBuildStamp } from "../../lib/academy/buildStamp";
@@ -18,18 +17,6 @@ import {
   quizStore,
   type QuizAttemptRecord,
 } from "../../lib/academy/persist";
-import {
-  consentStore,
-  enqueueQuizResult,
-  outboxStore,
-} from "../../lib/academy/persist/outbox";
-import {
-  buildQuizResultV2,
-  serializeQuizResultV2,
-  validateQuizResultV2Shape,
-} from "../../lib/academy/quizResultV2";
-import { scheduleOutboxFlush } from "../../lib/academy/outboxFlush";
-import { STUDENT_ID_RE, ALIAS_RE } from "../../lib/academy/packet/schema";
 import { useProgress } from "./ProgressProvider";
 import type { PublicQuizItem } from "../../lib/academy/useAuthorizedContent";
 
@@ -106,6 +93,7 @@ export default function QuizGate({
   );
 
   const [attemptNonce] = useState(() => makeAttemptNonce4());
+  const [attemptId, setAttemptId] = useState(() => crypto.randomUUID());
   const [startedAtISO] = useState(() => new Date().toISOString());
   const studentId = prefs.studentId?.trim() || "S00";
   const shuffleSeed = `${studentId}:${quizId}:${attemptNonce}`;
@@ -177,87 +165,77 @@ export default function QuizGate({
     setPersistError(null);
     setOutboxNote(null);
     try {
-      const hasLocalAnswers = asQuizItems.every((i) => i.answer !== undefined);
-      let scored: {
-        score: number;
-        correct: number;
-        total: number;
-        weakTopics: string[];
-        perItem: {
-          id: string;
-          pass: boolean;
-          unanswered: boolean;
-          skipped: boolean;
-          remediationTopic: string;
-          kind: QuizItem["kind"];
-          rationale?: QuizItem["rationale"];
-          itemHash?: string;
-        }[];
-        allAnswered: boolean;
+      const stamp = resolveBuildStamp();
+      const built = buildQuizSubmission({
+        attemptId,
+        quizId,
+        buildCommit: normalizeBuildCommit(stamp.commit),
+        items: items.map((item) => ({
+          id: item.id,
+          kind: item.kind,
+          itemHash: item.itemHash,
+        })),
+        answers,
+        touchedIds: touched,
+        skippedIds: skipped,
+      });
+      if (!built.ok) throw new Error(built.error);
+      const res = await fetch("/api/mentor/quizzes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(built.body),
+      });
+      const payload = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        fa?: string;
+        en?: string;
+        attemptId?: string;
+        assessment?: {
+          status?: "RECOMPUTED" | "UNVERIFIED";
+          reason?: string;
+          score?: number | null;
+          correct?: number;
+          total?: number;
+          verdict?: string | null;
+          items?: { itemId: string; correct: boolean }[];
+        };
+        decision?: { verdict?: string; feedback?: { fa: string; en: string } } | null;
       };
-
-      if (hasLocalAnswers) {
-        const local = scoreQuiz(asQuizItems, answers, {
-          touchedIds: touched,
-          skippedIds: skipped,
-        });
-        scored = {
-          ...local,
-          perItem: local.perItem.map((p) => ({
-            ...p,
-            rationale: asQuizItems.find((i) => i.id === p.id)?.rationale,
-          })),
-        };
-      } else {
-        const res = await fetch("/api/mentor/quiz-score", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({
-            quizId,
-            answers,
-            touchedIds: [...touched],
-            skippedIds: [...skipped],
-          }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(
-            typeof (err as { error?: string }).error === "string"
-              ? (err as { error: string }).error
-              : `SCORE_HTTP_${res.status}`,
-          );
-        }
-        const body = (await res.json()) as {
-          score: number;
-          correct: number;
-          total: number;
-          weakTopics: string[];
-          allAnswered: boolean;
-          perItem: {
-            id: string;
-            pass: boolean;
-            unanswered: boolean;
-            skipped: boolean;
-            remediationTopic: string;
-            kind: QuizItem["kind"];
-            itemHash: string;
-            rationale: QuizItem["rationale"];
-          }[];
-        };
-        scored = body;
+      if (!res.ok) {
+        throw new Error(
+          locale === "fa"
+            ? payload.fa ?? payload.error ?? `SCORE_HTTP_${res.status}`
+            : payload.en ?? payload.error ?? `SCORE_HTTP_${res.status}`,
+        );
       }
-
+      const assessment = payload.assessment;
+      const pending = assessment?.status !== "RECOMPUTED";
+      const byId = new Map((assessment?.items ?? []).map((item) => [item.itemId, item.correct]));
+      const scored = {
+        score: pending ? 0 : (assessment?.score ?? 0),
+        correct: assessment?.correct ?? 0,
+        total: assessment?.total ?? asQuizItems.length,
+        weakTopics: [] as string[],
+        pending,
+        pendingReason: assessment?.reason,
+        verdict: assessment?.verdict ?? payload.decision?.verdict ?? null,
+        feedback: payload.decision?.feedback,
+        perItem: items.map((item) => ({
+          id: item.id,
+          pass: byId.get(item.id) === true,
+          unanswered: !touched.has(item.id) || skipped.has(item.id),
+          skipped: skipped.has(item.id),
+          remediationTopic: item.remediationTopic,
+          kind: item.kind,
+          itemHash: item.itemHash,
+        })),
+        allAnswered: asQuizItems.every((item) => touched.has(item.id) && !skipped.has(item.id)),
+      };
       setResult(scored);
+      if (!pending) setAttemptId(crypto.randomUUID());
 
       const submittedAt = new Date();
-      const attemptId = makeQuizAttemptId({
-        quizId,
-        criteria: ASSESSMENT_CRITERIA_VERSION,
-        submittedAt,
-        nonce: attemptNonce,
-      });
-      const stamp = resolveBuildStamp();
 
       const itemRecords = await Promise.all(
         displayed.map(async (d) => {
@@ -329,61 +307,16 @@ export default function QuizGate({
       }
 
       setLastAttempt(attempt);
-      onScored(scored.score, scored.weakTopics, attempt);
-
-      // Enqueue ONLY after successful persist + consent + matching identity
-      if (assessmentMode === "ASSESSED") {
-        const consent = consentStore.getSnapshot();
-        const sid = prefs.studentId?.trim() ?? "";
-        const alias = prefs.alias?.trim() ?? "";
-        if (!consent.quizTransportConsent) {
-          setOutboxNote(
-            locale === "fa"
-              ? "رضایت ارسال خاموش است — نتیجه محلی ماند."
-              : "Transport consent OFF — result kept local only.",
-          );
-        } else if (!STUDENT_ID_RE.test(sid) || !ALIAS_RE.test(alias)) {
-          setOutboxNote(
-            locale === "fa"
-              ? "هویت معتبر نیست — صف ارسال نشده."
-              : "Identity invalid — not enqueued.",
-          );
-        } else {
-          try {
-            const topics: Record<string, string> = {};
-            for (const it of items) topics[it.id] = it.remediationTopic;
-            const payload = buildQuizResultV2({
-              attempt,
-              studentId: sid,
-              alias,
-              topics,
-            });
-            const shapeErr = validateQuizResultV2Shape(payload);
-            if (shapeErr.length) {
-              setOutboxNote(`OUTBOX_SHAPE:${shapeErr.join(",")}`);
-            } else {
-              const enq = enqueueQuizResult(outboxStore.getSnapshot(), {
-                attemptId: attempt.attemptId,
-                ownerStudentId: sid,
-                payloadJson: serializeQuizResultV2(payload),
-              });
-              if (enq.ok) {
-                outboxStore.set(enq.store);
-                scheduleOutboxFlush(200);
-                setOutboxNote(
-                  locale === "fa" ? "در صف ارسال Echo قرار گرفت." : "Queued for Echo transport.",
-                );
-              } else {
-                setOutboxNote(`OUTBOX:${enq.error}`);
-              }
-            }
-          } catch (e) {
-            setOutboxNote(
-              e instanceof Error ? e.message : "OUTBOX_ENQUEUE_FAIL",
-            );
-          }
-        }
-      }
+      onScored(pending ? 0 : scored.score, scored.weakTopics, attempt);
+      setOutboxNote(
+        pending
+          ? locale === "fa"
+            ? `در انتظار بررسی سرور${scored.pendingReason ? ` (${scored.pendingReason})` : ""}. این حالت مردود یا قبول خودکار نیست.`
+            : `Pending server review${scored.pendingReason ? ` (${scored.pendingReason})` : ""}. This is not an automatic fail or pass.`
+          : locale === "fa"
+            ? "درستی هر مورد پس از ثبت کامل از سرور آمد. توضیح آموزشی بعد از تصمیم Echo می‌آید. تأیید آزمون درس بعدی را باز نمی‌کند."
+            : "Per-item correctness came from the server after a complete submission. Teaching notes arrive with Echo's decision. Quiz approval does not unlock the next lesson.",
+      );
     } catch (e) {
       setPersistError(
         e instanceof Error
@@ -432,8 +365,8 @@ export default function QuizGate({
       </h3>
       <p className="text-xs text-fog">
         {locale === "fa"
-          ? "نمرات سمت کلاینت CLAIM هستند — تا مرور Echo/منتور UNVERIFIED. تأیید آزمون درس بعدی را باز نمی‌کند."
-          : "Client scores are CLAIMS — UNVERIFIED until Echo/mentor review. Quiz approval never unlocks the next lesson."}
+          ? "درستی را سرور بعد از ارسال کامل بانک محاسبه می‌کند. تا رسیدن کلید یا بررسی Echo، وضعیت Pending است. تأیید آزمون درس بعدی را باز نمی‌کند."
+          : "The server scores the full bank after you submit. Missing keys stay Pending. Quiz approval never unlocks the next lesson."}
       </p>
 
       {displayed.map(({ item, optionMap, initialOrder }) => {
@@ -549,26 +482,19 @@ export default function QuizGate({
               />
               {locale === "fa" ? "رد کردن این مورد" : "Skip this item"}
             </label>
-            {showResult ? (
+            {showResult && !("pending" in showResult && showResult.pending) ? (
               <p className="mt-3 text-xs text-fog" data-testid={`rationale-${item.id}`}>
-                {showResult.perItem.find((p) => p.id === item.id)?.pass
+                {showResult.perItem.find((p) => p.id === item.id)?.unanswered
                   ? locale === "fa"
-                    ? "درست (ادعای کلاینت)"
-                    : "Correct (client claim)"
-                  : locale === "fa"
-                    ? "نادرست / بدون پاسخ (ادعای کلاینت)"
-                    : "Wrong / unanswered (client claim)"}
-                {" · "}
-                {(() => {
-                  const row = showResult.perItem.find((p) => p.id === item.id) as
-                    | { rationale?: QuizItem["rationale"] }
-                    | undefined;
-                  const r = row?.rationale ?? item.rationale;
-                  return r ? t(r, locale) : "";
-                })()}
-                {!showResult.perItem.find((p) => p.id === item.id)?.pass
-                  ? ` · remediation: ${item.remediationTopic}`
-                  : ""}
+                    ? "بدون پاسخ"
+                    : "Not answered"
+                  : showResult.perItem.find((p) => p.id === item.id)?.pass
+                    ? locale === "fa"
+                      ? "درست (سرور)"
+                      : "Correct (server)"
+                    : locale === "fa"
+                      ? "نادرست (سرور)"
+                      : "Wrong (server)"}
               </p>
             ) : null}
           </div>
@@ -603,12 +529,15 @@ export default function QuizGate({
           aria-live="polite"
         >
           <p className="text-sm text-gold-soft">
-            Score {showResult.score}/100 · {showResult.correct}/{showResult.total}
-            {showResult.score < 80
-              ? ` · REMEDIATION: ${[...new Set(showResult.weakTopics)].join(", ")}`
-              : ""}
+            {"pending" in showResult && showResult.pending
+              ? locale === "fa"
+                ? "Pending — سرور هنوز نمره قطعی ندارد"
+                : "Pending — the server has not verified a score"
+              : `Score ${showResult.score}/100 · ${showResult.correct}/${showResult.total}`}
             {" · "}
-            <span className="text-fog">UNVERIFIED until mentor review</span>
+            <span className="text-fog">
+              {locale === "fa" ? "درس بعدی با تمرین عملی باز می‌شود" : "Next lesson waits for the practical"}
+            </span>
           </p>
           {displayAttempt ? (
             <p className="font-mono text-xs text-teal-bright" data-testid="attempt-meta" dir="ltr">
@@ -651,11 +580,13 @@ export default function QuizGate({
                         </bdi>
                       </td>
                       <td>
-                        {p.unanswered
-                          ? "not answered"
-                          : p.pass
-                            ? "correct"
-                            : "wrong"}
+                        {"pending" in showResult && showResult.pending
+                          ? "pending"
+                          : p.unanswered
+                            ? "not answered"
+                            : p.pass
+                              ? "correct"
+                              : "wrong"}
                       </td>
                       <td>{p.remediationTopic}</td>
                       <td className="font-mono">

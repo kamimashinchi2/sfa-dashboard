@@ -22,6 +22,7 @@ import MacroTransmissionBuilder from "./MacroTransmissionBuilder";
 import RiskGridCalculator from "./RiskGridCalculator";
 import JournalBuilder from "./JournalBuilder";
 import PerformanceCard from "./PerformanceCard";
+import { useServerResponses } from "../../lib/academy/stageResponses";
 import { useProgress } from "./ProgressProvider";
 
 function MissionBody({
@@ -33,9 +34,13 @@ function MissionBody({
   const mission = content;
   const { progress, recordAttempt, completeLesson } = useProgress();
   const locale = progress.locale;
+  useServerResponses(content.stages[0], content.id);
 
   const access = resolveMissionAccess(progress, mission.id as MissionId);
-  const readOnly = access.mode === "READ_ONLY_PREVIEW";
+  // The server already authorized this lesson body. Local XP cannot lock it
+  // into a preview or unlock a stage Python did not return.
+  const readOnly = false;
+  void access;
 
   const saved = latestValidAttempt(progress, mission.id as MissionId);
 
