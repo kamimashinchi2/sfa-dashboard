@@ -1,5 +1,5 @@
-import { noStoreJson, requireJsonOrigin } from "../../../lib/academy/server/bridgeProxy";
-import { clearSessionCookie } from "../../../lib/academy/server/sessionCookie";
+import { noStoreJson, requireJsonOrigin } from "@/app/lib/academy/server/bridgeProxy";
+import { clearSessionCookie } from "@/app/lib/academy/server/sessionCookie";
 
 
 export async function POST(req: Request) {

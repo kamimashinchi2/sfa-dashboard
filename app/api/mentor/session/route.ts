@@ -3,12 +3,18 @@ import {
   noStoreJson,
   proxyToBridge,
   requireJsonOrigin,
-} from "../../../lib/academy/server/bridgeProxy";
+} from "@/app/lib/academy/server/bridgeProxy";
 import {
   httpsRequiredForLogin,
   setSessionCookie,
-} from "../../../lib/academy/server/sessionCookie";
+} from "@/app/lib/academy/server/sessionCookie";
 
+// cacheComponents:true (Next 16.4.5) forbids export const runtime — Node.js
+// is the default and required runtime for crypto/cookies on these routes.
+
+/** Flask enrollmentToken max is 200; keep JSON envelope small. */
+const BODY_CAP = 1024;
+const TOKEN_MAX = 200;
 
 /**
  * POST { enrollmentToken } → bridge /api/session
@@ -34,13 +40,18 @@ export async function POST(req: Request) {
         fa: "برای ورود امن به HTTPS نیاز است.",
         en: "HTTPS is required for secure login.",
       },
-      403,
+      426,
     );
+  }
+
+  const raw = await req.text();
+  if (raw.length > BODY_CAP) {
+    return noStoreJson({ error: "PAYLOAD_TOO_LARGE" }, 413);
   }
 
   let body: unknown;
   try {
-    body = await req.json();
+    body = JSON.parse(raw) as unknown;
   } catch {
     return noStoreJson({ error: "BAD_JSON" }, 400);
   }
@@ -55,7 +66,7 @@ export async function POST(req: Request) {
   const enrollmentToken = (
     body as { enrollmentToken: string }
   ).enrollmentToken.trim();
-  if (!enrollmentToken || enrollmentToken.length > 512) {
+  if (!enrollmentToken || enrollmentToken.length > TOKEN_MAX) {
     return noStoreJson({ error: "INVALID_TOKEN" }, 400);
   }
 
@@ -73,8 +84,9 @@ export async function POST(req: Request) {
 
   const { status, body: resp } = proxied.result;
   if (status !== 200 && status !== 201) {
+    // Do not forward Flask response fields to the browser.
     return noStoreJson(
-      { error: "BRIDGE_REJECTED", status, detail: sanitize(resp) },
+      { error: "BRIDGE_REJECTED", status },
       status >= 400 && status < 600 ? status : 502,
     );
   }
@@ -102,13 +114,4 @@ export async function POST(req: Request) {
     expiresIn,
     // Token intentionally omitted from JSON body
   });
-}
-
-function sanitize(v: unknown): unknown {
-  if (!v || typeof v !== "object") return null;
-  const o = { ...(v as Record<string, unknown>) };
-  delete o.sessionToken;
-  delete o.token;
-  delete o.secret;
-  return o;
 }

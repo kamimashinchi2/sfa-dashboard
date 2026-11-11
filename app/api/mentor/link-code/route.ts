@@ -3,8 +3,8 @@ import {
   noStoreJson,
   proxyToBridge,
   requireJsonOrigin,
-} from "../../../lib/academy/server/bridgeProxy";
-import { readSessionToken } from "../../../lib/academy/server/sessionCookie";
+} from "@/app/lib/academy/server/bridgeProxy";
+import { readSessionToken } from "@/app/lib/academy/server/sessionCookie";
 
 
 /** POST {} → bridge POST /api/link-code. Code is secret — UI only, never outbox/telemetry. */

@@ -10,6 +10,7 @@ import {
 } from "../lib/academy/persist/outbox";
 import { prefsStore } from "../lib/academy/persist";
 import { pauseOutboxForLogin, scheduleOutboxFlush, startOutboxListeners } from "../lib/academy/outboxFlush";
+import { loginDiagMessage } from "../lib/academy/loginDiag";
 import { STUDENT_ID_RE, ALIAS_RE } from "../lib/academy/packet/schema";
 
 type Entitlement = {
@@ -137,13 +138,8 @@ function ProgressBody() {
         en?: string;
         fa?: string;
       };
-      setEnrollmentToken("");
       if (!res.ok) {
-        setSessionMsg(
-          body.fa && locale === "fa"
-            ? body.fa
-            : body.en || body.error || `HTTP_${res.status}`,
-        );
+        setSessionMsg(loginDiagMessage(locale, res.status, body));
         return;
       }
       setSessionMsg(locale === "fa" ? "نشست برقرار شد." : "Session established.");
@@ -152,8 +148,13 @@ function ProgressBody() {
       await refreshLinkStatus();
       scheduleOutboxFlush(200);
     } catch {
-      setSessionMsg(locale === "fa" ? "خطای شبکه" : "Network error");
+      setSessionMsg(
+        locale === "fa"
+          ? "خطای شبکه — اتصال به سرور برقرار نشد."
+          : "Network error — could not reach the login service.",
+      );
     } finally {
+      setEnrollmentToken("");
       setBusy(false);
     }
   };
