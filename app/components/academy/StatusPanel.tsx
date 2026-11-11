@@ -29,7 +29,7 @@ export default function StatusPanel() {
           <span className="max-w-[18rem] truncate font-mono text-[11px] text-gold-soft sm:text-xs">
             {stageLabel}
           </span>
-          <span className="font-mono text-[10px] text-fog">{stamp.label}</span>
+          <span className="hidden font-mono text-[10px] text-fog sm:block">{stamp.label}</span>
         </span>
       </li>
       <li className="inline-flex items-center gap-2 border border-line bg-ink/40 px-2.5 py-1.5">
@@ -47,10 +47,10 @@ export default function StatusPanel() {
         <Bot className="h-3.5 w-3.5 text-teal-bright" aria-hidden />
         <span className="flex flex-col leading-tight">
           <span className="text-[10px] tracking-[0.16em] text-fog uppercase">
-            {locale === "fa" ? "منتور AI" : "Live AI Mentor"}
+            {locale === "fa" ? "بررسی Echo" : "Echo"}
           </span>
           <span className="font-mono text-[11px] text-gold-soft sm:text-xs">
-            Echo Online
+            {locale === "fa" ? "بررسی صف، نه گفتگوی زنده" : "Queue review, not live chat"}
           </span>
         </span>
       </li>

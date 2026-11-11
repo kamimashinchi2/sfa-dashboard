@@ -84,7 +84,7 @@ export default function ContentGate({
             onClick={() => state.refresh()}
             data-testid="content-refresh"
           >
-            {locale === "fa" ? "تازه‌سازی entitlement" : "Refresh entitlement"}
+            {locale === "fa" ? "بررسی دوباره" : "Check again"}
           </button>
         </div>
       </div>

@@ -3,12 +3,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ProgressProvider, useProgress } from "./ProgressProvider";
+import SupportPath from "./SupportPath";
+import TawkLoader from "./TawkLoader";
 
 function Frame({
   title,
   children,
 }: {
-  title: string;
+  title: { fa: string; en: string };
   children: (locale: "fa" | "en") => ReactNode;
 }) {
   const { progress, setLocale } = useProgress();
@@ -21,7 +23,7 @@ function Frame({
     <div className="atmosphere min-h-dvh px-4 py-8 text-paper">
       <div className="mx-auto w-full max-w-md space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="font-display text-3xl">{title}</h1>
+          <h1 className="font-display text-3xl">{locale === "fa" ? title.fa : title.en}</h1>
           <button
             type="button"
             className="min-h-11 border border-line px-3 text-xs text-fog"
@@ -32,6 +34,7 @@ function Frame({
         </div>
         {children(locale)}
       </div>
+      <TawkLoader />
     </div>
   );
 }
@@ -40,7 +43,7 @@ export function AuthShell({
   title,
   children,
 }: {
-  title: string;
+  title: { fa: string; en: string };
   children: (locale: "fa" | "en") => ReactNode;
 }) {
   return (
@@ -79,7 +82,7 @@ export function SignupForm({ token }: { token: string }) {
   }, []);
 
   return (
-    <AuthShell title="Join">
+    <AuthShell title={{ fa: "ساخت حساب", en: "Join" }}>
       {(locale) => (
         <form
           className="space-y-3 border border-line bg-ink/40 p-4"
@@ -127,8 +130,8 @@ export function SignupForm({ token }: { token: string }) {
         >
           <p className="text-xs text-fog">
             {locale === "fa"
-              ? "ایمیل فقط شناسه ورود است. ایمیل تأیید ارسال نمی‌شود. بازیابی رمز از مالک آکادمی و پیوند یک‌بارمصرف ۳۰ دقیقه‌ای است."
-              : "Email is only a login identifier. No verification email is sent. Password recovery is a one-time 30-minute link from the academy owner."}
+              ? "ایمیل فقط شناسه ورود است. ایمیل تأیید یا بازیابی ارسال نمی‌شود. اگر رمز را فراموش کنید، از گفتگوی پشتیبانی بخواهید مالک آکادمی یک پیوند یک‌بارمصرف ۳۰ دقیقه‌ای بدهد."
+              : "Email is only a login identifier. No verification or recovery email is sent. If you forget the password, ask the support chat and the owner will give you a one-time 30-minute link."}
           </p>
           <label className="block text-xs text-fog">
             {locale === "fa" ? "نام نمایشی" : "Display name"}
@@ -184,7 +187,7 @@ export function LoginForm() {
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   return (
-    <AuthShell title="Log in">
+    <AuthShell title={{ fa: "ورود", en: "Log in" }}>
       {(locale) => (
         <form
           className="space-y-3 border border-line bg-ink/40 p-4"
@@ -223,11 +226,7 @@ export function LoginForm() {
               });
           }}
         >
-          <p className="text-xs text-fog">
-            {locale === "fa"
-              ? "اگر رمز را فراموش کردید، مالک آکادمی هویت را بررسی می‌کند و یک پیوند یک‌بارمصرف می‌دهد که تا ۳۰ دقیقه معتبر است. ایمیلی ارسال نمی‌شود."
-              : "If you forget the password, the academy owner verifies you and shares a one-time link that expires in 30 minutes. No email is sent."}
-          </p>
+          <SupportPath locale={locale} />
           <label className="block text-xs text-fog">
             {locale === "fa" ? "ایمیل" : "Email"}
             <input className={fieldClass()} type="email" value={email} data-testid="login-email" autoComplete="username" onChange={(e) => setEmail(e.target.value)} required />
@@ -256,7 +255,7 @@ export function ResetForm({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   return (
-    <AuthShell title="Reset">
+    <AuthShell title={{ fa: "رمز جدید", en: "New password" }}>
       {(locale) => (
         <form
           className="space-y-3 border border-line bg-ink/40 p-4"

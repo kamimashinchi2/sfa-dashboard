@@ -1,17 +1,19 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Iteration 2 advanced + gates", () => {
-  test("M2 direct URL is read-only preview at XP0", async ({ page }) => {
+  test("M2 direct URL asks for a session instead of a preview quiz", async ({ page }) => {
     await page.goto("/academy/missions/M2");
-    await expect(page.getByText(/READ_ONLY_PREVIEW/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /Score quiz|ثبت نمره/i })).toBeDisabled();
+    await expect(page.getByTestId("content-auth")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("quiz-gate")).toHaveCount(0);
+    await expect(page.getByText(/READ_ONLY_PREVIEW/i)).toHaveCount(0);
   });
 
-  test("M2 quiz has no answer-revealing labels", async ({ page }) => {
+  test("M2 outline does not reveal answer keys", async ({ page }) => {
     await page.goto("/academy/missions/M2");
-    await expect(page.getByText(/Correct option|Incorrect A/i)).toHaveCount(0);
+    await expect(page.getByTestId("content-auth")).toBeVisible({ timeout: 15_000 });
+    const body = await page.locator("body").innerText();
+    expect(body).not.toMatch(/Correct option|Incorrect A|correctAnswer/);
     await expect(page.getByRole("heading", { level: 1 })).toContainText(/M2/i);
-    await expect(page.getByText(/sweep|سوئیپ/i).first()).toBeVisible();
   });
 
   test("setup validator exposes FVG/OB evidence", async ({ page }) => {
@@ -40,10 +42,11 @@ test.describe("Iteration 2 advanced + gates", () => {
     await expect(page.getByText(/GOLD→DATA|UNSUPPORTED_EDGE/i).first()).toBeVisible();
   });
 
-  test("A6 research lab loads as preview", async ({ page }) => {
+  test("A6 direct URL stays locked without a session", async ({ page }) => {
     await page.goto("/academy/advanced/A6");
+    await expect(page.getByTestId("content-auth")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("heading", { level: 1 })).toContainText(/A6|Research/i);
-    await expect(page.getByText(/READ_ONLY_PREVIEW/i).first()).toBeVisible();
+    await expect(page.getByText(/READ_ONLY_PREVIEW/i)).toHaveCount(0);
   });
 
   test("journal markdown download reports completion", async ({ page }) => {

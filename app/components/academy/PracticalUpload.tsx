@@ -41,6 +41,7 @@ function bilingualError(body: { fa?: string; en?: string; error?: string }, loca
 function uploadOne(
   submissionId: string,
   file: File,
+  locale: "fa" | "en",
   onProgress: (ratio: number) => void,
 ): Promise<{ ok: true; file: RemoteFile } | { ok: false; status: number; message: string }> {
   return new Promise((resolve) => {
@@ -73,7 +74,7 @@ function uploadOne(
       resolve({
         ok: false,
         status: xhr.status,
-        message: body.error ?? `HTTP_${xhr.status}`,
+        message: bilingualError(body, locale, xhr.status),
       });
     };
     xhr.onerror = () => resolve({ ok: false, status: 0, message: "NETWORK" });
@@ -153,6 +154,29 @@ export default function PracticalUpload({ locale }: { locale: "fa" | "en" }) {
     const accepted = files.slice(0, room);
     const next: LocalFile[] = [];
     for (const file of accepted) {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      if (ext === "heic" || ext === "heif") {
+        next.push({
+          key: `${file.name}-${file.size}-${fileSeq.current++}`,
+          name: file.name,
+          size: file.size,
+          progress: 0,
+          status: "error",
+          error: locale === "fa" ? "عکس HEIC پذیرفته نمی‌شود. آن را JPEG کنید." : "HEIC photos are not accepted. Export a JPEG.",
+        });
+        continue;
+      }
+      if (file.size === 0) {
+        next.push({
+          key: `${file.name}-${file.size}-${fileSeq.current++}`,
+          name: file.name,
+          size: file.size,
+          progress: 0,
+          status: "error",
+          error: locale === "fa" ? "فایل خالی است." : "That file is empty.",
+        });
+        continue;
+      }
       if (file.size > MAX_BYTES) {
         next.push({
           key: `${file.name}-${file.size}-${fileSeq.current++}`,
@@ -180,7 +204,7 @@ export default function PracticalUpload({ locale }: { locale: "fa" | "en" }) {
     for (const item of next) {
       if (!item.file || item.status === "error") continue;
       setLocal((cur) => cur.map((row) => (row.key === item.key ? { ...row, status: "uploading" } : row)));
-      const result = await uploadOne(id, item.file, (ratio) => {
+      const result = await uploadOne(id, item.file, locale, (ratio) => {
         setLocal((cur) =>
           cur.map((row) => (row.key === item.key ? { ...row, progress: ratio } : row)),
         );
@@ -243,8 +267,8 @@ export default function PracticalUpload({ locale }: { locale: "fa" | "en" }) {
       </h2>
       <p className="text-xs text-fog">
         {locale === "fa"
-          ? "تا ۱۲ فایل، هر کدام حداکثر ۲۰ مگابایت: DOCX، PDF، TXT، MD، PNG، JPG. فقط تصویر کافی نیست؛ یک سند لازم است. آپلود و ثبت نهایی جدا هستند."
-          : "Up to 12 files, 20 MiB each: DOCX, PDF, TXT, MD, PNG, JPG. Screenshots alone are not enough; include a document. Upload and final submit are separate."}
+          ? "تا ۱۲ فایل، هر کدام حداکثر ۲۰ مگابایت: PDF، DOCX، TXT، MD، PNG، JPG. عکس HEIC گوشی را JPEG کنید. نام فارسی مشکلی ندارد. فقط تصویر کافی نیست؛ یک سند لازم است. اول آپلود، بعد ثبت نهایی. فایل خالی پذیرفته نمی‌شود."
+          : "Up to 12 files, 20 MiB each: PDF, DOCX, TXT, MD, PNG, JPG. Export phone HEIC photos as JPEG. Persian filenames are fine. Screenshots alone are not enough; include a document. Upload first, then press final submit. Empty files are rejected."}
       </p>
       <div
         className={`border border-dashed px-3 py-6 text-center text-sm ${dragOver ? "border-gold text-gold-soft" : "border-line text-fog"}`}
