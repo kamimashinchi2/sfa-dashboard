@@ -93,8 +93,14 @@ def configure(domain):
         for p in (root,root/'data',root/'state'):
             if (p/'bridge.sqlite3').is_file() and str(p) not in state['legacy_data']: state['legacy_data'].append(str(p))
     safe_write(STATE,json.dumps(state))
+def build_parser():
+    p=argparse.ArgumentParser()
+    p.add_argument('action',choices=['discover','configure','get','pm2'])
+    # Optional: install.sh calls `discover "$APP_DIR"` and APP_DIR may be empty.
+    p.add_argument('value',nargs='?',default=None)
+    return p
 if __name__=='__main__':
-    p=argparse.ArgumentParser(); p.add_argument('action',choices=['discover','configure','get','pm2']); p.add_argument('value',nargs=''); a=p.parse_args()
+    a=build_parser().parse_args()
     try:
         if a.action=='discover': discover(a.value or None)
         elif a.action=='configure': configure(a.value)
