@@ -330,6 +330,11 @@ check_node pm2
 stage 'database'
 systemctl enable --now postgresql
 /opt/sfa/.venv/bin/python "$HELPER" configure "$DOMAIN"
+# A rerun may have changed ECHO_API_KEY_HASH. Reload it before later steps if the API is already up.
+if systemctl is-active --quiet sfa-api; then
+  systemctl restart sfa-api
+  echo 'Restarted sfa-api so it reloads sfa.env.'
+fi
 export PYTHONPATH=/opt/sfa
 stage 'answer key'
 # Current build private answer key (server answerKeyData.ts hydration; never a public asset).
@@ -441,6 +446,22 @@ systemctl daemon-reload
 systemctl enable --now sfa-api sfa-backup.timer
 systemctl restart sfa-api
 wait_unit_http sfa-api http://127.0.0.1:8081/echo/v1/health || die 'sfa-api failed to serve /echo/v1/health. Journal lines are above.'
+# Prove the key file matches ECHO_API_KEY_HASH. The key stays in this Python process, not in shell trace or the log.
+echo_code=$(/opt/sfa/.venv/bin/python - <<'PY'
+import urllib.error, urllib.request
+from pathlib import Path
+key=Path('/etc/sfa/echo-api-key').read_text().strip()
+req=urllib.request.Request('http://127.0.0.1:8081/echo/v1/queue', headers={'Authorization':'Bearer '+key})
+try:
+    with urllib.request.urlopen(req, timeout=5) as response: print(response.status)
+except urllib.error.HTTPError as exc: print(exc.code)
+except Exception: print('000')
+PY
+)
+if [[ $echo_code != 200 ]]; then
+  die "Echo API rejected the key file (HTTP ${echo_code}) at http://127.0.0.1:8081/echo/v1/queue. The key was not printed."
+fi
+echo 'Echo key matches the API (HTTP 200).'
 if /opt/sfa/.venv/bin/python -c 'from sfa_api.config import Config;import sys;sys.exit(not bool(Config.env().bot_token))'; then
   systemctl enable --now sfa-bot
   systemctl restart sfa-bot

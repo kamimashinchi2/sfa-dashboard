@@ -97,6 +97,8 @@ def test_sfa_cli_help_for_every_command():
         ["status"],
         ["backup-now"],
         ["show-echo-key"],
+        ["check-echo-key"],
+        ["rotate-echo-key"],
         ["invite"],
         ["make-admin"],
         ["reset-password"],
@@ -252,6 +254,26 @@ def test_pm2_env_file_is_private_and_reachable(tmp_path):
     path = mod.write_pm2_env_file(state, {"SFA_BRIDGE_URL": "http://127.0.0.1:8081", "SFA_SITE_ORIGIN": "https://example.test", "SFA_BRIDGE_SECRET": "s" * 40, "SFA_ALLOW_INSECURE_PILOT": "0", "SFA_ALLOW_CONTENT_BYPASS": "0"})
     assert (path.stat().st_mode & 0o777) == 0o600
     assert (path.parent.stat().st_mode & 0o777) == 0o700
+
+
+def test_stale_echo_hash_follows_the_key_file(tmp_path):
+    mod = load_configure()
+    key = mod.ensure_echo_key(tmp_path, chown_root=False)
+    stale = "ab" * 32
+    updated = mod.apply_echo_hash({"ECHO_API_KEY_HASH": stale, "OTHER": "1"}, (tmp_path / "echo-api-key").read_text())
+    assert updated["ECHO_API_KEY_HASH"] != stale
+    assert updated["ECHO_API_KEY_HASH"] == mod.echo_key_hash(key)
+    assert updated["OTHER"] == "1"
+    assert mod.ensure_echo_key(tmp_path, chown_root=False) == key
+    from sfa_api.cli import echo_key_state, write_echo_hash
+    (tmp_path / "sfa.env").write_text('ECHO_API_KEY_HASH="' + stale + '"\nDATABASE_URL="postgresql://sfa:secret@127.0.0.1/sfa"\n')
+    state, missing = echo_key_state(tmp_path)
+    assert state == "mismatch" and missing == ""
+    write_echo_hash(tmp_path, (tmp_path / "echo-api-key").read_text())
+    state, _missing = echo_key_state(tmp_path)
+    assert state == "ok"
+    assert "secret" in (tmp_path / "sfa.env").read_text()
+    assert (tmp_path / "echo-api-key").read_text().strip() == key
 
 
 def test_echo_key_is_created_once_and_kept(tmp_path):

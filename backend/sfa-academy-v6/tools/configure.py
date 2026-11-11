@@ -72,9 +72,16 @@ def ensure_echo_key(directory=None, chown_root=True):
     written=path.read_text().strip()
     if not written: raise RuntimeError('echo-api-key was not created')
     return written
+def echo_key_hash(key_text):
+    """SHA-256 of the key file contents. Never reuse a hash stored in sfa.env."""
+    return hashlib.sha256(key_text.strip().encode()).hexdigest()
+def apply_echo_hash(env, key_text):
+    updated=dict(env)
+    updated['ECHO_API_KEY_HASH']=echo_key_hash(key_text)
+    return updated
 def configure(domain):
     # Key first: a PostgreSQL or later failure must not skip creating it, and a rerun must not rotate it.
-    key=ensure_echo_key(P)
+    ensure_echo_key(P)
     state=json.loads(STATE.read_text()); user=pwd.getpwnam('sfa'); app=Path(state['app']); envfile=P/'sfa.env'; env=dict(dotenv_values(envfile)) if envfile.exists() else {}
     # Preserve only explicitly named bridge settings; never copy personal Google credentials.
     candidates=[Path(p)/'.env' for p in state['legacy']]+[app/'.env',app/'.env.local',Path('/opt/sfa-bridge/.env'),Path('/opt/sfa_bridge/.env'),Path(state['home'])/'sfa_bridge/.env',Path(state['home'])/'sfa-bridge/.env']
@@ -82,11 +89,11 @@ def configure(domain):
     for p in candidates:
         if p.is_file():
             v=dotenv_values(p)
-            for key in ('TELEGRAM_BOT_TOKEN','ADMIN_CHAT_ID','ANSWER_KEY_PATH','QUIZ_ANSWER_KEY_PATH','DATA_DIR','BRIDGE_DATA_DIR'):
-                if v.get(key):
-                    value=v[key]
-                    if key in ('ANSWER_KEY_PATH','QUIZ_ANSWER_KEY_PATH','DATA_DIR','BRIDGE_DATA_DIR') and not Path(value).is_absolute(): value=str((p.parent/value).resolve())
-                    oldenv.setdefault(key,value)
+            for name in ('TELEGRAM_BOT_TOKEN','ADMIN_CHAT_ID','ANSWER_KEY_PATH','QUIZ_ANSWER_KEY_PATH','DATA_DIR','BRIDGE_DATA_DIR'):
+                if v.get(name):
+                    value=v[name]
+                    if name in ('ANSWER_KEY_PATH','QUIZ_ANSWER_KEY_PATH','DATA_DIR','BRIDGE_DATA_DIR') and not Path(value).is_absolute(): value=str((p.parent/value).resolve())
+                    oldenv.setdefault(name,value)
     pending=P/'database-password.pending'
     dbpass=env.get('SFA_DB_PASSWORD') or (pending.read_text().strip() if pending.exists() else secrets.token_hex(32))
     # No SQL/secret on command line; child output remains captured, not installer log.
@@ -102,7 +109,9 @@ def configure(domain):
     psql("ALTER ROLE sfa WITH LOGIN PASSWORD '"+dbpass+"';")
     if psql("SELECT 1 FROM pg_database WHERE datname='sfa';")!='1': psql('CREATE DATABASE sfa OWNER sfa;')
     elif psql("SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname='sfa';")!='sfa': raise ValueError('Existing database is not academy-owned')
-    env.update({'SFA_DB_PASSWORD':dbpass,'DATABASE_URL':'postgresql://sfa:'+dbpass+'@127.0.0.1/sfa','SFA_BRIDGE_SECRET':env.get('SFA_BRIDGE_SECRET') or secrets.token_hex(32),'SESSION_SECRET':env.get('SESSION_SECRET') or secrets.token_hex(32),'ECHO_API_KEY_HASH':hashlib.sha256(key.encode()).hexdigest(),'SFA_SITE_ORIGIN':'https://'+domain,'SFA_DATA_DIR':'/var/lib/sfa','ANSWER_KEY_PATH':'/etc/sfa/answer-keys','APPROVAL_REQUIRED':env.get('APPROVAL_REQUIRED','false'),'TELEGRAM_BOT_TOKEN':env.get('TELEGRAM_BOT_TOKEN') or oldenv.get('TELEGRAM_BOT_TOKEN',''),'ADMIN_CHAT_ID':env.get('ADMIN_CHAT_ID') or oldenv.get('ADMIN_CHAT_ID','0'),'TELEGRAM_BOT_USERNAME':env.get('TELEGRAM_BOT_USERNAME','')})
+    env.update({'SFA_DB_PASSWORD':dbpass,'DATABASE_URL':'postgresql://sfa:'+dbpass+'@127.0.0.1/sfa','SFA_BRIDGE_SECRET':env.get('SFA_BRIDGE_SECRET') or secrets.token_hex(32),'SESSION_SECRET':env.get('SESSION_SECRET') or secrets.token_hex(32),'SFA_SITE_ORIGIN':'https://'+domain,'SFA_DATA_DIR':'/var/lib/sfa','ANSWER_KEY_PATH':'/etc/sfa/answer-keys','APPROVAL_REQUIRED':env.get('APPROVAL_REQUIRED','false'),'TELEGRAM_BOT_TOKEN':env.get('TELEGRAM_BOT_TOKEN') or oldenv.get('TELEGRAM_BOT_TOKEN',''),'ADMIN_CHAT_ID':env.get('ADMIN_CHAT_ID') or oldenv.get('ADMIN_CHAT_ID','0'),'TELEGRAM_BOT_USERNAME':env.get('TELEGRAM_BOT_USERNAME','')})
+    # Always the current key file. A previous ECHO_API_KEY_HASH in sfa.env is discarded.
+    env=apply_echo_hash(env, (P/'echo-api-key').read_text())
     safe_write(envfile,'\n'.join(k+'='+json.dumps(str(v or '')) for k,v in env.items())+'\n',user.pw_uid,user.pw_gid)
     pending.unlink(missing_ok=True)
     # Merge Next env without parsing arbitrary shell syntax; strip obsolete security escape hatches.
