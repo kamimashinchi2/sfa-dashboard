@@ -94,6 +94,9 @@ def test_installer_static_safety():
     assert 'tar_rc' in s and 'cohort-invite is created only if missing' in s
     assert 'umask 022' in s and 'publish_opt_sfa /opt/sfa' in s
     assert 'wait_unit_http sfa-api' in s and 'last HTTP' in s
+    assert '--location' in s and '--max-redirs 5' in s
+    health_curl = next(line for line in s.splitlines() if 'health_url' in line and 'curl ' in line)
+    assert '--location' not in health_curl and 'health_code == 200' in s
 
 
 def test_risk_arithmetic_near_threshold_is_exact():

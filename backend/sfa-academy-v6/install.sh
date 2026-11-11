@@ -621,9 +621,16 @@ home_url="https://$DOMAIN/"
 health_code=000
 home_code=000
 for _ in $(seq 1 12); do
+  # Health stays on the exact URL. A redirect there is not a healthy API.
   health_code=$(curl --silent --output /dev/null --max-time 10 --write-out '%{http_code}' "$health_url" || true)
-  home_code=$(curl --silent --output /dev/null --max-time 10 --write-out '%{http_code}' "$home_url" || true)
-  if [[ $health_code == 200 && $home_code == 200 ]]; then HTTPS_OK=1; break; fi
+  # / redirects to /academy. Follow at most 5 hops and require the final page.
+  home_meta=$(curl --silent --location --max-redirs 5 --output /dev/null --max-time 20 --write-out '%{http_code} %{url_effective}' "$home_url" || true)
+  home_code=${home_meta%%[[:space:]]*}
+  home_final=${home_meta#*[[:space:]]}
+  if [[ $health_code == 200 ]] && /opt/sfa/.venv/bin/python /opt/sfa/tools/https_check.py home "$home_code" "$home_final" "$DOMAIN"; then
+    HTTPS_OK=1
+    break
+  fi
   sleep 5
 done
 if [[ $HTTPS_OK == 1 ]]; then
@@ -636,7 +643,9 @@ if [[ $HTTPS_OK == 1 ]]; then
   echo 'HTTPS verified; ports 3000/8081 blocked publicly.'
 else
   [[ $health_code == 200 ]] || echo "HTTPS check failed: ${health_url} returned HTTP ${health_code:-000}"
-  [[ $home_code == 200 ]] || echo "HTTPS check failed: ${home_url} returned HTTP ${home_code:-000}"
+  if ! /opt/sfa/.venv/bin/python /opt/sfa/tools/https_check.py home "${home_code:-000}" "${home_final:-}" "$DOMAIN"; then
+    echo "HTTPS check failed: ${home_url} returned HTTP ${home_code:-000} (final ${home_final:-unknown})"
+  fi
   echo 'HTTPS NOT VERIFIED: check OCI VCN/NSG TCP 80/443 ingress and the proxy certificate logs. No HTTP login fallback is enabled.'
 fi
 echo "Site: https://$DOMAIN"
