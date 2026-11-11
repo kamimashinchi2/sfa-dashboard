@@ -85,6 +85,11 @@ def test_installer_static_safety():
     assert 'next.config.ts' in s and '$ROOT/../..' in s
     assert 'header_up X-SFA-Client-IP {http.request.remote.host}' in s
     assert 'X-Forwarded-For' not in s
+    assert 'set -eEuo pipefail' in s and "trap 'on_err $? $LINENO' ERR" in s
+    assert 'stdbuf -oL' in s and 'BASH_XTRACEFD=4' in s and '--verbose' in s
+    assert s.index("exec /opt/sfa/.venv/bin/python -m sfa_api.cli") < s.index('discover "$APP_DIR"')
+    assert 'Node 22.6 or newer is required' in s and 'nvm install 22' in s
+    assert 'tar_rc' in s and 'cohort-invite is created only if missing' in s
 
 
 def test_risk_arithmetic_near_threshold_is_exact():

@@ -79,7 +79,9 @@ def test_install_sh_helper_lines_are_the_shapes_we_execute():
     text = (ROOT / "install.sh").read_text()
     for snippet in (
         'discover "$APP_DIR"',
-        'get "$1"',
+        "get app",
+        "get user",
+        "get path",
         'configure "$DOMAIN"',
         "pm2 stop-legacy",
         "pm2 restart",
@@ -147,6 +149,82 @@ def test_bot_and_wsgi_missing_config_are_clean_startup_errors():
     imported = run([PY, "-c", "from sfa_api.app import create_app; print('import-ok')"])
     assert imported.returncode == 0
     assert "import-ok" in imported.stdout
+
+
+def test_install_preflight_old_node_is_not_silent(tmp_path):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    node = bindir / "node"
+    node.write_text("#!/bin/sh\nif [ \"$1\" = \"-p\" ]; then echo 18.19.1; exit 0; fi\nexit 1\n")
+    node.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{bindir}{os.pathsep}{env.get('PATH', '')}"
+    env["SFA_INSTALL_TEST_PREFLIGHT"] = "1"
+    env["SFA_TEST_PM2_USER"] = "pm2owner"
+    env["SFA_TEST_PM2_PATH"] = str(bindir)
+    result = subprocess.run(
+        ["/bin/bash", str(ROOT / "install.sh"), "--domain", "92-5-230-55.sslip.io", "--no-rebuild-next"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    text = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert text.strip()
+    assert "18.19.1" in text
+    assert "22.6" in text
+    assert "pm2owner" in text
+    assert str(bindir) in text
+    assert "nvm install 22" in text
+
+
+def test_install_preflight_missing_node_and_new_enough_node(tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    env = os.environ.copy()
+    env["PATH"] = str(empty)
+    env["SFA_INSTALL_TEST_PREFLIGHT"] = "1"
+    env["SFA_TEST_PM2_USER"] = "pm2owner"
+    env["SFA_TEST_PM2_PATH"] = str(empty)
+    missing = subprocess.run(
+        ["/bin/bash", str(ROOT / "install.sh"), "--domain", "92-5-230-55.sslip.io"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert missing.returncode != 0
+    assert "not found" in (missing.stdout + missing.stderr).lower()
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    node = bindir / "node"
+    node.write_text("#!/bin/sh\nif [ \"$1\" = \"-p\" ]; then echo 22.14.0; exit 0; fi\nexit 0\n")
+    node.chmod(0o755)
+    env["PATH"] = str(bindir)
+    env["SFA_TEST_PM2_PATH"] = str(bindir)
+    ok = subprocess.run(
+        ["/bin/bash", str(ROOT / "install.sh"), "--domain", "92-5-230-55.sslip.io", "--verbose"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert ok.returncode == 0, ok.stderr
+    combined = ok.stdout + ok.stderr
+    assert "Node 22.14.0" in combined
+    # --verbose must not leak xtrace onto the terminal during this early exit,
+    # and must not print set -x lines for the preflight itself.
+    assert "\n+" not in combined and not combined.startswith("+")
+
+
+def test_sfa_help_does_not_read_server_config():
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT)
+    for key in ("DATABASE_URL", "SFA_BRIDGE_SECRET", "ECHO_API_KEY_HASH", "SFA_SITE_ORIGIN", "SFA_ENV"):
+        env.pop(key, None)
+    result = subprocess.run([PY, "-m", "sfa_api.cli", "--help"], cwd=ROOT, capture_output=True, text=True, env=env)
+    assert result.returncode == 0
+    assert "migrate" in result.stdout
+    source = (ROOT / "sfa_api" / "cli.py").read_text()
+    assert source.index("parse_args()") < source.index("Config.env()")
 
 
 def test_answer_key_extractor_usage_and_repo_smoke():

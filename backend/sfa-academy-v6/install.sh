@@ -1,48 +1,171 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# Reruns are safe: package tar exit 1 (file changed while reading) is a warning;
+# the Caddy key and apt list are replaced via temp files; iptables -C and
+# systemctl enable/restart can run again; the answer-key temp name is new each
+# time and removed on EXIT; /etc/sfa/cohort-invite is created only if missing,
+# cohort-invite is created only if missing, so `sfa invite` is not regenerated.
+set -eEuo pipefail
 umask 077
 DOMAIN=92-5-230-55.sslip.io
 APP_DIR=''
 REBUILD=1
-for arg in "$@"; do : "$arg"; done
+VERBOSE=0
+SFA_LOG=''
+SFA_IN_ERR=0
+KEY_TMP=''
+
+say_terminal() {
+  if { true >&3; } 2>/dev/null; then
+    printf '%s\n' "$1" >&3
+  else
+    printf '%s\n' "$1" >&2
+  fi
+}
+
+on_err() {
+  local rc=$1 line=$2 src=''
+  [[ $SFA_IN_ERR == 1 ]] && return
+  SFA_IN_ERR=1
+  # Script text, not the expanded command, so values and secrets are not printed.
+  src=$(sed -n "${line}p" "$0" 2>/dev/null || true)
+  src=${src#"${src%%[![:space:]]*}"}
+  local msg="SFA installer failed at line ${line} (exit ${rc}): ${src:-unknown command}"
+  say_terminal "$msg"
+  if [[ -n $SFA_LOG ]]; then
+    printf '%s\n' "$msg" >> "$SFA_LOG" || true
+  fi
+}
+trap 'on_err $? $LINENO' ERR
+
+cleanup_key() {
+  if [[ -n ${KEY_TMP} && -f $KEY_TMP ]]; then
+    rm -f "$KEY_TMP" || true
+  fi
+}
+trap cleanup_key EXIT
+
+die() {
+  say_terminal "$1"
+  if [[ -n $SFA_LOG ]]; then
+    printf '%s\n' "$1" >> "$SFA_LOG" || true
+  fi
+  exit 1
+}
+
+stage() {
+  echo "=== SFA installer: $1 ==="
+}
+
+# mode is "direct" (tests) or "pm2" (runuser + PM2 user's PATH).
+check_node() {
+  local mode=$1 bin='' ver='' major='' minor='' rest=''
+  if [[ $mode == direct ]]; then
+    bin=$(command -v node || true)
+  else
+    bin=$(runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" bash -c 'command -v node' || true)
+  fi
+  if [[ -z $bin ]]; then
+    die "Node was not found for PM2 user ${PM2_USER} (PATH ${PM2_PATH}). Node 22.6 or newer is required. Upgrade with: nvm install 22, then restart PM2 as ${PM2_USER} so sfa-dashboard uses that Node."
+  fi
+  if [[ $mode == direct ]]; then
+    ver=$(node -p 'process.versions.node' 2>/dev/null || true)
+  else
+    ver=$(runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" node -p 'process.versions.node' 2>/dev/null || true)
+  fi
+  ver=${ver#v}
+  ver=${ver%%[[:space:]]*}
+  major=${ver%%.*}
+  rest=${ver#*.}
+  minor=${rest%%.*}
+  if ! [[ $major =~ ^[0-9]+$ && $minor =~ ^[0-9]+$ ]]; then
+    die "Could not read a Node version for PM2 user ${PM2_USER} at ${bin} (PATH ${PM2_PATH}). Node 22.6 or newer is required. Upgrade with: nvm install 22, then restart PM2 as ${PM2_USER}."
+  fi
+  if (( major < 22 || (major == 22 && minor < 6) )); then
+    die "Node ${ver} at ${bin} is too old for PM2 user ${PM2_USER} (PATH ${PM2_PATH}). Node 22.6 or newer is required. Upgrade with: nvm install 22, then restart PM2 as ${PM2_USER} so sfa-dashboard uses that Node."
+  fi
+  echo "Node ${ver} at ${bin} (PM2 user ${PM2_USER})"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --domain) DOMAIN=$2; shift 2;;
     --app-dir) APP_DIR=$2; shift 2;;
     --rebuild-next) REBUILD=1; shift;;
     --no-rebuild-next) REBUILD=0; shift;;
+    --verbose) VERBOSE=1; shift;;
     *) echo "Unknown option: $1"; exit 2;;
   esac
 done
-[[ $EUID -eq 0 ]] || { echo 'Run with sudo bash install.sh'; exit 1; }
-[[ $DOMAIN =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]+$ ]] || { echo 'Invalid hostname'; exit 1; }
+[[ $DOMAIN =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]+$ ]] || die 'Invalid hostname'
+# Test-only path. Unset by default; production runs never enter it.
+if [[ ${SFA_INSTALL_TEST_PREFLIGHT:-} == 1 ]]; then
+  PM2_USER=${SFA_TEST_PM2_USER:-pm2user}
+  PM2_PATH=${SFA_TEST_PM2_PATH:-$PATH}
+  check_node direct
+  exit 0
+fi
+[[ $EUID -eq 0 ]] || die 'Run with sudo bash install.sh'
 # shellcheck source=/dev/null
 source /etc/os-release
-[[ $ID == ubuntu && ( $VERSION_ID == 22.04 || $VERSION_ID == 24.04 ) ]] || { echo 'Supported: Ubuntu 22.04 or 24.04 only'; exit 1; }
-case "$(dpkg --print-architecture)" in amd64|arm64) ;; *) echo 'Supported CPU: amd64/arm64'; exit 1;; esac
+[[ $ID == ubuntu && ( $VERSION_ID == 22.04 || $VERSION_ID == 24.04 ) ]] || die 'Supported: Ubuntu 22.04 or 24.04 only'
+case "$(dpkg --print-architecture)" in amd64|arm64) ;; *) die 'Supported CPU: amd64/arm64';; esac
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 mkdir -p /etc/sfa /var/log
 chmod 700 /etc/sfa
-exec 3>&1
-exec > >(tee -a /var/log/sfa-install.log) 2>&1
+touch /var/log/sfa-install.log
 chmod 600 /var/log/sfa-install.log
+SFA_LOG=/var/log/sfa-install.log
+exec 3>&1
+exec 4>>"$SFA_LOG"
+if [[ $VERBOSE == 1 ]]; then
+  # Trace goes to the private log only, never the terminal copy the operator may paste.
+  BASH_XTRACEFD=4
+  set -x
+fi
+if command -v stdbuf >/dev/null 2>&1; then
+  exec > >(stdbuf -oL -eL tee -a "$SFA_LOG") 2>&1
+else
+  exec > >(tee -a "$SFA_LOG") 2>&1
+fi
 echo 'SFA v6 installer: no secret values are printed. No git pull is performed.'
+stage 'packages'
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y ca-certificates curl gnupg debian-keyring debian-archive-keyring apt-transport-https python3-venv python3-pip postgresql postgresql-client libmagic1 unzip iptables iptables-persistent
+stage 'python env'
 if ! id sfa >/dev/null 2>&1; then useradd --system --home-dir /var/lib/sfa --create-home --shell /usr/sbin/nologin sfa; fi
 install -d -m 750 -o root -g sfa /etc/sfa
 install -d -m 700 -o sfa -g sfa /var/lib/sfa /var/lib/sfa/uploads
 install -d -m 700 /var/backups/sfa
 # Keep prior package for local rollback; no data deletion.
-if [[ -d /opt/sfa/sfa_api ]]; then tar -czf "/var/backups/sfa/package-$(date +%Y%m%d-%H%M%S).tar.gz" -C /opt/sfa --exclude=.venv --exclude=__pycache__ .; fi
+if [[ -d /opt/sfa/sfa_api ]]; then
+  tar_rc=0
+  tar -czf "/var/backups/sfa/package-$(date +%Y%m%d-%H%M%S).tar.gz" -C /opt/sfa --exclude=.venv --exclude=__pycache__ . || tar_rc=$?
+  if [[ $tar_rc -eq 1 ]]; then
+    echo 'Package backup finished with a tar warning (a file changed while it was read). Continuing.'
+  elif [[ $tar_rc -ne 0 ]]; then
+    die "Package backup failed (tar exit ${tar_rc})."
+  fi
+fi
 install -d -m 755 /opt/sfa
 cp -a "$ROOT/sfa_api" "$ROOT/tools" "$ROOT/echo_client.py" "$ROOT/backup.sh" "$ROOT/requirements.txt" /opt/sfa/
 cp "$ROOT/"*.schema.json /opt/sfa/
 chown -R root:root /opt/sfa
 python3 -m venv /opt/sfa/.venv
 /opt/sfa/.venv/bin/pip install --disable-pip-version-check -q -r /opt/sfa/requirements.txt
+stage 'CLI'
+# Written before later steps so `sfa` exists if preflight or configure stops the run.
+# The wrapper does not read config; `sfa_api.cli` parses arguments first and calls
+# Config.env() only for commands that need the database.
+cat > /usr/local/bin/sfa <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH=/opt/sfa
+exec /opt/sfa/.venv/bin/python -m sfa_api.cli "$@"
+SH
+chmod 755 /usr/local/bin/sfa
 HELPER=/opt/sfa/tools/configure.py
+stage 'discover'
 # Vendored tree: backend/sfa-academy-v6/install.sh → repository root (the Next app).
 # A standalone zip extract has no next.config.ts two levels up and keeps PM2 cwd discovery.
 if [[ -z ${APP_DIR} ]]; then
@@ -52,29 +175,36 @@ if [[ -z ${APP_DIR} ]]; then
   fi
 fi
 /opt/sfa/.venv/bin/python "$HELPER" discover "$APP_DIR"
-get() { /opt/sfa/.venv/bin/python "$HELPER" get "$1"; }
+get() {
+  local key=$1 val=''
+  if ! val=$(/opt/sfa/.venv/bin/python "$HELPER" get "$key"); then
+    die "Could not read installer state '${key}' after discover."
+  fi
+  printf '%s\n' "$val"
+}
 APP_DIR=$(get app); PM2_USER=$(get user); PM2_PATH=$(get path)
-# Require Cursor integration marker and modern Node BEFORE stopping old services.
-[[ -f "$APP_DIR/.sfa-v6-ready" ]] || { echo 'Apply Cursor prompt, test and pull first (.sfa-v6-ready missing). Old bridge left running.'; exit 1; }
-runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" node -e 'const [a,b]=process.versions.node.split(".").map(Number);if(a<22||(a===22&&b<6))process.exit(1)'
+stage 'preflight'
+# Require the integration marker and modern Node BEFORE stopping old services.
+[[ -f "$APP_DIR/.sfa-v6-ready" ]] || die 'Apply Cursor prompt, test and pull first (.sfa-v6-ready missing). Old bridge left running.'
+check_node pm2
+stage 'database'
 systemctl enable --now postgresql
 /opt/sfa/.venv/bin/python "$HELPER" configure "$DOMAIN"
-cat > /usr/local/bin/sfa <<'SH'
-#!/usr/bin/env bash
-set -euo pipefail
 export PYTHONPATH=/opt/sfa
-exec /opt/sfa/.venv/bin/python -m sfa_api.cli "$@"
-SH
-chmod 755 /usr/local/bin/sfa
-export PYTHONPATH=/opt/sfa
+stage 'answer key'
 # Current build private answer key (server answerKeyData.ts hydration; never a public asset).
+install -d -m 750 -o root -g sfa /etc/sfa/answer-keys
 COMMIT=$(git -C "$APP_DIR" rev-parse HEAD)
 KEY_TMP=$(mktemp /etc/sfa/answer-keys/.key-XXXXXX)
-trap 'rm -f "${KEY_TMP:-}"' EXIT
-if ! runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" node /opt/sfa/tools/extract_answer_key.mjs "$APP_DIR" "$COMMIT" > "$KEY_TMP" 2> /var/log/sfa-key-extract.log; then echo 'Private answer-key extraction failed; old bridge left running. Review /var/log/sfa-key-extract.log privately.'; exit 1; fi
+if ! runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" node /opt/sfa/tools/extract_answer_key.mjs "$APP_DIR" "$COMMIT" > "$KEY_TMP" 2> /var/log/sfa-key-extract.log; then
+  die 'Private answer-key extraction failed; old bridge left running. Review /var/log/sfa-key-extract.log privately.'
+fi
 install -m 640 -o root -g sfa "$KEY_TMP" "/etc/sfa/answer-keys/$COMMIT.json"
 rm -f "$KEY_TMP"
+KEY_TMP=''
+stage 'migrate'
 sfa migrate
+stage 'services'
 # Snapshot legacy data before stopping processes; SQLite consistent backup is made using its backup API.
 /opt/sfa/.venv/bin/python - <<'PY'
 import json,sqlite3,subprocess,time,tarfile
@@ -171,9 +301,23 @@ systemctl enable --now sfa-api sfa-backup.timer
 systemctl restart sfa-api
 if /opt/sfa/.venv/bin/python -c 'from sfa_api.config import Config;import sys;sys.exit(not bool(Config.env().bot_token))'; then systemctl enable --now sfa-bot; systemctl restart sfa-bot; else systemctl disable --now sfa-bot || true; echo 'Telegram is optional and currently disabled (no token found).'; fi
 chown -R sfa:sfa /var/lib/sfa
-# Official Caddy apt repository; no curl | shell.
-curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt -o /etc/apt/sources.list.d/caddy-stable.list
+stage 'caddy'
+# Official Caddy apt repository; no curl | shell. Replace any existing key/list in place.
+caddy_key=$(mktemp)
+if ! curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor --yes -o "$caddy_key"; then
+  rm -f "$caddy_key"
+  die 'Could not download the Caddy signing key. An existing keyring was left unchanged.'
+fi
+install -d -m 755 /usr/share/keyrings
+install -m 644 "$caddy_key" /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+rm -f "$caddy_key"
+caddy_list=$(mktemp)
+if ! curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt -o "$caddy_list"; then
+  rm -f "$caddy_list"
+  die 'Could not download the Caddy apt source. An existing source list was left unchanged.'
+fi
+install -m 644 "$caddy_list" /etc/apt/sources.list.d/caddy-stable.list
+rm -f "$caddy_list"
 apt-get update -qq && apt-get install -y caddy
 if [[ -f /etc/caddy/Caddyfile && ! -f /etc/caddy/Caddyfile.pre-sfa6 ]]; then cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.pre-sfa6; fi
 cat > /etc/caddy/Caddyfile <<CADDY
@@ -203,6 +347,7 @@ $DOMAIN {
 }
 CADDY
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+stage 'firewall'
 # Preserve existing firewall chains. Insert allow rules before Oracle's terminal REJECT.
 for port in 80 443; do
   iptables -C INPUT -p tcp --dport "$port" -m comment --comment sfa6-web -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -p tcp --dport "$port" -m comment --comment sfa6-web -j ACCEPT
@@ -212,11 +357,15 @@ install -d -m 755 /etc/iptables
 iptables-save > /etc/iptables/rules.v4
 systemctl enable --now caddy
 systemctl reload caddy
+stage 'build'
 # Rebuild as app owner, not root. Build output could contain app-generated secrets: keep private, not installer log.
 if [[ $REBUILD == 1 ]]; then
   # shellcheck disable=SC2016 # $1 is deliberately expanded by the child shell
-  if ! runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" bash -c 'cd "$1" && npm ci && npm run build' _ "$APP_DIR" > /var/log/sfa-next-build.log 2>&1; then echo 'Next build failed; private log /var/log/sfa-next-build.log. Do not send it unreviewed.'; exit 1; fi
+  if ! runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" bash -c 'cd "$1" && npm ci && npm run build' _ "$APP_DIR" > /var/log/sfa-next-build.log 2>&1; then
+    die 'Next build failed; private log /var/log/sfa-next-build.log. Do not send it unreviewed.'
+  fi
 fi
+stage 'restart'
 /opt/sfa/.venv/bin/python "$HELPER" pm2 restart
 python3 - <<'CHECK'
 import subprocess
@@ -226,6 +375,7 @@ for line in rows:
     if endpoint.endswith((':3000',':8081')) and endpoint not in ('127.0.0.1:3000','127.0.0.1:8081','[::1]:3000','[::1]:8081'):
         raise SystemExit('Unsafe public listener. Set PM2 Next start args to --hostname 127.0.0.1, then rerun installer. No HTTP fallback permitted.')
 CHECK
+stage 'https'
 # Do not imply HTTPS succeeded or weaken cookies if issuance/OCI networking fails.
 HTTPS_OK=0
 for _ in $(seq 1 12); do
