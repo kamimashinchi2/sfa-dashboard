@@ -15,14 +15,14 @@ const hits = new Map<string, { count: number; resetAt: number }>();
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 60;
 
-export function checkRateLimit(key: string): boolean {
+export function checkRateLimit(key: string, max = RATE_MAX): boolean {
   const now = Date.now();
   const cur = hits.get(key);
   if (!cur || cur.resetAt < now) {
     hits.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
     return true;
   }
-  if (cur.count >= RATE_MAX) return false;
+  if (cur.count >= max) return false;
   cur.count += 1;
   return true;
 }
@@ -40,6 +40,9 @@ export async function proxyToBridge(input: {
   idempotencyKey?: string | null;
   /** Frozen body bytes for retries — if omitted, serialize body. */
   frozenBodyBytes?: Uint8Array;
+  /** Sanitized trusted client IP. Never pass a raw X-Forwarded-For chain. */
+  clientIp?: string | null;
+  timeoutMs?: number;
 }): Promise<
   | { ok: true; result: BridgeProxyResult }
   | { ok: false; status: number; code: string; message: string }
@@ -60,7 +63,7 @@ export async function proxyToBridge(input: {
       ? new Uint8Array(0)
       : new TextEncoder().encode(JSON.stringify(input.body)));
 
-  const { headers } = buildSignedHeaders({
+  const signed = buildSignedHeaders({
     secret: cfg.config.secret,
     method: input.method,
     flaskPath: input.flaskPath,
@@ -68,9 +71,14 @@ export async function proxyToBridge(input: {
     bearerToken: input.bearerToken,
     idempotencyKey: input.idempotencyKey,
   });
+  const headers = signed.headers;
+  if (input.clientIp) headers["X-SFA-Client-IP"] = input.clientIp;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(
+    () => controller.abort(),
+    input.timeoutMs ?? TIMEOUT_MS,
+  );
   try {
     const res = await fetch(`${cfg.config.url}${input.flaskPath}`, {
       method: input.method,
@@ -86,9 +94,9 @@ export async function proxyToBridge(input: {
     try {
       body = rawText ? JSON.parse(rawText) : null;
     } catch {
-      body = { raw: rawText.slice(0, 200) };
+      body = null;
     }
-    return { ok: true, result: { status: res.status, body, rawText } };
+    return { ok: true, result: { status: res.status, body, rawText: "" } };
   } catch (e) {
     const aborted = e instanceof Error && e.name === "AbortError";
     const code = aborted ? "BRIDGE_TIMEOUT" : "BRIDGE_UNREACHABLE";
@@ -104,24 +112,32 @@ export async function proxyToBridge(input: {
   }
 }
 
-export function requireJsonOrigin(
+export function requireExactOrigin(
   req: Request,
 ): { ok: true } | { ok: false; status: number; code: string } {
-  const ct = req.headers.get("content-type") ?? "";
-  if (req.method !== "GET" && !ct.includes("application/json")) {
-    return { ok: false, status: 415, code: "UNSUPPORTED_MEDIA" };
-  }
-
-  // Origin/config for mutations is never bypassed (SFA_ALLOW_CONTENT_BYPASS
-  // remains content-entitlement only; it must not skip Exact Origin).
+  // Exact Origin on every mutation. SameSite is not CSRF protection on sslip.io.
+  // Content bypass flags must not skip this check.
   const cfg = loadBridgeConfig();
   if (!cfg.ok) {
     return { ok: false, status: 503, code: cfg.code };
   }
+  if (req.method === "GET" || req.method === "HEAD") return { ok: true };
   const origin = req.headers.get("origin");
-  if (req.method !== "GET") {
-    if (!origin || origin !== cfg.config.siteOrigin) {
-      return { ok: false, status: 403, code: "ORIGIN_REJECTED" };
+  if (!origin || origin !== cfg.config.siteOrigin) {
+    return { ok: false, status: 403, code: "ORIGIN_REJECTED" };
+  }
+  return { ok: true };
+}
+
+export function requireJsonOrigin(
+  req: Request,
+): { ok: true } | { ok: false; status: number; code: string } {
+  const origin = requireExactOrigin(req);
+  if (!origin.ok) return origin;
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    const ct = req.headers.get("content-type") ?? "";
+    if (!ct.includes("application/json")) {
+      return { ok: false, status: 415, code: "UNSUPPORTED_MEDIA" };
     }
   }
   return { ok: true };

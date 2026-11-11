@@ -37,7 +37,7 @@ export default function AcademyPortal() {
             </h1>
             <p className="reveal reveal-delay-2 mt-4 max-w-xl text-base leading-relaxed text-fog">
               Select a stage, clear its milestones, size every idea at the 1.0%
-              risk cap, and dispatch homework through Drive — with Echo online
+              risk cap, and upload the weekly practical on the dashboard — with Echo online
               for mentor review.
             </p>
           </div>

@@ -73,8 +73,8 @@ export default function ContentGate({
           ) : null}
           {state.status === "auth" ? (
             <p className="mt-3">
-              <a className="underline" href="/progress">
-                {locale === "fa" ? "ورود در /progress" : "Sign in on /progress"}
+              <a className="underline" href="/login">
+                {locale === "fa" ? "ورود" : "Log in"}
               </a>
             </p>
           ) : null}

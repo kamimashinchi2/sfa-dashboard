@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, type ReactNode } from "react";
+import TawkLoader from "./TawkLoader";
 import { Calculator, BookOpen, Languages } from "lucide-react";
 import { ui, t } from "../../lib/academy/dictionary";
 import { ProgressProvider, useProgress } from "./ProgressProvider";
@@ -11,6 +13,36 @@ function ShellInner({ children }: { children: ReactNode }) {
   const { progress, setLocale, hydrated, warning, storageError, xp, resetProgress } =
     useProgress();
   const locale = progress.locale;
+  const router = useRouter();
+  const [account, setAccount] = useState<{ displayName: string; role: string } | null>(null);
+
+  useEffect(() => {
+    let cancel = false;
+    void fetch("/api/mentor/me", { credentials: "same-origin", cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return (await res.json()) as { displayName?: string; role?: string };
+      })
+      .then((body) => {
+        if (cancel || !body?.displayName) return;
+        setAccount({ displayName: body.displayName, role: body.role ?? "STUDENT" });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancel = true;
+    };
+  }, []);
+
+  const logout = async () => {
+    await fetch("/api/mentor/logout", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: "{}",
+    });
+    setAccount(null);
+    router.push("/login");
+  };
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -74,6 +106,25 @@ function ShellInner({ children }: { children: ReactNode }) {
               >
                 XP {hydrated ? xp : "—"}
               </Link>
+              {account ? (
+                <>
+                  <span className="inline-flex min-h-11 items-center px-2 text-xs text-paper" data-testid="account-name">
+                    {account.displayName}
+                  </span>
+                  {account.role === "ADMIN" ? (
+                    <Link href="/admin" className="inline-flex min-h-11 items-center border border-line px-3 text-xs text-fog">
+                      Admin
+                    </Link>
+                  ) : null}
+                  <button type="button" className="min-h-11 border border-line px-3 text-xs text-fog" data-testid="account-logout" onClick={() => void logout()}>
+                    {locale === "fa" ? "خروج" : "Log out"}
+                  </button>
+                </>
+              ) : (
+                <Link href="/login" className="inline-flex min-h-11 items-center border border-gold/45 px-3 text-xs text-gold-soft" data-testid="nav-login">
+                  {locale === "fa" ? "ورود" : "Log in"}
+                </Link>
+              )}
             </div>
           </div>
           <StatusPanel />
@@ -85,6 +136,7 @@ function ShellInner({ children }: { children: ReactNode }) {
       </div>
 
       <main className="relative z-10 flex flex-1 flex-col">{children}</main>
+      <TawkLoader />
 
       <footer className="relative z-0 border-t border-line isolate">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-fog sm:flex-row sm:items-center sm:justify-between sm:px-8">

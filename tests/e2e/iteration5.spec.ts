@@ -63,10 +63,10 @@ test.describe("Iteration 5", () => {
   test("/progress shows consent, entitlements, outbox panels", async ({ page }) => {
     await page.goto("/progress");
     await expect(page.getByTestId("progress-page")).toBeVisible();
-    await expect(page.getByTestId("consent-panel")).toBeVisible();
+    await expect(page.getByTestId("student-dashboard")).toBeVisible();
     await expect(page.getByTestId("entitlements-panel")).toBeVisible();
-    await expect(page.getByTestId("outbox-panel")).toBeVisible();
-    await expect(page.getByTestId("link-code-panel")).toBeVisible();
+    await expect(page.getByTestId("link-code-panel")).toHaveCount(0);
+    await expect(page.getByTestId("enrollment-token")).toHaveCount(0);
   });
 
   test("FA 390 progress no horizontal scroll", async ({ page }) => {

@@ -14,16 +14,21 @@ import ResearchLab from "./ResearchLab";
 import EquityDrawdownLab from "./EquityDrawdownLab";
 import CrossAssetCapstone from "./CrossAssetCapstone";
 import PerformanceCard from "./PerformanceCard";
+import { useServerResponses } from "../../lib/academy/stageResponses";
 import { useProgress } from "./ProgressProvider";
 
 function AdvancedBody({ content }: { content: AuthorizedContent }) {
   const mod = content;
   const { progress, recordAttempt, completeLesson } = useProgress();
   const locale = progress.locale;
+  useServerResponses(content.stages[0], content.id);
 
   const assessedEnabled = Boolean(progress.advancedAssessedEnabled);
   const prereqOk = missionPassedForUnlock(progress, "M5");
-  const readOnly = !assessedEnabled || !prereqOk;
+  // Delivered advanced content is server-authorized. Local flags are not the lock.
+  const readOnly = false;
+  void assessedEnabled;
+  void prereqOk;
 
   const saved = latestValidAttempt(progress, mod.id as AdvancedId);
 
