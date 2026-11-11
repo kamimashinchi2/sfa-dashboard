@@ -87,6 +87,46 @@ check_node() {
   echo "Node ${ver} at ${bin} (PM2 user ${PM2_USER})"
 }
 
+# Code and the virtualenv contain no secrets. Capital X adds execute for
+# directories and for files that are already executable (gunicorn, backup.sh).
+publish_opt_sfa() {
+  local root=$1
+  chmod -R u=rwX,go=rX "$root"
+}
+
+redact_stream() {
+  sed -E 's/([A-Za-z_][A-Za-z0-9_]*=)[^[:space:]]+/\1***/g'
+}
+
+wait_unit_http() {
+  local unit=$1 url=$2 code=000
+  for _ in $(seq 1 30); do
+    code=$(curl --silent --output /dev/null --max-time 2 --write-out '%{http_code}' "$url" || true)
+    if [[ $code == 200 ]]; then
+      echo "$unit healthy: $url -> 200"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "$unit did not become healthy: $url last HTTP ${code}."
+  journalctl -u "$unit" -n 20 --no-pager 2>&1 | redact_stream || true
+  return 1
+}
+
+wait_unit_active() {
+  local unit=$1
+  for _ in $(seq 1 30); do
+    if systemctl is-active --quiet "$unit"; then
+      echo "$unit is active"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "$unit is not active after 30s."
+  journalctl -u "$unit" -n 20 --no-pager 2>&1 | redact_stream || true
+  return 1
+}
+
 nginx_holds_443() {
   ss -ltnpH 2>/dev/null | grep -E '[:.]443([^0-9]|$)' | grep -q nginx
 }
@@ -171,6 +211,24 @@ if [[ ${SFA_INSTALL_RENDER_NGINX:-} == 1 ]]; then
   render_nginx_site
   exit 0
 fi
+if [[ ${SFA_INSTALL_TEST_PERMS:-} == 1 ]]; then
+  root=${SFA_TEST_OPT:?}
+  umask 077
+  mkdir -p "$root/.venv/bin"
+  printf '#!/usr/bin/env python3\n' > "$root/.venv/bin/gunicorn"
+  chmod 700 "$root" "$root/.venv" "$root/.venv/bin" "$root/.venv/bin/gunicorn"
+  printf 'print(1)\n' > "$root/plain.py"
+  chmod 600 "$root/plain.py"
+  umask 022
+  publish_opt_sfa "$root"
+  if [[ -n ${SFA_TEST_WRAPPER:-} ]]; then
+    printf '#!/bin/sh\n' > "$SFA_TEST_WRAPPER"
+    chmod 755 "$SFA_TEST_WRAPPER"
+  fi
+  stat -c '%a %n' "$root" "$root/.venv" "$root/.venv/bin" "$root/.venv/bin/gunicorn" "$root/plain.py"
+  if [[ -n ${SFA_TEST_WRAPPER:-} ]]; then stat -c '%a %n' "$SFA_TEST_WRAPPER"; fi
+  exit 0
+fi
 if [[ ${SFA_INSTALL_TEST_PREFLIGHT:-} == 1 ]]; then
   PM2_USER=${SFA_TEST_PM2_USER:-pm2user}
   PM2_PATH=${SFA_TEST_PM2_PATH:-$PATH}
@@ -220,12 +278,17 @@ if [[ -d /opt/sfa/sfa_api ]]; then
     die "Package backup failed (tar exit ${tar_rc})."
   fi
 fi
+# /opt/sfa is code and a virtualenv, not secrets. umask 077 would make it mode 700
+# and sfa-api would fail with 203/EXEC (cannot traverse or exec gunicorn).
+umask 022
 install -d -m 755 /opt/sfa
 cp -a "$ROOT/sfa_api" "$ROOT/tools" "$ROOT/echo_client.py" "$ROOT/backup.sh" "$ROOT/requirements.txt" /opt/sfa/
 cp "$ROOT/"*.schema.json /opt/sfa/
 chown -R root:root /opt/sfa
 python3 -m venv /opt/sfa/.venv
 /opt/sfa/.venv/bin/pip install --disable-pip-version-check -q -r /opt/sfa/requirements.txt
+publish_opt_sfa /opt/sfa
+umask 077
 stage 'CLI'
 # Written before later steps so `sfa` exists if preflight or configure stops the run.
 # The wrapper does not read config; `sfa_api.cli` parses arguments first and calls
@@ -237,6 +300,8 @@ export PYTHONPATH=/opt/sfa
 exec /opt/sfa/.venv/bin/python -m sfa_api.cli "$@"
 SH
 chmod 755 /usr/local/bin/sfa
+# A rerun may have created the wrapper under umask 077; 0755 is required for every user.
+[[ -x /usr/local/bin/sfa ]] || die '/usr/local/bin/sfa is not executable'
 HELPER=/opt/sfa/tools/configure.py
 stage 'discover'
 # Vendored tree: backend/sfa-academy-v6/install.sh → repository root (the Next app).
@@ -371,10 +436,19 @@ RandomizedDelaySec=120
 WantedBy=timers.target
 UNIT
 chmod 755 /opt/sfa/backup.sh
+publish_opt_sfa /opt/sfa
 systemctl daemon-reload
 systemctl enable --now sfa-api sfa-backup.timer
 systemctl restart sfa-api
-if /opt/sfa/.venv/bin/python -c 'from sfa_api.config import Config;import sys;sys.exit(not bool(Config.env().bot_token))'; then systemctl enable --now sfa-bot; systemctl restart sfa-bot; else systemctl disable --now sfa-bot || true; echo 'Telegram is optional and currently disabled (no token found).'; fi
+wait_unit_http sfa-api http://127.0.0.1:8081/echo/v1/health || die 'sfa-api failed to serve /echo/v1/health. Journal lines are above.'
+if /opt/sfa/.venv/bin/python -c 'from sfa_api.config import Config;import sys;sys.exit(not bool(Config.env().bot_token))'; then
+  systemctl enable --now sfa-bot
+  systemctl restart sfa-bot
+  wait_unit_active sfa-bot || die 'sfa-bot failed to stay active. Journal lines are above.'
+else
+  systemctl disable --now sfa-bot || true
+  echo 'Telegram is optional and currently disabled (no token found).'
+fi
 chown -R sfa:sfa /var/lib/sfa
 stage 'web'
 choose_proxy
@@ -521,8 +595,14 @@ CHECK
 stage 'https'
 # Do not imply HTTPS succeeded or weaken cookies if issuance/OCI networking fails.
 HTTPS_OK=0
+health_url="https://$DOMAIN/echo/v1/health"
+home_url="https://$DOMAIN/"
+health_code=000
+home_code=000
 for _ in $(seq 1 12); do
-  if curl --fail --silent --max-time 10 "https://$DOMAIN/echo/v1/health" >/dev/null && curl --fail --silent --max-time 10 "https://$DOMAIN/" >/dev/null; then HTTPS_OK=1; break; fi
+  health_code=$(curl --silent --output /dev/null --max-time 10 --write-out '%{http_code}' "$health_url" || true)
+  home_code=$(curl --silent --output /dev/null --max-time 10 --write-out '%{http_code}' "$home_url" || true)
+  if [[ $health_code == 200 && $home_code == 200 ]]; then HTTPS_OK=1; break; fi
   sleep 5
 done
 if [[ $HTTPS_OK == 1 ]]; then
@@ -534,7 +614,9 @@ if [[ $HTTPS_OK == 1 ]]; then
   iptables-save > /etc/iptables/rules.v4
   echo 'HTTPS verified; ports 3000/8081 blocked publicly.'
 else
-  echo 'HTTPS NOT VERIFIED: check OCI VCN/NSG TCP 80/443 ingress and Caddy certificate/rate-limit logs. No HTTP login fallback is enabled.'
+  [[ $health_code == 200 ]] || echo "HTTPS check failed: ${health_url} returned HTTP ${health_code:-000}"
+  [[ $home_code == 200 ]] || echo "HTTPS check failed: ${home_url} returned HTTP ${home_code:-000}"
+  echo 'HTTPS NOT VERIFIED: check OCI VCN/NSG TCP 80/443 ingress and the proxy certificate logs. No HTTP login fallback is enabled.'
 fi
 echo "Site: https://$DOMAIN"
 if [[ ! -f /etc/sfa/cohort-invite ]]; then sfa invite > /etc/sfa/cohort-invite; chmod 600 /etc/sfa/cohort-invite; fi

@@ -216,6 +216,44 @@ def test_install_preflight_missing_node_and_new_enough_node(tmp_path):
     assert "\n+" not in combined and not combined.startswith("+")
 
 
+def test_opt_sfa_permissions_are_traversable(tmp_path):
+    root = tmp_path / "opt-sfa"
+    wrapper = tmp_path / "sfa"
+    env = os.environ.copy()
+    env["SFA_INSTALL_TEST_PERMS"] = "1"
+    env["SFA_TEST_OPT"] = str(root)
+    env["SFA_TEST_WRAPPER"] = str(wrapper)
+    result = subprocess.run(
+        ["/bin/bash", str(ROOT / "install.sh"), "--domain", "92-5-230-55.sslip.io"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    modes = {}
+    for line in result.stdout.splitlines():
+        mode, path = line.split(" ", 1)
+        modes[path] = mode
+    assert modes[str(root)] == "755"
+    assert modes[str(root / ".venv")] == "755"
+    assert modes[str(root / ".venv" / "bin")] == "755"
+    assert modes[str(root / ".venv" / "bin" / "gunicorn")] == "755"
+    assert modes[str(root / "plain.py")] == "644"
+    assert modes[str(wrapper)] == "755"
+    secret = tmp_path / "secret"
+    secret.write_text("x")
+    secret.chmod(0o600)
+    assert oct(secret.stat().st_mode & 0o777) == "0o600"
+
+
+def test_pm2_env_file_is_private_and_reachable(tmp_path):
+    mod = load_configure()
+    state = {"user": "app", "uid": os.getuid(), "gid": os.getgid(), "home": str(tmp_path), "path": "/usr/bin", "app": str(tmp_path), "pm2": "/usr/bin/pm2"}
+    path = mod.write_pm2_env_file(state, {"SFA_BRIDGE_URL": "http://127.0.0.1:8081", "SFA_SITE_ORIGIN": "https://example.test", "SFA_BRIDGE_SECRET": "s" * 40, "SFA_ALLOW_INSECURE_PILOT": "0", "SFA_ALLOW_CONTENT_BYPASS": "0"})
+    assert (path.stat().st_mode & 0o777) == 0o600
+    assert (path.parent.stat().st_mode & 0o777) == 0o700
+
+
 def test_echo_key_is_created_once_and_kept(tmp_path):
     mod = load_configure()
     first = mod.ensure_echo_key(tmp_path, chown_root=False)

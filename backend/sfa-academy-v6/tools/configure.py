@@ -188,10 +188,18 @@ def pm2_process_env(state, sfa_env):
     }
     return env
 def write_pm2_env_file(state, proc_env):
-    # Readable only by the app owner. Keeps the bridge secret out of argv and out of root's environ.
-    path=Path(state['home'])/'.sfa'/'pm2.env'
+    # Readable only by the app owner. The directory must be owned by that user:
+    # root's umask 077 would otherwise create ~/.sfa as mode 700 root, and the
+    # owner could not traverse it to read this mode-0600 file.
+    folder=Path(state['home'])/'.sfa'
+    folder.mkdir(parents=True, exist_ok=True)
+    try: os.chown(folder, int(state['uid']), int(state['gid']))
+    except PermissionError: pass
+    os.chmod(folder, 0o700)
+    path=folder/'pm2.env'
     lines=[key+'='+shlex.quote(proc_env[key]) for key in ('SFA_BRIDGE_URL','SFA_SITE_ORIGIN','SFA_BRIDGE_SECRET','SFA_ALLOW_INSECURE_PILOT','SFA_ALLOW_CONTENT_BYPASS')]
     safe_write(path, '\n'.join(lines)+'\n', int(state['uid']), int(state['gid']), 0o600)
+    os.chmod(path, 0o600)
     return path
 def runuser_argv(state, envfile, pm2_args):
     """runuser without --preserve-environment. Identity vars go through env(1); secrets stay in envfile."""

@@ -92,6 +92,8 @@ def test_installer_static_safety():
     assert s.index("exec /opt/sfa/.venv/bin/python -m sfa_api.cli") < s.index('discover "$APP_DIR"')
     assert 'Node 22.6 or newer is required' in s and 'nvm install 22' in s
     assert 'tar_rc' in s and 'cohort-invite is created only if missing' in s
+    assert 'umask 022' in s and 'publish_opt_sfa /opt/sfa' in s
+    assert 'wait_unit_http sfa-api' in s and 'last HTTP' in s
 
 
 def test_risk_arithmetic_near_threshold_is_exact():
