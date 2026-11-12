@@ -9,10 +9,6 @@ import {
   latestValidAttempt,
   resolveMissionAccess,
 } from "../../lib/academy/unlock";
-import {
-  pushSelfReport,
-  responsesStore,
-} from "../../lib/academy/persist";
 import type { AuthorizedContent } from "../../lib/academy/useAuthorizedContent";
 import ContentGate from "./ContentGate";
 import MicroLesson from "./MicroLesson";
@@ -21,7 +17,6 @@ import SetupValidator from "./SetupValidator";
 import MacroTransmissionBuilder from "./MacroTransmissionBuilder";
 import RiskGridCalculator from "./RiskGridCalculator";
 import JournalBuilder from "./JournalBuilder";
-import PerformanceCard from "./PerformanceCard";
 import { useServerResponses } from "../../lib/academy/stageResponses";
 import { useProgress } from "./ProgressProvider";
 
@@ -32,7 +27,7 @@ function MissionBody({
   refresh: () => void;
 }) {
   const mission = content;
-  const { progress, recordAttempt, completeLesson } = useProgress();
+  const { progress, recordAttempt } = useProgress();
   const locale = progress.locale;
   useServerResponses(content.stages[0], content.id);
 
@@ -44,7 +39,7 @@ function MissionBody({
 
   const saved = latestValidAttempt(progress, mission.id as MissionId);
 
-  const [lessonDone, setLessonDone] = useState(() => Boolean(saved) || false);
+  const lessonDone = Boolean(saved);
   const [quizScore, setQuizScore] = useState<number | null>(
     () => saved?.quizScore ?? null,
   );
@@ -54,9 +49,7 @@ function MissionBody({
   const [practicalValidated, setPracticalValidated] = useState(
     () => Boolean(saved?.practicalEvidence),
   );
-  const [freeTextSubmitted, setFreeTextSubmitted] = useState(
-    () => Boolean(saved),
-  );
+  const freeTextSubmitted = Boolean(saved);
   const [riskStatus, setRiskStatus] = useState<RiskStatus | null>(
     () => saved?.riskStatus ?? null,
   );
@@ -67,17 +60,6 @@ function MissionBody({
 
   const needsRisk = mission.id === "M1" || mission.id === "M3";
   const effectiveRisk = needsRisk ? riskStatus : null;
-
-  const readiness =
-    quizScore === null
-      ? null
-      : evaluateReadiness({
-          quizScore,
-          taskComplete: taskComplete && (mission.id !== "M2" || practicalValidated),
-          riskStatus: effectiveRisk,
-          freeTextSubmitted: freeTextSubmitted || lessonDone,
-          missionRequiresRisk: needsRisk,
-        });
 
   const persistAttempt = (
     score: number,
@@ -118,43 +100,15 @@ function MissionBody({
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10 px-6 py-10 sm:px-8">
       <header>
-        <p className="text-[10px] tracking-[0.22em] text-teal-bright uppercase">
-          {mission.id} · stages {mission.stages.join(", ")} ·{" "}
-          {readOnly ? "READ_ONLY_PREVIEW" : "ASSESSED"} · {access.reason}
-          {" · "}
-          entitlement stage {content.entitlement.unlockedStage}
-        </p>
         <h1 className="mt-2 font-display text-4xl text-paper">
           {t(mission.title, locale)}
         </h1>
         <p className="mt-3 max-w-3xl text-fog">{t(mission.summary, locale)}</p>
-        {readOnly ? (
-          <p className="mt-3 border border-line bg-ink/40 p-3 text-sm text-gold-soft">
-            {locale === "fa"
-              ? "پیش‌نمایش فقط‌خواندنی — برای تلاش assessed پیش‌نیاز را کامل کنید."
-              : "Read-only preview — complete prerequisites for assessed attempts."}
-          </p>
-        ) : null}
-        {saved ? (
-          <p className="mt-2 font-mono text-xs text-teal-bright">
-            Hydrated from attempt {saved.id}: score={saved.quizScore} task=
-            {String(saved.taskComplete)} readiness={saved.readiness}
-          </p>
-        ) : null}
       </header>
 
       <div className="space-y-8">
         {mission.lessons.map((lesson) => (
-          <MicroLesson
-            key={lesson.id}
-            lesson={lesson}
-            onComplete={() => {
-              if (readOnly) return;
-              setLessonDone(true);
-              setFreeTextSubmitted(true);
-              completeLesson(lesson.id);
-            }}
-          />
+          <MicroLesson key={lesson.id} lesson={lesson} />
         ))}
       </div>
 
@@ -200,29 +154,6 @@ function MissionBody({
             Open Risk Grid
           </button>
         ) : null}
-        <label className="flex min-h-11 items-center gap-2 text-sm text-fog">
-          <input
-            type="checkbox"
-            checked={taskComplete}
-            disabled={readOnly || (mission.id === "M2" && !practicalValidated)}
-            onChange={(e) => {
-              if (mission.id === "M2" && !practicalValidated) return;
-              setTaskComplete(e.target.checked);
-              if (e.target.checked) {
-                responsesStore.set(
-                  pushSelfReport(responsesStore.getSnapshot(), {
-                    kind: "PRACTICAL_COMPLETE",
-                    refId: mission.id,
-                    atISO: new Date().toISOString(),
-                  }),
-                );
-              }
-            }}
-          />
-          {locale === "fa"
-            ? "خودبررسی (نمره‌دهی نشده): تمرین کامل شد"
-            : "Self-check (not graded): Mark practical complete"}
-        </label>
       </section>
 
       <QuizGate
@@ -245,29 +176,6 @@ function MissionBody({
             : "Archived legacy attempt, reassessment required."}
         </p>
       ) : null}
-
-      {readiness && !saved?.archivedLegacy ? (
-        <div className="border border-line p-4" aria-live="polite">
-          <p className="font-mono text-sm text-gold-soft">
-            numericPass={String(readiness.numericPass)} · readiness=
-            {readiness.readiness}
-            {" · UNVERIFIED claim — quiz does not unlock next lesson"}
-          </p>
-          <p className="mt-2 text-xs text-fog">
-            Assessment criteria v{ASSESSMENT_CRITERIA_VERSION}.{" "}
-            <a className="text-gold-soft underline" href="/submit">
-              {locale === "fa" ? "بستهٔ ارسال" : "Submission packet"}
-            </a>
-          </p>
-        </div>
-      ) : null}
-
-      <PerformanceCard
-        riskScore={quizScore}
-        technicalMacroScore={quizScore}
-        journalingScore={lessonDone ? 80 : null}
-        riskStatus={effectiveRisk}
-      />
 
       <RiskGridCalculator
         open={sizerOpen}

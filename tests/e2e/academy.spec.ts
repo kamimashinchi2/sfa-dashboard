@@ -35,8 +35,8 @@ test.describe("Academy pilot", () => {
     await expect(dialog).toBeVisible();
 
     await dialog.getByLabel(/^Risk %/i).fill("2");
-    await expect(dialog.getByText("HARD_BLOCK", { exact: true })).toBeVisible();
-    await expect(dialog.getByText("RISK_PCT_HARD_BLOCK")).toBeVisible();
+    await expect(dialog.getByText("BLOCKED", { exact: true })).toBeVisible();
+    await expect(dialog.getByTestId("risk-plain")).toContainText(/above 1% of equity/i);
 
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);

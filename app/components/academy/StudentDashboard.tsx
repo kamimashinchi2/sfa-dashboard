@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import PracticalUpload from "./PracticalUpload";
-import SupportPath from "./SupportPath";
 import { SafeMarkdown } from "../../lib/academy/safeMarkdown";
 import { maybeLegacyImport } from "../../lib/academy/legacyImport";
 import { formatDualTime, nextStep, noticeLabel, statusLabel } from "../../lib/academy/studentCopy";
@@ -406,7 +405,6 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
             : "The practical upload opens after the quiz is approved or partially approved. Do the step at the top of this page first."}
         </p>
       ) : null}
-      <SupportPath locale={locale} />
 
       {reportMd ? (
         <section className="space-y-2 border border-line bg-ink/40 p-4" data-testid="report-panel">

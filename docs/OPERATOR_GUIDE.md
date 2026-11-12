@@ -38,7 +38,7 @@ Echo is not a live chat. The header says queue review. There is no promised grad
 
 ## Password reset, with no email
 
-The site cannot email a reset. If a student forgets the password, they open the support chat on the login page and tell you the name and email they used. You check that it is really them, then:
+The site cannot email a reset. The login page tells the student: "Forgot your password? Ask your mentor for a reset link." You check who they are, then:
 
 ```bash
 sudo sfa reset-password student@example.com
@@ -98,7 +98,7 @@ Once a week, same day:
 - `sudo sfa check-echo-key`.
 - `sudo sfa backup-now`, then confirm a new file exists in `/var/backups/sfa/`.
 - Read any override you still owe. The window is 24 hours, not "when you get to it".
-- Skim the support chat. Reset passwords only after you know who is asking.
+- When a student asks you for a password reset, confirm who they are, then run `sudo sfa reset-password` and send the link in private.
 - Invite link: if the cohort is full or the link leaked, issue a new `sfa invite`. Old unused links still work until they expire or run out of uses.
 
 ## Week 8 wrap-up

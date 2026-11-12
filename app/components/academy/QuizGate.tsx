@@ -28,36 +28,6 @@ export type QuizScoredPayload = {
   attempt: QuizAttemptRecord;
 };
 
-function formatAmsterdam(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/Amsterdam",
-      dateStyle: "medium",
-      timeStyle: "medium",
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}
-
-function formatCanonicalAnswer(
-  kind: QuizItem["kind"],
-  canonical: unknown,
-  touched: boolean,
-  locale: "fa" | "en",
-): string {
-  if (!touched || canonical === null || canonical === undefined) {
-    return locale === "fa" ? "بدون پاسخ" : "not answered";
-  }
-  if (kind === "mc" && typeof canonical === "number") {
-    return `opt#${canonical}`;
-  }
-  if (kind === "order" && Array.isArray(canonical)) {
-    return canonical.join("→");
-  }
-  return String(canonical);
-}
-
 export default function QuizGate({
   items,
   quizId,
@@ -569,90 +539,38 @@ export default function QuizGate({
           <p className="text-sm text-gold-soft">
             {"pending" in showResult && showResult.pending
               ? locale === "fa"
-                ? "Pending — سرور هنوز نمره قطعی ندارد"
-                : "Pending — the server has not verified a score"
-              : `Score ${showResult.score}/100 · ${showResult.correct}/${showResult.total}`}
-            {" · "}
-            <span className="text-fog">
-              {locale === "fa" ? "درس بعدی با تمرین عملی باز می‌شود" : "Next lesson waits for the practical"}
-            </span>
+                ? "نمره هنوز قطعی نیست."
+                : "The score is not final yet."
+              : locale === "fa"
+                ? `نمره ${showResult.score} از ۱۰۰`
+                : `Score ${showResult.score} out of 100`}
           </p>
-          {displayAttempt ? (
-            <p className="font-mono text-xs text-teal-bright" data-testid="attempt-meta" dir="ltr">
-              attemptId=<bdi dir="ltr">{displayAttempt.attemptId}</bdi>
-              {" · "}
-              {formatAmsterdam(displayAttempt.submittedAtISO)} (Europe/Amsterdam)
-              {" · "}
-              build=<bdi dir="ltr">{displayAttempt.buildCommit ?? resolveBuildStamp().label}</bdi>
-            </p>
-          ) : null}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-fog" data-testid="per-item-table">
-              <thead>
-                <tr className="text-teal-bright">
-                  <th className="py-1">item</th>
-                  <th>{locale === "fa" ? "پاسخ شما" : "Your answer"}</th>
-                  <th>result</th>
-                  <th>topic</th>
-                  <th>attempt</th>
-                  <th>time (Europe/Amsterdam)</th>
-                  <th>build</th>
-                </tr>
-              </thead>
-              <tbody>
-                {showResult.perItem.map((p) => {
-                  const rec = displayAttempt?.items.find((i) => i.itemId === p.id);
-                  return (
-                    <tr key={p.id} className="border-t border-line/40">
-                      <td className="py-1 font-mono">
-                        <bdi dir="ltr">{p.id}</bdi>
-                      </td>
-                      <td className="font-mono">
-                        <bdi dir="ltr">
-                          {formatCanonicalAnswer(
-                            p.kind,
-                            rec?.answer.canonical,
-                            rec?.touched ?? !p.unanswered,
-                            locale,
-                          )}
-                        </bdi>
-                      </td>
-                      <td>
-                        {"pending" in showResult && showResult.pending
-                          ? "pending"
-                          : p.unanswered
-                            ? "not answered"
-                            : p.pass
-                              ? "correct"
-                              : "wrong"}
-                      </td>
-                      <td>{p.remediationTopic}</td>
-                      <td className="font-mono">
-                        <bdi dir="ltr">{displayAttempt?.attemptId ?? "—"}</bdi>
-                      </td>
-                      <td>
-                        {displayAttempt
-                          ? formatAmsterdam(displayAttempt.submittedAtISO)
-                          : "—"}
-                      </td>
-                      <td className="font-mono">
-                        <bdi dir="ltr">
-                          {displayAttempt?.buildCommit ??
-                            resolveBuildStamp().label}
-                        </bdi>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-xs text-fog">
-            <a className="text-gold-soft underline" href="/submit">
-              {locale === "fa"
-                ? "افزودن به بستهٔ ارسال این هفته"
-                : "Include in this week's submission packet"}
-            </a>
+          <ul className="space-y-1 text-sm text-fog" data-testid="per-item-table">
+            {showResult.perItem.map((item, index) => (
+              <li key={item.id}>
+                {locale === "fa" ? `سؤال ${index + 1}: ` : `Question ${index + 1}: `}
+                {"pending" in showResult && showResult.pending
+                  ? locale === "fa"
+                    ? "در انتظار"
+                    : "waiting"
+                  : item.unanswered
+                    ? locale === "fa"
+                      ? "بدون پاسخ"
+                      : "not answered"
+                    : item.pass
+                      ? locale === "fa"
+                        ? "درست"
+                        : "right"
+                      : locale === "fa"
+                        ? "نادرست"
+                        : "wrong"}
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-paper">
+            {locale === "fa"
+              ? "Echo آزمون را می‌خواند و بازخورد را روی داشبورد می‌فرستد."
+              : "Echo will review your quiz and send feedback on your dashboard."}
           </p>
         </div>
       ) : null}

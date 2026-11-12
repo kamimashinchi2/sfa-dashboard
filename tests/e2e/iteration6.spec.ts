@@ -158,10 +158,12 @@ test.describe("Iteration 6 mobile", () => {
     expect(dashScroll).toBeLessThanOrEqual(1);
 
     await page.goto("/submit");
+    await expect(page).toHaveURL(/\/progress$/);
     await setLocale(page, "en");
     await expect(page.getByTestId("upload-dropzone")).toBeVisible();
     await expect(page.getByTestId("upload-submit")).toBeVisible();
-    await expect(page.getByTestId("submit-page")).not.toContainText("Google Drive");
+    await expect(page.getByTestId("progress-page")).toContainText(/saved securely/i);
+    await expect(page.getByTestId("progress-page")).not.toContainText("Google Drive");
     await shot(page, "iteration6-upload-en");
     await setLocale(page, "fa");
     await shot(page, "iteration6-upload-fa");

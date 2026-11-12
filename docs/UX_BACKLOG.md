@@ -4,13 +4,13 @@ These are the hard, confusing, or unfinished parts left after the student-journe
 
 ## Ranked product gaps
 
-1. **Password help still depends on a human being awake.** The login page now says to use the support chat, and no email is pretended. If the chat widget is blocked, or the owner is offline, the student is stuck with no ticket number and no status. Fix: a "I forgot my password" form that stores a request on the server, shows "the owner has been told", and lists it in `sfa status`, still without emailing a secret.
+1. **Done: the third-party chat is gone.** Password help is one sentence: ask the mentor, who runs `sfa reset-password`. Still open: there is no in-site request ticket, so a student who cannot reach the mentor has no queue to join.
 
 2. **Nobody wakes Echo.** A finished quiz can sit on "waiting for Echo" with no clock and no promise. The dashboard says grading time is not guaranteed, which is honest and still unpleasant. Fix: show the age of the pending review, and send the owner one alarm when a queue item is older than 24 hours.
 
-3. **Two different "submit" ideas.** The dashboard upload is the real practical. `/submit` still builds a local markdown packet for practice. A careful student will do both and not know which one Echo reads. Fix: rename the local page to "Practice notes (not graded)" and remove any wording that sounds like the official hand-in.
+3. **Done: `/submit` redirects to the dashboard.** The graded upload appears only after Echo issues an assignment. The old local packet builder is off the student path.
 
-4. **The header still looks like a trading terminal.** It shows local XP, "earned 0", a build stamp on desktop, and a 1% risk chip. None of that is the week's task. The real next step is on the dashboard, which a student may not open. Fix: replace the three chips with the same "what to do next" sentence, and hide XP unless the student opens practice details.
+4. **Done: the header is Dashboard, Lessons, Risk Calculator, and Journal.** Local XP, the Submit item, and the practice-reset button are gone. The lessons page also points at the dashboard.
 
 5. **A quiz has no server-side draft.** Refresh now restores answers in this browser tab's session. A second device, a cleared browser, or a crashed phone still loses the attempt. The quiz is long. Fix: save untouched drafts to the account every minute, and restore them on any device until submit.
 
@@ -18,11 +18,11 @@ These are the hard, confusing, or unfinished parts left after the student-journe
 
 7. **Override is easy to miss.** The owner has 24 hours and the student is not shown "this grade can still be corrected until Tuesday 18:00". Fix: show the deadline on the verdict card, in both Amsterdam and local time.
 
-8. **Support chat is a third-party script.** tawk.to may fail on slow networks or be blocked. The button then only reveals a "refresh" note. Fix: a first-party help box on the login page that does not load an outside domain.
+8. **Done: tawk.to is removed.** There is no chat widget to block or load.
 
 9. **RTL is better and not finished.** Login and dashboard titles follow the language, and Persian text uses a font that has Arabic letters. Lesson prose, quiz choices, and tickers such as EURUSD still mix directions. A Persian sentence with an English ticker can jump. Fix: wrap every ticker, number, and filename in isolated left-to-right runs inside the lesson renderer, and read every mission once in Persian on a phone.
 
-10. **Error pages while the API is down used to spin forever.** They now stop after eight seconds and say the content stays locked. The message is still "fail closed", which is accurate for an engineer and cold for a student. Fix: one sentence, "The academy is briefly unavailable. Your place in the course is saved. Try again in a few minutes." with the support chat link.
+10. **Error pages while the API is down stop after eight seconds and stay locked.** The wording can still be warmer: "The academy is briefly unavailable. Your place in the course is saved. Try again in a few minutes."
 
 ## Teaching gaps that make finishing hard
 

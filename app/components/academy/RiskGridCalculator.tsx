@@ -13,7 +13,6 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import {
   INSTRUMENT_PRESETS,
-  RISK_ENGINE_VERSION,
   customSpec,
   type CalcHistoryEntry,
   type ContractSpec,
@@ -26,16 +25,13 @@ import {
 import {
   draftToRiskPrices,
   evaluateRisk,
-  explainRiskStatus,
   explainStopType,
 } from "../../lib/academy/risk";
-import { buildDescriptiveGrid } from "../../lib/academy/grid";
 import { unsafeRiskExample } from "../../lib/academy/fixtures";
 import {
   calcHistoryToSimRun,
   createPersistedStore,
   defaultCalcHistory,
-  deleteCalcHistory,
   makeCalcHistoryEntry,
   pushCalcHistory,
   pushSimRun,
@@ -97,7 +93,7 @@ export default function RiskGridCalculator({
   const locale = progress.locale;
 
   const [preset, setPreset] = useState<InstrumentPresetId>("SYNTHETIC_XAUUSD");
-  const [accountCurrency, setAccountCurrency] = useState("USD");
+  const [accountCurrency] = useState("USD");
   const [conversion, setConversion] = useState("1");
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
   const [stopType, setStopType] = useState<StopType>("HARD_STRUCTURAL");
@@ -107,7 +103,6 @@ export default function RiskGridCalculator({
   const [entry, setEntry] = useState("2500");
   const [stop, setStop] = useState("2492");
   const [target, setTarget] = useState("2516");
-  const [anchor, setAnchor] = useState("2500");
   const [contractSize, setContractSize] = useState("100");
   const [pipSize, setPipSize] = useState("0.01");
   const [pipValue, setPipValue] = useState("1");
@@ -115,14 +110,6 @@ export default function RiskGridCalculator({
   const [minLot, setMinLot] = useState("0.01");
   const [maxLot, setMaxLot] = useState("100");
   const [pnlCurrency, setPnlCurrency] = useState("USD");
-  const historyStore = useSyncExternalStore(
-    calcStore.subscribe,
-    calcStore.getSnapshot,
-    calcStore.getServerSnapshot,
-  );
-  const history = historyStore.entries;
-  const historyReady = true;
-
   useEffect(() => {
     if (!open) return;
     openerRef.current = document.activeElement;
@@ -154,7 +141,6 @@ export default function RiskGridCalculator({
     setEntry(prices.entry);
     setStop(prices.stop);
     setTarget(prices.target);
-    setAnchor(prices.entry);
   };
 
   const activeSpec: ContractSpec = useMemo(() => {
@@ -314,31 +300,6 @@ export default function RiskGridCalculator({
     setStopType("HARD_STRUCTURAL");
   };
 
-  const reloadEntry = (h: CalcHistoryEntry) => {
-    const s = h.input.spec;
-    if (s) {
-      setPreset(s.presetId);
-      setContractSize(s.contractSize);
-      setPipSize(s.pipSize);
-      setPipValue(s.pipValueQuotePerLot);
-      setLotStep(s.lotStep);
-      setMinLot(s.minLot);
-      setMaxLot(s.maxLot);
-      setPnlCurrency(s.pnlCurrency);
-    }
-    setDirection(h.side);
-    setStopType(h.stopType);
-    setRiskPct(h.riskPct);
-    setEquity(h.input.equity ?? "");
-    setEntry(h.input.entry ?? "");
-    setStop(h.input.stop ?? "");
-    setTarget(h.input.target ?? "");
-    setConversion(h.input.conversion ?? "");
-    setAccountCurrency(h.input.accountCurrency);
-  };
-
-  const grid = buildDescriptiveGrid(anchor);
-
   const mounted = useSyncExternalStore(
     () => () => undefined,
     () => true,
@@ -378,11 +339,8 @@ export default function RiskGridCalculator({
       >
         <div className="relative z-10 flex shrink-0 items-start justify-between gap-4 border-b border-line bg-ink-elevated px-5 py-5">
           <div>
-            <p className="text-[10px] tracking-[0.22em] text-teal-bright uppercase">
-              SYNTHETIC ONLY · engine v{RISK_ENGINE_VERSION}
-            </p>
             <h2 id={titleId} className="mt-2 font-display text-2xl text-paper">
-              {locale === "fa" ? "ماشین‌حساب ریسک / شبکه" : "Risk Grid Calculator"}
+              {locale === "fa" ? "ماشین‌حساب ریسک" : "Risk calculator"}
             </h2>
           </div>
           <button
@@ -399,23 +357,22 @@ export default function RiskGridCalculator({
         <div className="relative z-10 flex-1 space-y-5 overflow-y-auto overscroll-contain bg-ink-elevated px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <p className="text-sm text-fog">
             {locale === "fa"
-              ? "ورودی خالی صفر نیست. ۲٪ = HARD_BLOCK بدون clamp خاموش. مشخصات synthetic — با بروکر خود تأیید کنید."
-              : "Empty input ≠ zero. 2% requests HARD_BLOCK — never silent clamp. Synthetic spec, confirm with your broker."}
+              ? "این یک تمرین است. سه قاعده نتیجه را مشخص می‌کنند."
+              : "This is practice. Three rules decide the result."}
           </p>
 
           <fieldset className="space-y-2">
-            <legend className="text-[10px] tracking-[0.16em] text-fog uppercase">
-              Instrument preset
+            <legend className="text-xs text-fog">
+              {locale === "fa" ? "ابزار تمرین" : "Practice instrument"}
             </legend>
             <div className="flex flex-wrap gap-2">
               {(
                 [
-                  "SYNTHETIC_EURUSD",
-                  "SYNTHETIC_USDJPY",
-                  "SYNTHETIC_XAUUSD",
-                  "CUSTOM",
-                ] as InstrumentPresetId[]
-              ).map((id) => (
+                  ["SYNTHETIC_EURUSD", "EURUSD"],
+                  ["SYNTHETIC_USDJPY", "USDJPY"],
+                  ["SYNTHETIC_XAUUSD", locale === "fa" ? "طلا" : "Gold"],
+                ] as const
+              ).map(([id, label]) => (
                 <button
                   key={id}
                   type="button"
@@ -426,11 +383,10 @@ export default function RiskGridCalculator({
                   }`}
                   onClick={() => applyPreset(id)}
                 >
-                  {id}
+                  {label}
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-fog">{activeSpec.brokerConfirmNotice}</p>
           </fieldset>
 
           <fieldset className="space-y-2">
@@ -440,9 +396,9 @@ export default function RiskGridCalculator({
             <div className="flex flex-col gap-2" role="radiogroup" aria-label="Stop type">
               {(
                 [
-                  ["HARD_STRUCTURAL", "Hard structural (on platform)"],
-                  ["MENTAL", "Mental"],
-                  ["NONE", "None"],
+                  ["HARD_STRUCTURAL", locale === "fa" ? "استاپ ساختاری سخت" : "Hard structural"],
+                  ["MENTAL", locale === "fa" ? "ذهنی" : "Mental"],
+                  ["NONE", locale === "fa" ? "هیچ" : "None"],
                 ] as const
               ).map(([value, label]) => (
                 <label
@@ -453,6 +409,7 @@ export default function RiskGridCalculator({
                     type="radio"
                     name="stopType"
                     value={value}
+                    aria-label={value === "MENTAL" ? "Mental" : value === "NONE" ? "None" : "Hard structural"}
                     checked={stopType === value}
                     onChange={() => setStopType(value)}
                     className="h-5 w-5"
@@ -467,10 +424,8 @@ export default function RiskGridCalculator({
           </fieldset>
 
           <fieldset className="space-y-2">
-            <legend className="text-[10px] tracking-[0.16em] text-fog uppercase">
-              {locale === "fa"
-                ? "آیا قبل از ورود، استاپ روی پلتفرم گذاشته شده؟"
-                : "Stop placed on platform before entry?"}
+            <legend className="text-xs text-fog">
+              {locale === "fa" ? "استاپ قبل از ورود گذاشته شده؟" : "Stop placed before entry?"}
             </legend>
             <div
               className="flex flex-col gap-2"
@@ -500,13 +455,6 @@ export default function RiskGridCalculator({
                 </label>
               ))}
             </div>
-            <p className="text-xs text-fog">
-              {preEntry === "NO"
-                ? "HARD_BLOCK · PRE_ENTRY_NO"
-                : preEntry === "UNKNOWN"
-                  ? "UNVERIFIED · PRE_ENTRY_UNKNOWN"
-                  : ""}
-            </p>
           </fieldset>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -523,30 +471,22 @@ export default function RiskGridCalculator({
                 <option value="SHORT">SHORT</option>
               </select>
             </label>
-            <label className="block text-[10px] tracking-[0.16em] text-fog uppercase">
-              Account currency
-              <input
-                className="mt-2 min-h-11 w-full border border-line bg-ink px-3 font-mono text-base text-paper outline-none focus:border-gold/50"
-                value={accountCurrency}
-                onChange={(e) => setAccountCurrency(e.target.value.toUpperCase())}
-              />
-            </label>
             {(
               [
-                ["equity", equity, setEquity, "Equity"],
-                ["riskPct", riskPct, setRiskPct, "Risk %"],
-                ["entry", entry, setEntry, "Entry"],
-                ["stop", stop, setStop, "Stop"],
-                ["target", target, setTarget, "Target"],
-                ["conversion", conversion, setConversion, "Quote→account rate"],
+                ["equity", equity, setEquity, locale === "fa" ? "سرمایه" : "Equity", "Equity"],
+                ["riskPct", riskPct, setRiskPct, locale === "fa" ? "ریسک ٪" : "Risk %", "Risk %"],
+                ["entry", entry, setEntry, locale === "fa" ? "ورود" : "Entry", "Entry"],
+                ["stop", stop, setStop, locale === "fa" ? "استاپ" : "Stop", "Stop"],
+                ["target", target, setTarget, locale === "fa" ? "هدف" : "Target", "Target"],
               ] as const
-            ).map(([key, value, setter, label]) => (
+            ).map(([key, value, setter, label, accessible]) => (
               <label
                 key={key}
                 className="block text-[10px] tracking-[0.16em] text-fog uppercase"
               >
                 {label}
                 <input
+                  aria-label={accessible}
                   className="mt-2 min-h-11 w-full border border-line bg-ink px-3 font-mono text-base text-paper outline-none focus:border-gold/50"
                   value={value}
                   onChange={(e) => setter(e.target.value)}
@@ -558,44 +498,13 @@ export default function RiskGridCalculator({
             ))}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(
-              [
-                ["contractSize", contractSize, setContractSize, "Contract size"],
-                ["pipSize", pipSize, setPipSize, "Pip/tick size"],
-                ["pipValue", pipValue, setPipValue, "Pip value / lot (quote)"],
-                ["pnlCurrency", pnlCurrency, setPnlCurrency, "Quote currency"],
-                ["lotStep", lotStep, setLotStep, "Lot step"],
-                ["minLot", minLot, setMinLot, "Min lot"],
-                ["maxLot", maxLot, setMaxLot, "Max lot"],
-              ] as const
-            ).map(([key, value, setter, label]) => (
-              <label
-                key={key}
-                className="block text-[10px] tracking-[0.16em] text-fog uppercase"
-              >
-                {label}
-                <input
-                  className="mt-2 min-h-11 w-full border border-line bg-ink px-3 font-mono text-base text-paper outline-none focus:border-gold/50"
-                  value={value}
-                  onChange={(e) => {
-                    setPreset("CUSTOM");
-                    setter(e.target.value);
-                  }}
-                  inputMode="decimal"
-                  dir="ltr"
-                />
-              </label>
-            ))}
-          </div>
-
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={runEval}
               className="min-h-11 bg-gold px-4 text-sm font-semibold text-ink"
             >
-              {locale === "fa" ? "ارزیابی و ذخیره" : "Evaluate & save"}
+              {locale === "fa" ? "ارزیابی" : "Evaluate"}
             </button>
             <button
               type="button"
@@ -606,155 +515,41 @@ export default function RiskGridCalculator({
             </button>
           </div>
 
-          <div
-            className="border border-line bg-ink/50 p-4 text-sm"
-            aria-live="polite"
-          >
-            <p
-              className={
-                result.status === "PASS_SIMULATION"
-                  ? "font-mono text-teal-bright"
-                  : result.status === "HARD_BLOCK"
-                    ? "font-mono text-red-400"
-                    : "font-mono text-gold-soft"
-              }
-            >
-              {result.status}
+          <div className="border border-line bg-ink/50 p-4 text-sm" aria-live="polite" data-testid="risk-plain">
+            <p className={result.status === "PASS_SIMULATION" ? "text-teal-bright" : "text-gold-soft"}>
+              {result.status === "PASS_SIMULATION"
+                ? "PASS"
+                : result.status === "HARD_BLOCK"
+                  ? "BLOCKED"
+                  : locale === "fa"
+                    ? "ورودی را کامل کنید"
+                    : "Finish the inputs"}
             </p>
-            <p className="mt-2 text-fog">{explainRiskStatus(result.status)}</p>
-            <dl className="mt-3 space-y-1 font-mono text-xs text-paper" dir="ltr">
-              <div>stopPips: {result.stopPips ?? "—"}</div>
-              <div>pipValueAccount: {result.pipValueAccount ?? "—"}</div>
-              <div>maxLots: {result.maxLots ?? "—"}</div>
-              <div>loss: {result.loss ?? "—"}</div>
-              <div>grossRR: {result.grossRR ?? "—"}</div>
-              <div>netRR: {result.netRR ?? "—"}</div>
-            </dl>
-            <ul className="mt-3 space-y-1 text-xs text-fog">
-              {result.issues.map((i) => (
-                <li key={`${i.code}-${i.field}`}>
-                  {i.code}
-                  {i.field ? ` · ${i.field}` : ""}
-                </li>
-              ))}
+            <ul className="mt-3 space-y-1 text-fog">
+              <li>
+                {result.issues.some((issue) => issue.code === "RISK_PCT_HARD_BLOCK")
+                  ? "Risk is above 1% of equity."
+                  : "Risk is at most 1% of equity."}
+              </li>
+              <li>
+                {result.issues.some((issue) =>
+                  ["MENTAL_STOP", "NO_STOP", "PRE_ENTRY_NO"].includes(issue.code),
+                )
+                  ? "A hard structural stop is required."
+                  : "A hard structural stop is in place."}
+              </li>
+              <li>
+                {result.issues.some((issue) => issue.code === "NET_RR_BELOW_2")
+                  ? "Net reward is below 1:2."
+                  : "Net reward is at least 1:2."}
+              </li>
             </ul>
-            <p className="mt-3 text-[11px] text-fog">
-              Stops do not guarantee loss caps through gaps; margin sufficiency is
-              separate.
+            <p className="mt-3 text-paper" dir="ltr">
+              Position size: {result.maxLots ?? "—"}
             </p>
-          </div>
-
-          <section className="space-y-3 border border-line p-4">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm text-paper">
-                {locale === "fa" ? "تاریخچه محاسبات (۵۰)" : "Calc history (50)"}
-              </h3>
-              <button
-                type="button"
-                className="min-h-11 border border-line px-3 text-xs text-fog"
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      locale === "fa"
-                        ? "همه تاریخچه پاک شود؟"
-                        : "Clear all calc history?",
-                    )
-                  )
-                    return;
-                  calcStore.set({ entries: [] });
-                }}
-              >
-                Clear all
-              </button>
-            </div>
-            {!historyReady ? (
-              <p className="text-xs text-fog">…</p>
-            ) : history.length === 0 ? (
-              <p className="text-xs text-fog">No saved runs yet.</p>
-            ) : (
-              <ul className="max-h-56 space-y-2 overflow-auto">
-                {history.map((h) => (
-                  <li
-                    key={h.id}
-                    className="border border-line/60 bg-ink/40 p-3 text-xs"
-                  >
-                    <div className="flex flex-wrap items-center gap-2 font-mono" dir="ltr">
-                      <span>{h.atISO.slice(11, 19)}</span>
-                      <span>{h.instrument}</span>
-                      <span>{h.side}</span>
-                      <span>{h.riskPct}%</span>
-                      <span>{h.stopType}</span>
-                      <span
-                        className={
-                          h.status === "HARD_BLOCK"
-                            ? "text-red-400"
-                            : h.status === "PASS_SIMULATION"
-                              ? "text-teal-bright"
-                              : "text-gold-soft"
-                        }
-                      >
-                        {h.status}
-                      </span>
-                      <span>lots={h.lots ?? "—"}</span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="min-h-11 border border-gold/40 px-3 text-gold-soft"
-                        onClick={() => reloadEntry(h)}
-                      >
-                        Reload
-                      </button>
-                      <button
-                        type="button"
-                        className="min-h-11 border border-line px-3 text-fog"
-                        onClick={() => {
-                          if (
-                            !window.confirm(
-                              locale === "fa" ? "حذف شود؟" : "Delete this run?",
-                            )
-                          )
-                            return;
-                          const next = deleteCalcHistory(history, h.id);
-                          calcStore.set({ entries: next });
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <div>
-            <label className="block text-[10px] tracking-[0.16em] text-fog uppercase">
-              Grid anchor (visible scenario)
-              <input
-                className="mt-2 min-h-11 w-full border border-line bg-ink px-3 font-mono text-base text-paper"
-                value={anchor}
-                onChange={(e) => setAnchor(e.target.value)}
-                inputMode="decimal"
-                dir="ltr"
-              />
-            </label>
-            <p className="mt-2 text-xs text-fog">
-              Descriptive geometry only — not direction, targets, or signals.
+            <p className="text-paper" dir="ltr">
+              Net R:R: {result.netRR ?? "—"}
             </p>
-            {grid.ok ? (
-              <div className="mt-3 max-h-40 overflow-x-auto overflow-y-auto">
-                <ul className="min-w-max font-mono text-[11px] text-fog">
-                  {grid.lines.slice(0, 24).map((l) => (
-                    <li key={`${l.kind}-${l.k}-${l.price}`}>
-                      {l.kind} k={l.k} → {l.price}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="mt-2 text-xs text-red-400">{grid.reason}</p>
-            )}
           </div>
         </div>
       </div>

@@ -1,21 +1,4 @@
 import { expect, test } from "@playwright/test";
-import path from "node:path";
-import fs from "node:fs";
-import { createHash } from "node:crypto";
-
-/** Minimal sfa-canon-v1 for Node digest recompute in E2E. */
-function canon(value: unknown): string {
-  if (value === null) return "null";
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "number") return JSON.stringify(value);
-  if (typeof value === "string") return JSON.stringify(value.normalize("NFC"));
-  if (Array.isArray(value)) return `[${value.map((v) => canon(v)).join(",")}]`;
-  if (value && typeof value === "object") {
-    const keys = Object.keys(value as object).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canon((value as Record<string, unknown>)[k])}`).join(",")}}`;
-  }
-  throw new Error("bad");
-}
 
 test.describe("Iteration 4", () => {
   test("M1 does not score a quiz without a session", async ({ page }) => {
@@ -47,67 +30,23 @@ test.describe("Iteration 4", () => {
 
     await page.goto("/simulators/risk-grid");
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("button", { name: "SYNTHETIC_EURUSD" }).click();
+    await dialog.getByRole("button", { name: "EURUSD" }).click();
     await dialog.locator('input[name="preEntry"][value="YES"]').check();
     await dialog.getByRole("button", { name: /Evaluate|ارزیابی/ }).click();
-    await expect(dialog.getByText("PASS_SIMULATION", { exact: true }).first()).toBeVisible();
+    await expect(dialog.getByText("PASS", { exact: true }).first()).toBeVisible();
 
     await dialog.getByLabel(/Mental/i).check();
     await dialog.getByRole("button", { name: /Evaluate|ارزیابی/ }).click();
-    await expect(dialog.getByText("HARD_BLOCK", { exact: true }).first()).toBeVisible();
+    await expect(dialog.getByText("BLOCKED", { exact: true }).first()).toBeVisible();
     await dialog.getByRole("button", { name: /Close|بستن|×/ }).first().click({ force: true }).catch(() => {});
     // Escape close
     await page.keyboard.press("Escape");
 
-    // Local packet export does not require an unlocked lesson.
     await page.goto("/submit");
-    await page.getByTestId("student-id").fill("S07");
-    await page.getByTestId("alias").fill("Falcon-07");
-
-    // Fill any required item reflections
-    const refl = page.locator('[data-testid^="reflection-"]');
-    const rc = await refl.count();
-    for (let i = 0; i < rc; i++) {
-      await refl.nth(i).fill("I assumed the first option; next time I will check the rationale carefully.");
-    }
-    await page.getByTestId("weekly-reflection").fill(
-      "This week I practiced risk sizing and learned that mental stops are HARD_BLOCK. Next week I will place structural stops first.",
-    );
-    await page.getByTestId("emotion-before").fill("4");
-    await page.getByTestId("emotion-after").fill("6");
-
-    await expect(page.getByTestId("download-packet")).toBeEnabled({ timeout: 10_000 });
-
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      page.getByTestId("download-packet").click(),
-    ]);
-    const suggested = download.suggestedFilename();
-    expect(suggested).toMatch(/^SFA_S07_\d{4}-W\d{2}_packet-\d{2}\.md$/);
-    const target = path.join("/tmp", suggested);
-    await download.saveAs(target);
-    const text = fs.readFileSync(target, "utf8");
-    expect(text).toContain("<!-- sfa-submission:begin -->");
-    expect(text).toContain("<!-- sfa-submission:end -->");
-    expect(text.match(/<!-- sfa-submission:begin -->/g)?.length).toBe(1);
-    expect(text).toMatch(/[\u0600-\u06FF]|Falcon|UNVERIFIED/);
-
-    const begin = text.indexOf("```json");
-    const end = text.indexOf("```", begin + 7);
-    const json = text.slice(begin + 7, end).trim();
-    const packet = JSON.parse(json);
-    const { integrity, ...rest } = packet;
-    const digest = createHash("sha256").update(canon(rest)).digest("hex");
-    expect(digest).toBe(integrity.digest);
-
-    await expect(page.getByTestId("result-code")).toBeVisible();
-    const code = await page.getByTestId("result-code").innerText();
-    expect(code.trim()).toMatch(
-      /^SFA1-S\d{2,4}-\d{4}W\d{2}-[0-9a-f]{10}-Q\d+-R\d+-HB\d+$/,
-    );
-
-    // No external network during scoring/saving/export
-    expect(requests.filter((u) => !u.includes("tawk"))).toEqual([]);
+    await expect(page).toHaveURL(/\/progress$/);
+    await expect(page.getByTestId("progress-page")).toBeVisible();
+    await expect(page.getByTestId("download-packet")).toHaveCount(0);
+    expect(requests.filter((u) => u.includes("tawk.to"))).toEqual([]);
   });
 
   test("FA locale /submit at 390 has no horizontal scroll", async ({ page }) => {
@@ -121,12 +60,12 @@ test.describe("Iteration 4", () => {
       const lang = await html.getAttribute("lang");
       if (lang !== "fa") await toggle.first().click();
     }
-    await page.goto("/submit");
+    await page.goto("/progress");
     const scroll = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );
     expect(scroll).toBeLessThanOrEqual(1);
-    await expect(page.getByTestId("submit-page")).toBeVisible();
+    await expect(page.getByTestId("progress-page")).toBeVisible();
     const body = await page.locator("body").innerText();
     expect(body).not.toMatch(/Submit for mentor review/);
   });

@@ -12,18 +12,16 @@ export default function AcademyPage() {
   return (
     <AcademyShell>
       <div className="mx-auto w-full max-w-6xl space-y-12 px-6 py-10 sm:px-8">
-        <section>
-          <p className="text-[10px] tracking-[0.22em] text-teal-bright uppercase">
-            Student Learning Portal · Pilot · {stamp.label}
+        <section className="space-y-3 border border-gold/50 bg-ink/60 p-4" data-testid="next-step">
+          <p className="text-[10px] tracking-[0.18em] text-gold-soft uppercase">What to do next</p>
+          <h1 className="font-display text-3xl text-paper">Open your academy dashboard</h1>
+          <p className="max-w-2xl text-fog">
+            The dashboard names the one step for this week: read the lesson, submit the quiz, or upload the assignment. A quiz does not open the next lesson.
           </p>
-          <h1 className="mt-3 font-display text-4xl text-paper sm:text-5xl">
-            Bilingual academy · M1–M5 + A6–A8 labs
-          </h1>
-          <p className="mt-4 max-w-2xl text-fog">
-            Browse stage outlines publicly. Lesson and quiz bodies require an
-            account session. A positive practical unlocks the next lesson — quiz
-            approval never does. Data are SYNTHETIC.
-          </p>
+          <Link href="/progress" className="inline-flex min-h-11 items-center border border-gold/50 px-3 text-sm text-gold-soft">
+            Go to the dashboard
+          </Link>
+          <p className="text-[10px] text-fog">{stamp.label}</p>
         </section>
 
         <StageMap />

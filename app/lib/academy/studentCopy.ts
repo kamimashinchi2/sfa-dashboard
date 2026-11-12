@@ -61,8 +61,8 @@ export function nextStep(input: {
     return {
       heading: fa ? "اول وارد شوید" : "Start by signing in",
       body: fa
-        ? "اگر دعوت‌نامه دارید، همان پیوند را باز کنید و حساب بسازید. اگر قبلاً ثبت‌نام کرده‌اید، وارد شوید. رمز گم‌شده ایمیلی نمی‌شود؛ از گفتگوی پشتیبانی بخواهید مالک آکادمی یک پیوند ۳۰ دقیقه‌ای بدهد."
-        : "Open the cohort invite to create an account, or log in if you already joined. A forgotten password is not emailed. Ask in the support chat and the owner will give you a one-time link that expires in 30 minutes.",
+        ? "اگر دعوت‌نامه دارید، همان پیوند را باز کنید. اگر حساب دارید، وارد شوید. رمز را فراموش کردید؟ از منتور یک پیوند بازنشانی بخواهید."
+        : "Open your invite link to join, or log in if you already have an account. Forgot your password? Ask your mentor for a reset link.",
       href: "/login",
       cta: fa ? "ورود" : "Log in",
     };
@@ -83,8 +83,8 @@ export function nextStep(input: {
     return {
       heading: fa ? "منتظر بررسی Echo بمانید" : "Wait for Echo's review",
       body: fa
-        ? "چیزی را دوباره ارسال نکنید و درس بعدی را از نشانی باز نکنید. زمان نمره‌دهی تضمین نشده. نتیجه همین‌جا و در اعلان‌ها می‌آید. تلگرام اختیاری است."
-        : "Do not resubmit and do not open the next lesson by URL. Grading time is not guaranteed. The result appears here and in notifications. Telegram is optional.",
+        ? "چیزی را دوباره نفرستید و درس بعدی را با نشانی باز نکنید. نتیجه همین‌جا می‌آید."
+        : "Do not resubmit, and do not open the next lesson by typing its address. The result will show up here.",
       href: "/progress",
       cta: fa ? "ماندن در داشبورد" : "Stay on the dashboard",
     };
@@ -112,8 +112,8 @@ export function nextStep(input: {
   return {
     heading: fa ? "داشبورد را تازه کنید" : "Refresh the dashboard",
     body: fa
-      ? "وضعیت این هفته هنوز مشخص نیست. اگر خطا ماند، از گفتگوی پشتیبانی بپرسید."
-      : "This week's status is not available yet. If the error stays, ask in the support chat.",
+      ? "وضعیت این هفته هنوز مشخص نیست. صفحه را تازه کنید."
+      : "This week's status is not available yet. Refresh the page.",
     href: "/progress",
     cta: fa ? "تازه‌سازی" : "Refresh",
   };

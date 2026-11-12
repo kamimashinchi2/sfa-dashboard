@@ -265,6 +265,11 @@ export default function PracticalUpload({ locale }: { locale: "fa" | "en" }) {
       <h2 className="font-display text-xl text-paper">
         {locale === "fa" ? "تمرین عملی این هفته" : "This week's practical"}
       </h2>
+      <p className="text-sm text-paper">
+        {locale === "fa"
+          ? "کار شما به صورت امن روی سرور آکادمی ذخیره می‌شود."
+          : "Your work is saved securely on the academy server."}
+      </p>
       <p className="text-xs text-fog">
         {locale === "fa"
           ? "تا ۱۲ فایل، هر کدام حداکثر ۲۰ مگابایت: PDF، DOCX، TXT، MD، PNG، JPG. عکس HEIC گوشی را JPEG کنید. نام فارسی مشکلی ندارد. فقط تصویر کافی نیست؛ یک سند لازم است. اول آپلود، بعد ثبت نهایی. فایل خالی پذیرفته نمی‌شود."

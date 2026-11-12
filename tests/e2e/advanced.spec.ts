@@ -57,6 +57,6 @@ test.describe("Iteration 2 advanced + gates", () => {
     expect(download.suggestedFilename()).toBe("sfa-journal.md");
     const path = await download.path();
     expect(path).toBeTruthy();
-    await expect(page.getByTestId("download-status")).toContainText(/DOWNLOAD_OK/);
+    await expect(page.getByTestId("download-status")).toContainText(/Notes downloaded/);
   });
 });

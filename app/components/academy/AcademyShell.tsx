@@ -3,15 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import TawkLoader from "./TawkLoader";
-import { Calculator, BookOpen, Languages } from "lucide-react";
+import { Calculator, BookOpen, Languages, LayoutDashboard, Library } from "lucide-react";
 import { ui, t } from "../../lib/academy/dictionary";
 import { ProgressProvider, useProgress } from "./ProgressProvider";
-import StatusPanel from "./StatusPanel";
 
 function ShellInner({ children }: { children: ReactNode }) {
-  const { progress, setLocale, hydrated, warning, storageError, xp, resetProgress } =
-    useProgress();
+  const { progress, setLocale, warning, storageError } = useProgress();
   const locale = progress.locale;
   const router = useRouter();
   const [account, setAccount] = useState<{ displayName: string; role: string } | null>(null);
@@ -63,7 +60,7 @@ function ShellInner({ children }: { children: ReactNode }) {
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-6 py-5 sm:px-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
-              <Link href="/academy" className="font-display text-2xl tracking-tight text-paper sm:text-3xl">
+              <Link href="/progress" className="font-display text-2xl tracking-tight text-paper sm:text-3xl">
                 Smart Financial Academy
               </Link>
               <p className="mt-1 text-sm text-gold-soft sm:text-base" lang="fa" dir="rtl">
@@ -80,31 +77,34 @@ function ShellInner({ children }: { children: ReactNode }) {
                 {t(ui.localeToggle, locale)}
               </button>
               <Link
-                href="/simulators/risk-grid"
+                href="/progress"
                 className="inline-flex min-h-11 items-center gap-2 border border-gold/45 px-3 py-2 text-xs font-semibold text-gold-soft hover:bg-gold/10"
+                data-testid="nav-dashboard"
+              >
+                <LayoutDashboard className="h-4 w-4" aria-hidden />
+                {locale === "fa" ? "داشبورد" : "Dashboard"}
+              </Link>
+              <Link
+                href="/academy"
+                className="inline-flex min-h-11 items-center gap-2 border border-line px-3 py-2 text-xs text-fog hover:text-paper"
+                data-testid="nav-lessons"
+              >
+                <Library className="h-4 w-4" aria-hidden />
+                {locale === "fa" ? "درس‌ها" : "Lessons"}
+              </Link>
+              <Link
+                href="/simulators/risk-grid"
+                className="inline-flex min-h-11 items-center gap-2 border border-line px-3 py-2 text-xs text-fog hover:text-paper"
               >
                 <Calculator className="h-4 w-4" aria-hidden />
-                Risk Grid
+                {locale === "fa" ? "ماشین‌حساب ریسک" : "Risk Calculator"}
               </Link>
               <Link
                 href="/journal/builder"
                 className="inline-flex min-h-11 items-center gap-2 border border-line px-3 py-2 text-xs text-fog hover:text-paper"
               >
                 <BookOpen className="h-4 w-4" aria-hidden />
-                Journal
-              </Link>
-              <Link
-                href="/submit"
-                className="inline-flex min-h-11 items-center gap-2 border border-gold/45 px-3 py-2 text-xs font-semibold text-gold-soft hover:bg-gold/10"
-                data-testid="nav-submit"
-              >
-                {locale === "fa" ? "ارسال" : "Submit"}
-              </Link>
-              <Link
-                href="/progress"
-                className="inline-flex min-h-11 items-center gap-2 border border-line px-3 py-2 text-xs text-fog hover:text-paper"
-              >
-                XP {hydrated ? xp : "—"}
+                {locale === "fa" ? "ژورنال" : "Journal"}
               </Link>
               {account ? (
                 <>
@@ -127,7 +127,6 @@ function ShellInner({ children }: { children: ReactNode }) {
               )}
             </div>
           </div>
-          <StatusPanel />
         </div>
       </header>
 
@@ -136,22 +135,13 @@ function ShellInner({ children }: { children: ReactNode }) {
       </div>
 
       <main className="relative z-10 flex flex-1 flex-col">{children}</main>
-      <TawkLoader />
 
       <footer className="relative z-0 border-t border-line isolate">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-fog sm:flex-row sm:items-center sm:justify-between sm:px-8">
-          <div>
-            <p className="font-display text-paper">Smart Financial Academy</p>
-            <p className="mt-1 text-xs">{t(ui.audioUnavailable, locale)}</p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link href="/legal/disclaimer" className="hover:text-paper">
-              Disclaimer
-            </Link>
-            <button type="button" onClick={resetProgress} className="hover:text-paper">
-              {t(ui.progressReset, locale)}
-            </button>
-          </div>
+          <p className="font-display text-paper">Smart Financial Academy</p>
+          <Link href="/legal/disclaimer" className="hover:text-paper">
+            Disclaimer
+          </Link>
         </div>
       </footer>
     </div>

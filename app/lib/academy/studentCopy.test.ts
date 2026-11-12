@@ -5,8 +5,7 @@ describe("student next step", () => {
   it("tells a signed-out student to log in and use chat, not email", () => {
     const step = nextStep({ signedIn: false, status: null, stage: 1, locale: "en" });
     expect(step.href).toBe("/login");
-    expect(step.body).toMatch(/not emailed/i);
-    expect(step.body).toMatch(/support chat/i);
+    expect(step.body).toMatch(/Ask your mentor for a reset link/);
   });
 
   it("points an open lesson at the current mission and refuses a skip", () => {
@@ -17,7 +16,7 @@ describe("student next step", () => {
   });
 
   it("says a submitted practical is waiting, and stage 8 is the senior mentor", () => {
-    expect(nextStep({ signedIn: true, status: "PRACTICAL_SUBMITTED", stage: 3, locale: "fa" }).body).toMatch(/تلگرام/);
+    expect(nextStep({ signedIn: true, status: "PRACTICAL_SUBMITTED", stage: 3, locale: "fa" }).body).toMatch(/نتیجه/);
     const done = nextStep({ signedIn: true, status: "AWAITING_SENIOR_MENTOR", stage: 8, locale: "en" });
     expect(done.body).toMatch(/no stage 9/i);
     expect(done.href).toBeNull();

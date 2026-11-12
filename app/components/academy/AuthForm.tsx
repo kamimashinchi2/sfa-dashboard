@@ -3,8 +3,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ProgressProvider, useProgress } from "./ProgressProvider";
-import SupportPath from "./SupportPath";
-import TawkLoader from "./TawkLoader";
 
 function Frame({
   title,
@@ -34,7 +32,6 @@ function Frame({
         </div>
         {children(locale)}
       </div>
-      <TawkLoader />
     </div>
   );
 }
@@ -130,8 +127,8 @@ export function SignupForm({ token }: { token: string }) {
         >
           <p className="text-xs text-fog">
             {locale === "fa"
-              ? "ایمیل فقط شناسه ورود است. ایمیل تأیید یا بازیابی ارسال نمی‌شود. اگر رمز را فراموش کنید، از گفتگوی پشتیبانی بخواهید مالک آکادمی یک پیوند یک‌بارمصرف ۳۰ دقیقه‌ای بدهد."
-              : "Email is only a login identifier. No verification or recovery email is sent. If you forget the password, ask the support chat and the owner will give you a one-time 30-minute link."}
+              ? "ایمیل فقط نام ورود است. رمز را فراموش کردید؟ از منتور یک پیوند بازنشانی بخواهید."
+              : "Email is only your login name. Forgot your password? Ask your mentor for a reset link."}
           </p>
           <label className="block text-xs text-fog">
             {locale === "fa" ? "نام نمایشی" : "Display name"}
@@ -226,7 +223,11 @@ export function LoginForm() {
               });
           }}
         >
-          <SupportPath locale={locale} />
+          <p className="text-sm text-fog" data-testid="password-help">
+            {locale === "fa"
+              ? "رمز را فراموش کردید؟ از منتور یک پیوند بازنشانی بخواهید."
+              : "Forgot your password? Ask your mentor for a reset link."}
+          </p>
           <label className="block text-xs text-fog">
             {locale === "fa" ? "ایمیل" : "Email"}
             <input className={fieldClass()} type="email" value={email} data-testid="login-email" autoComplete="username" onChange={(e) => setEmail(e.target.value)} required />

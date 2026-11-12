@@ -168,7 +168,7 @@ test.describe("persona journeys", () => {
     await page.goto("/login");
     await useEnglish(page);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Log in");
-    await expect(page.getByTestId("support-path")).toContainText(/No recovery email/i);
+    await expect(page.getByTestId("password-help")).toContainText(/Ask your mentor for a reset link/);
     await page.getByTestId("login-email").fill("careless@example.test");
     await page.getByTestId("login-password").fill("wrong-password");
     await page.getByTestId("login-submit").click();
@@ -307,9 +307,7 @@ test.describe("persona journeys", () => {
     await signedOut(page);
     await page.goto("/login");
     await useEnglish(page);
-    await expect(page.getByTestId("open-support-chat")).toBeVisible();
-    await page.getByTestId("open-support-chat").click();
-    await expect(page.getByTestId("support-chat-pending")).toBeVisible();
+    await expect(page.getByTestId("password-help")).toContainText(/Ask your mentor for a reset link/);
 
     await page.goto("/academy/missions/M5");
     await expect(page.getByTestId("content-auth")).toBeVisible({ timeout: 15_000 });

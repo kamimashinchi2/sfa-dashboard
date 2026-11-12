@@ -6,7 +6,7 @@ Times on deadlines are shown twice: Europe/Amsterdam, and the clock on the stude
 
 ## Before week 1
 
-The student receives one invite link. They enter a display name, an email, and a password of at least 12 characters, and they accept a short notice that work is stored on the academy server. No email is sent back. If they lose the password later, the login page tells them to open the support chat. The owner checks who they are and sends a one-time link that lasts 30 minutes. Using that link signs them out of every device.
+The student receives one invite link. They enter a display name, an email, and a password of at least 12 characters, and they accept a short notice that work is stored on the academy server. No email is sent back. If they lose the password, the login page says: "Forgot your password? Ask your mentor for a reset link." The mentor runs `sfa reset-password` and shares a one-time link that lasts 30 minutes. Using that link signs them out of every device.
 
 Telegram is optional. The course works without it.
 
@@ -40,6 +40,6 @@ A failed practical does not delete the week. It adds a remedial week at that sam
 ## What the student never gets
 
 - The answer key, another student's files, or another student's grades.
-- A lesson opened by local browser storage, an old bookmark, or a high local XP number. The header XP is practice on that device only.
+- A lesson opened by a bookmark or by typing a later week's address. The header no longer shows a local XP score.
 - An email that says the password was reset or the quiz was graded.
 - A diploma from the software. Week 8 ends with a person.

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { AdvancedId, Attempt, RiskStatus } from "../../lib/academy/contracts";
+import { useState } from "react";
+import type { AdvancedId, Attempt } from "../../lib/academy/contracts";
 import { ASSESSMENT_CRITERIA_VERSION } from "../../lib/academy/assessmentVersion";
 import { t } from "../../lib/academy/dictionary";
 import { evaluateReadiness } from "../../lib/academy/grading";
@@ -13,13 +13,12 @@ import QuizGate from "./QuizGate";
 import ResearchLab from "./ResearchLab";
 import EquityDrawdownLab from "./EquityDrawdownLab";
 import CrossAssetCapstone from "./CrossAssetCapstone";
-import PerformanceCard from "./PerformanceCard";
 import { useServerResponses } from "../../lib/academy/stageResponses";
 import { useProgress } from "./ProgressProvider";
 
 function AdvancedBody({ content }: { content: AuthorizedContent }) {
   const mod = content;
-  const { progress, recordAttempt, completeLesson } = useProgress();
+  const { progress, recordAttempt } = useProgress();
   const locale = progress.locale;
   useServerResponses(content.stages[0], content.id);
 
@@ -32,31 +31,13 @@ function AdvancedBody({ content }: { content: AuthorizedContent }) {
 
   const saved = latestValidAttempt(progress, mod.id as AdvancedId);
 
-  const [lessonDone, setLessonDone] = useState(Boolean(saved));
+  const lessonDone = Boolean(saved);
   const [quizScore, setQuizScore] = useState<number | null>(saved?.quizScore ?? null);
-  const [taskComplete, setTaskComplete] = useState(saved?.taskComplete ?? false);
-  const [riskStatus] = useState<RiskStatus | null>(null);
-
-  const readiness = useMemo(() => {
-    if (quizScore === null) return null;
-    return evaluateReadiness({
-      quizScore,
-      taskComplete,
-      riskStatus: null,
-      freeTextSubmitted: lessonDone,
-      missionRequiresRisk: false,
-    });
-  }, [quizScore, taskComplete, lessonDone]);
+  const taskComplete = saved?.taskComplete ?? false;
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10 px-6 py-10 sm:px-8">
       <header>
-        <p className="text-[10px] tracking-[0.22em] text-teal-bright uppercase">
-          {mod.id} · stages {mod.stages.join(", ")} ·{" "}
-          {readOnly ? "READ_ONLY_PREVIEW / feature-flagged" : "ASSESSED"}
-          {" · entitlement "}
-          {content.entitlement.unlockedStage}
-        </p>
         {readOnly ? (
           <p
             className="mt-2 border border-gold/40 bg-ink/50 px-3 py-2 text-sm text-gold-soft"
@@ -75,15 +56,7 @@ function AdvancedBody({ content }: { content: AuthorizedContent }) {
 
       <div className="space-y-8">
         {mod.lessons.map((lesson) => (
-          <MicroLesson
-            key={lesson.id}
-            lesson={lesson}
-            onComplete={() => {
-              if (readOnly) return;
-              setLessonDone(true);
-              completeLesson(lesson.id);
-            }}
-          />
+          <MicroLesson key={lesson.id} lesson={lesson} />
         ))}
       </div>
 
@@ -95,17 +68,6 @@ function AdvancedBody({ content }: { content: AuthorizedContent }) {
         {mod.id === "A6" ? <ResearchLab readOnly={readOnly} /> : null}
         {mod.id === "A7" ? <EquityDrawdownLab readOnly={readOnly} /> : null}
         {mod.id === "A8" ? <CrossAssetCapstone readOnly={readOnly} /> : null}
-        <label className="flex min-h-11 items-center gap-2 text-sm text-fog">
-          <input
-            type="checkbox"
-            checked={taskComplete}
-            disabled={readOnly}
-            onChange={(e) => setTaskComplete(e.target.checked)}
-          />
-          {locale === "fa"
-            ? "خودبررسی (نمره‌دهی نشده): تمرین کامل شد"
-            : "Self-check (not graded): Mark practical complete"}
-        </label>
       </section>
 
       <QuizGate
@@ -140,21 +102,6 @@ function AdvancedBody({ content }: { content: AuthorizedContent }) {
         }}
       />
 
-      {readiness ? (
-        <div className="border border-line p-4" aria-live="polite">
-          <p className="font-mono text-sm text-gold-soft">
-            numericPass={String(readiness.numericPass)} · readiness=
-            {readiness.readiness}
-          </p>
-        </div>
-      ) : null}
-
-      <PerformanceCard
-        riskScore={quizScore}
-        technicalMacroScore={quizScore}
-        journalingScore={lessonDone ? 80 : null}
-        riskStatus={riskStatus}
-      />
     </div>
   );
 }

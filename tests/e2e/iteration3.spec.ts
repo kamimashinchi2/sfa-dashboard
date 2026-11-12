@@ -8,20 +8,18 @@ test.describe("Iteration 3 P0/P1", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    await dialog.getByRole("button", { name: "SYNTHETIC_EURUSD" }).click();
+    await dialog.getByRole("button", { name: "EURUSD" }).click();
     await dialog.locator('input[name="preEntry"][value="YES"]').check();
-    await expect(dialog.getByText("PASS_SIMULATION", { exact: true })).toBeVisible();
-    await expect(dialog.getByText("maxLots: 0.5")).toBeVisible();
-    await expect(dialog.getByText("loss: 100")).toBeVisible();
-    await expect(dialog.getByText("stopPips: 20")).toBeVisible();
+    await expect(dialog.getByText("PASS", { exact: true })).toBeVisible();
+    await expect(dialog.getByText(/Position size: 0\.5/)).toBeVisible();
   });
 
   test("Mental stop HARD_BLOCK MENTAL_STOP", async ({ page }) => {
     await page.goto("/simulators/risk-grid");
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel(/Mental/i).check();
-    await expect(dialog.getByText("HARD_BLOCK", { exact: true })).toBeVisible();
-    await expect(dialog.getByText("MENTAL_STOP")).toBeVisible();
+    await expect(dialog.getByText("BLOCKED", { exact: true })).toBeVisible();
+    await expect(dialog.getByText(/hard structural stop is required/i)).toBeVisible();
   });
 
   test("M3 direct URL does not open the scout without a session", async ({ page }) => {
@@ -31,11 +29,12 @@ test.describe("Iteration 3 P0/P1", () => {
     expect(body).not.toMatch(/MOMENTUM_ENTRY_ACTIVE|RETRACEMENT_ENTRY_ACTIVE|correctAnswer/);
   });
 
-  test("journal stage matches mission registry", async ({ page }) => {
+  test("journal shows the seven writing fields", async ({ page }) => {
     await page.goto("/journal/builder");
-    await expect(page.getByTestId("journal-stage")).toContainText(/Stage 6/);
-    await expect(page.getByTestId("journal-stage")).toContainText(/mission M5/);
-    await expect(page.getByTestId("journal-stage")).not.toContainText(/Stage 1 · mission M5/);
+    await expect(page.getByText("Hypothesis")).toBeVisible();
+    await expect(page.getByText("What will you do next?")).toBeVisible();
+    await expect(page.getByTestId("export-markdown")).toContainText(/Download my notes|دانلود یادداشت/);
+    await expect(page.getByText(/Export JSON|Copy Markdown|Mission/)).toHaveCount(0);
   });
 
   test("journal markdown download has UTF-8 content", async ({ page }) => {
@@ -50,8 +49,7 @@ test.describe("Iteration 3 P0/P1", () => {
     await download.saveAs(target);
     const text = fs.readFileSync(target, "utf8");
     expect(text).toContain("# Journal");
-    expect(text).toContain("Mission: M5");
-    expect(text).toMatch(/Stage:\s*6/);
+    expect(text).toContain("Hypothesis");
   });
 
   test("advanced A6 does not use the removed content bypass", async ({ page }) => {
@@ -63,7 +61,7 @@ test.describe("Iteration 3 P0/P1", () => {
   test("progress page says local storage cannot unlock a lesson", async ({ page }) => {
     await page.goto("/progress");
     await expect(page.getByTestId("next-step")).toBeVisible();
-    await expect(page.getByTestId("progress-page")).toContainText(/cannot unlock a lesson|درس را باز نمی‌کند/i);
+    await expect(page.getByTestId("local-practice-debug")).toHaveCount(0);
   });
 });
 
@@ -105,9 +103,7 @@ test.describe("storage cross-tab", () => {
     // Give storage event a beat
     await pageB.waitForTimeout(500);
     await pageB.reload();
-    await pageB.getByTestId("local-practice-debug").locator("summary").click();
-    const localeLine = pageB.locator("text=locale:");
-    await expect(localeLine).toBeVisible();
+    await expect(pageB.getByTestId("progress-page")).toBeVisible();
     await context.close();
   });
 });
