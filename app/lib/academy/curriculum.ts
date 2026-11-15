@@ -1,5 +1,6 @@
 import type { Lesson, MissionId, StageId, Text } from "./contracts";
-import { M2_QUIZ, M3_QUIZ, M4_QUIZ, M5_QUIZ } from "./quizzes";
+import { LESSON_PATCH } from "./weekLessons";
+import { M1_QUIZ, M2_QUIZ, M3_QUIZ, M4_QUIZ, M5_QUIZ } from "./weekQuizzes";
 
 export type QuizItem = {
   id: string;
@@ -85,6 +86,7 @@ function lesson(
       },
     ],
     ...partial,
+    ...(LESSON_PATCH[partial.id] ?? {}),
   };
 }
 
@@ -153,198 +155,7 @@ export const missions: MissionDef[] = [
         },
       }),
     ],
-    quiz: [
-      {
-        id: "M1-Q1",
-        kind: "mc",
-        prompt: {
-          fa: "اسپرد عمدتاً چیست؟",
-          en: "Spread is primarily:",
-        },
-        options: [
-          { fa: "سیگنال ورود", en: "An entry signal" },
-          { fa: "هزینه معامله", en: "A trading cost" },
-          { fa: "تأیید MSS", en: "MSS confirmation" },
-          { fa: "هدف سود", en: "A profit target" },
-        ],
-        rationale: {
-          fa: "اسپرد فاصله bid/ask و هزینه اجراست.",
-          en: "Spread is the bid/ask gap — an execution cost.",
-        },
-        remediationTopic: "spread-cost",
-      },
-      {
-        id: "M1-Q2",
-        kind: "numeric",
-        prompt: {
-          fa: "اگر ریسک ۱٪ روی ۱۰٬۰۰۰ باشد، بودجه چند دلار است؟",
-          en: "At 1% risk on 10,000 equity, what is the dollar budget?",
-        },
-        rationale: {
-          fa: "۱۰۰۰۰ × ۰٫۰۱ = ۱۰۰",
-          en: "10000 × 0.01 = 100",
-        },
-        remediationTopic: "risk-budget",
-      },
-      {
-        id: "M1-Q3",
-        kind: "mc",
-        prompt: {
-          fa: "هم‌پوشانی لندن–نیویورک بیشتر چه چیزی را افزایش می‌دهد؟",
-          en: "The London–New York overlap most increases:",
-        },
-        options: [
-          { fa: "مارجین اجباری", en: "Forced margin" },
-          { fa: "نقدینگی جلسه", en: "Session liquidity" },
-          { fa: "نرخ بهره فدرال", en: "Fed funds rate" },
-          { fa: "حداقل lot", en: "Minimum lot size" },
-        ],
-        rationale: {
-          fa: "هم‌پوشانی اوج مشارکت و نقدینگی را می‌آورد.",
-          en: "Overlap concentrates participation and liquidity.",
-        },
-        remediationTopic: "sessions",
-      },
-      {
-        id: "M1-Q4",
-        kind: "mc",
-        prompt: {
-          fa: "قرارداد synthetic طلای آکادمی چند اونس در هر lot فرض می‌کند؟",
-          en: "The Academy synthetic gold contract assumes how many oz per lot?",
-        },
-        options: [
-          { fa: "1", en: "1" },
-          { fa: "10", en: "10" },
-          { fa: "100", en: "100" },
-          { fa: "1000", en: "1000" },
-        ],
-        rationale: {
-          fa: "مشخصات آموزشی: ۱۰۰ oz/lot.",
-          en: "Educational spec: 100 oz/lot.",
-        },
-        remediationTopic: "contract-card",
-      },
-      {
-        id: "M1-Q5",
-        kind: "mc",
-        prompt: {
-          fa: "اسپات در برابر فیوچرز: کدام درست است؟",
-          en: "Spot versus futures — which is true?",
-        },
-        options: [
-          {
-            fa: "همیشه یک قیمت یکسان دارند",
-            en: "They always share one identical price",
-          },
-          {
-            fa: "فیوچرز سررسید و مشخصات قرارداد دارد",
-            en: "Futures carry expiry and contract specs",
-          },
-          {
-            fa: "اسپات همیشه بدون اسپرد است",
-            en: "Spot never has spread",
-          },
-          {
-            fa: "فیوچرز یعنی بدون مارجین",
-            en: "Futures means no margin",
-          },
-        ],
-        rationale: {
-          fa: "فیوچرز مشخصات، سررسید و مدل تحویل دارد.",
-          en: "Futures embed specs, expiry and delivery models.",
-        },
-        remediationTopic: "spot-futures",
-      },
-      {
-        id: "M1-Q6",
-        kind: "order",
-        prompt: {
-          fa: "ترتیب درست آماده‌سازی قبل از اندازه:",
-          en: "Correct prep order before sizing:",
-        },
-        options: [
-          { fa: "تعیین بودجه ریسک", en: "Set risk budget" },
-          { fa: "تعیین stop ساختاری", en: "Define structural stop" },
-          { fa: "محاسبه lot", en: "Compute lots" },
-          { fa: "ارسال سفارش", en: "Send order" },
-        ],
-        rationale: {
-          fa: "بودجه → stop → lot → اجرا.",
-          en: "Budget → stop → lots → execution.",
-        },
-        remediationTopic: "sizing-order",
-      },
-      {
-        id: "M1-Q7",
-        kind: "mc",
-        prompt: {
-          fa: "pip و tick در همه قراردادها همیشه مساوی‌اند؟",
-          en: "Are pip and tick always identical across contracts?",
-        },
-        options: [
-          { fa: "بله", en: "Yes" },
-          { fa: "خیر — به مشخصات قرارداد بستگی دارد", en: "No — depends on contract specs" },
-        ],
-        rationale: {
-          fa: "باید tickSize قرارداد را بخوانید.",
-          en: "Read the contract tickSize.",
-        },
-        remediationTopic: "pip-tick",
-      },
-      {
-        id: "M1-Q8",
-        kind: "numeric",
-        prompt: {
-          fa: "اگر tickSize طلا ۰٫۰۱ و فاصله stop برابر ۸ باشد، چند tick است؟",
-          en: "Gold tickSize 0.01 and stop distance 8 → how many ticks?",
-        },
-        rationale: {
-          fa: "۸ / ۰٫۰۱ = ۸۰۰",
-          en: "8 / 0.01 = 800",
-        },
-        remediationTopic: "tick-math",
-      },
-      {
-        id: "M1-Q9",
-        kind: "mc",
-        prompt: {
-          fa: "کدام جمله درست است؟",
-          en: "Which statement is correct?",
-        },
-        options: [
-          {
-            fa: "مارجین سقف زیان ۱٪ را تضمین می‌کند",
-            en: "Margin guarantees the 1% loss cap",
-          },
-          {
-            fa: "بودجه ریسک از equity و risk% ساخته می‌شود",
-            en: "Risk budget is built from equity and risk%",
-          },
-        ],
-        rationale: {
-          fa: "بودجه = equity × risk%/100",
-          en: "Budget = equity × risk%/100",
-        },
-        remediationTopic: "risk-budget",
-      },
-      {
-        id: "M1-Q10",
-        kind: "mc",
-        prompt: {
-          fa: "داده‌های این پورتال چه برچسبی باید داشته باشند؟",
-          en: "Portal data must be labeled:",
-        },
-        options: [
-          { fa: "تاریخی تأییدشده", en: "Verified historical" },
-          { fa: "SYNTHETIC / شبیه‌سازی‌شده", en: "SYNTHETIC / شبیه‌سازی‌شده" },
-        ],
-        rationale: {
-          fa: "همه فیکسچرها آموزشی و synthetic هستند.",
-          en: "All fixtures are educational and synthetic.",
-        },
-        remediationTopic: "synthetic-label",
-      },
-    ],
+    quiz: M1_QUIZ,
     practicalTask: {
       fa: "کارت قرارداد synthetic طلا را کامل کنید و بودجه ۱٪ برای equity=10000 را بنویسید.",
       en: "Complete the synthetic gold contract card and write the 1% budget for equity=10000.",
@@ -352,7 +163,7 @@ export const missions: MissionDef[] = [
   },
   {
     id: "M2",
-    stages: [2, 3],
+    stages: [2],
     title: {
       fa: "M2 — نقدینگی و انواع سفارش",
       en: "M2 — Liquidity & Order Types",
@@ -366,7 +177,7 @@ export const missions: MissionDef[] = [
       lesson({
         id: "M2-L1",
         missionId: "M2",
-        stages: [2, 3],
+        stages: [2],
         title: {
           fa: "سوئیپ در برابر تأیید",
           en: "Sweep versus confirmation",
@@ -397,7 +208,7 @@ export const missions: MissionDef[] = [
   },
   {
     id: "M3",
-    stages: [3, 7],
+    stages: [3],
     title: {
       fa: "M3 — ستاپ و ریسک",
       en: "M3 — Setup & Risk",
@@ -411,7 +222,7 @@ export const missions: MissionDef[] = [
       lesson({
         id: "M3-L1",
         missionId: "M3",
-        stages: [3, 7],
+        stages: [3],
         title: {
           fa: "Stop ساختاری و سقف ۱٪",
           en: "Structural stop and the 1% cap",
@@ -442,7 +253,7 @@ export const missions: MissionDef[] = [
   },
   {
     id: "M4",
-    stages: [4, 5],
+    stages: [4],
     title: {
       fa: "M4 — زنجیره کلان",
       en: "M4 — Macro Transmission",
@@ -456,7 +267,7 @@ export const missions: MissionDef[] = [
       lesson({
         id: "M4-L1",
         missionId: "M4",
-        stages: [4, 5],
+        stages: [4],
         title: {
           fa: "سورپرایز داده و انتقال مشروط",
           en: "Data surprise and conditional transmission",
@@ -487,7 +298,7 @@ export const missions: MissionDef[] = [
   },
   {
     id: "M5",
-    stages: [6, 7, 8],
+    stages: [5],
     title: {
       fa: "M5 — پژوهش و ژورنال (capstone-lite)",
       en: "M5 — Research & Journal (capstone-lite)",
@@ -501,7 +312,7 @@ export const missions: MissionDef[] = [
       lesson({
         id: "M5-L1",
         missionId: "M5",
-        stages: [6, 7, 8],
+        stages: [5],
         title: {
           fa: "پیش‌ثبت فرضیه",
           en: "Preregister the hypothesis",

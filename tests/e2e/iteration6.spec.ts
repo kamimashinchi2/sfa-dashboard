@@ -105,6 +105,7 @@ async function installMocks(page: Page) {
 }
 
 async function setLocale(page: Page, locale: "fa" | "en") {
+  await expect.poll(async () => page.locator("html").getAttribute("dir")).toMatch(/rtl|ltr/);
   const dir = await page.locator("html").getAttribute("dir");
   const current = dir === "rtl" ? "fa" : "en";
   if (current === locale) return;

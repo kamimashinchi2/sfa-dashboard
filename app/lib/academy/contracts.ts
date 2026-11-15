@@ -71,6 +71,8 @@ export type Lesson = {
   reality: Text;
   question: Text;
   selfReviewRubric: Text[];
+  /** Illustrative numbers only. Never a signal or live-market claim. */
+  workedExample?: Text;
 };
 
 export type Attempt = {

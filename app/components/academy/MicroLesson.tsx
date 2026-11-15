@@ -31,6 +31,21 @@ export default function MicroLesson({ lesson }: { lesson: Lesson }) {
         </h4>
         <p className="mt-2 text-sm leading-relaxed text-fog">{t(lesson.reality, locale)}</p>
       </section>
+      {lesson.workedExample ? (
+        <section className="border border-gold/40 bg-ink/60 p-4" data-testid="worked-example">
+          <h4 className="text-xs tracking-[0.18em] text-gold-soft uppercase">
+            {locale === "fa"
+              ? "مثال حل‌شده (اعداد آموزشی، نه داده واقعی بازار)"
+              : "Worked example (illustrative numbers, not real market data)"}
+          </h4>
+          <p className="mt-2 text-sm leading-relaxed text-fog">{t(lesson.workedExample, locale)}</p>
+          <p className="mt-2 text-xs text-fog">
+            {locale === "fa"
+              ? "این مثال سیگنال یا توصیه مالی نیست."
+              : "This example is not a signal and not financial advice."}
+          </p>
+        </section>
+      ) : null}
     </article>
   );
 }

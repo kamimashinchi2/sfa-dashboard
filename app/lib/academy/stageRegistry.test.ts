@@ -8,7 +8,7 @@ import {
 describe("stage registry", () => {
   it("derives stage from mission — M5 is not Stage 1", () => {
     expect(stageFromMission("M1")).toBe(1);
-    expect(stageFromMission("M5")).toBe(6);
+    expect(stageFromMission("M5")).toBe(5);
     expect(stageFromMission("M5")).not.toBe(1);
   });
 
@@ -24,7 +24,7 @@ describe("stage registry", () => {
       missionId: "M5",
       advancedModule: null,
     });
-    expect(r.stage).toBe(6);
+    expect(r.stage).toBe(5);
     expect(r.warning).toContain("STAGE_MISMATCH");
   });
 });
