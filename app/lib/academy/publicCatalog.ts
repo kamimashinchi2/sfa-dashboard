@@ -72,7 +72,7 @@ export const publicMissions: PublicMissionOutline[] = [
   },
   {
     id: "M2",
-    stages: [2, 3],
+    stages: [2],
     title: {
       fa: "M2 — نقدینگی و انواع سفارش",
       en: "M2 — Liquidity & Order Types",
@@ -85,10 +85,10 @@ export const publicMissions: PublicMissionOutline[] = [
   },
   {
     id: "M3",
-    stages: [3, 7],
+    stages: [3],
     title: {
-      fa: "M3 — ستاپ و ریسک",
-      en: "M3 — Setup & Risk",
+      fa: "M3 — سواد چارت",
+      en: "M3 — Chart Literacy",
     },
     summary: {
       fa: "MSS، جابه‌جایی، FVG/OB، stop ساختاری و اندازه.",
@@ -98,7 +98,7 @@ export const publicMissions: PublicMissionOutline[] = [
   },
   {
     id: "M4",
-    stages: [4, 5],
+    stages: [4],
     title: {
       fa: "M4 — کلان و انتقال",
       en: "M4 — Macro & Transmission",
@@ -111,10 +111,10 @@ export const publicMissions: PublicMissionOutline[] = [
   },
   {
     id: "M5",
-    stages: [6, 7, 8],
+    stages: [5],
     title: {
-      fa: "M5 — دفتر و روان‌شناسی تمرین",
-      en: "M5 — Journal & Practice Psychology",
+      fa: "M5 — بین‌بازاری",
+      en: "M5 — Intermarket",
     },
     summary: {
       fa: "فرضیه، ابطال، عادت‌های تمرین بدون سیگنال زنده.",
@@ -198,7 +198,7 @@ export function bridgeStageForId(id: string): number | null {
 
 /**
  * Curriculum primary stage (stages[0]) for journal/UI registry.
- * Note: M5 primary is 6 in curriculum, while bridge stage for M5 is 5.
+ * Primary stage matches the 8-week bridge: M1..M5 are weeks 1..5, A6..A8 are weeks 6..8.
  */
 export function curriculumPrimaryStage(id: string): number | null {
   const map: Record<string, number> = {
@@ -206,7 +206,7 @@ export function curriculumPrimaryStage(id: string): number | null {
     M2: 2,
     M3: 3,
     M4: 4,
-    M5: 6,
+    M5: 5,
     A6: 6,
     A7: 7,
     A8: 8,
