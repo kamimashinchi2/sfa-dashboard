@@ -12,6 +12,82 @@ from .uploads import store
 PASSWORDS=PasswordHasher(time_cost=3,memory_cost=65536,parallelism=2)
 DUMMY=PASSWORDS.hash(secrets.token_urlsafe(32))
 NOTICE='Your learning work and grades are stored on the academy server; Echo and the academy mentor review them. No live trading or sensitive account documents required. / تمرین‌ها و نمرات در سرور آکادمی ذخیره و توسط Echo و منتور بررسی می‌شوند. اطلاعات حساس حساب نفرستید.'
+# Per-kind owner lines for a delivered decision are replaced by one summary in deliver().
+_DELIVERED_KINDS=frozenset(('QUIZ_RESULT_READY','ASSIGNMENT_READY','PRACTICAL_GRADED','LESSON_UNLOCKED'))
+_OWNER_EVENT_LINES={'DECISION_PENDING_APPROVAL':'decision pending approval','DECISION_RETRACTED':'decision retracted'}
+_VERDICTS=frozenset(('APPROVED','PARTIALLY_APPROVED','NOT_APPROVED'))
+
+def _whole(v):
+    return v if type(v) is int else None
+
+def _student_id(v):
+    return v if isinstance(v,str) and 3<=len(v)<=13 and v[0]=='S' and v[1:].isdigit() else ''
+
+def _pick(row,p,keys):
+    for source in (row,p):
+        if not hasattr(source,'get'): continue
+        for key in keys:
+            if source.get(key) not in (None,''): return source.get(key)
+    return None
+
+def _fraction(correct,total):
+    correct,total=_whole(correct),_whole(total)
+    if correct is None or total is None or not 1<=total<=100 or not 0<=correct<=total: return ''
+    return f'{correct}/{total}'
+
+def _practical_score(p):
+    scores=p.get('scores') if isinstance(p,dict) else None
+    if not isinstance(scores,dict): return ''
+    parts=[_whole(scores.get(k)) for k in ('risk','technicalMacro','journalPsychology')]
+    if any(v is None or not 0<=v<=100 for v in parts): return ''
+    total=sum(parts)
+    if not 0<=total<=100: return ''
+    return f'{total}/100'
+
+def _quiz_fraction(c,attempt):
+    if c is None or not isinstance(attempt,str) or not attempt: return ''
+    row=c.execute('SELECT assessment FROM quizzes WHERE attempt=?',(attempt,)).fetchone()
+    raw=row.get('assessment') if row else None
+    if not isinstance(raw,str) or not raw: return ''
+    try: assessment=json.loads(raw)
+    except (TypeError,ValueError): return ''
+    if not isinstance(assessment,dict): return ''
+    # Drop per-item records before reading the two totals. Those records hold expected answers.
+    assessment.pop('items',None)
+    return _fraction(assessment.get('correct'),assessment.get('total'))
+
+def _next_step(p,kind,week):
+    if kind=='quiz':
+        if p.get('verdict')=='NOT_APPROVED' or not p.get('assignment'):
+            return 'retake required' if p.get('verdict')=='NOT_APPROVED' else ''
+        return 'practical assigned'
+    if kind!='practical': return ''
+    if p.get('verdict')=='NOT_APPROVED' or p.get('remedialAssignment'): return 'remedial issued'
+    if p.get('unlockNext') is True and week: return f'Week {week+1} unlocked'
+    if p.get('unlockNext') is True: return 'next week unlocked'
+    if p.get('verdict') in ('APPROVED','PARTIALLY_APPROVED'): return 'awaiting senior mentor'
+    return ''
+
+def _owner_decision_line(c,row,p,origin):
+    p=p if isinstance(p,dict) else {}
+    row=row if hasattr(row,'get') else {}
+    sid=_student_id(_pick(row,p,('student','studentId')))
+    week=_whole(_pick(row,p,('week',)))
+    if week is not None and not 1<=week<=10000: week=None
+    kind=_pick(row,p,('kind',))
+    if kind not in ('quiz','practical'):
+        fmt=p.get('format')
+        kind='quiz' if fmt=='sfa-quiz-decision' else 'practical' if fmt=='sfa-practical-decision' else ''
+    verdict=p.get('verdict') if p.get('verdict') in _VERDICTS else ''
+    if kind=='practical': score=_practical_score(p)
+    elif kind=='quiz': score=_fraction(p.get('correct'),p.get('total')) or _quiz_fraction(c,p.get('attemptId'))
+    else: score=_practical_score(p) or _fraction(p.get('correct'),p.get('total'))
+    step=_next_step(p,kind,week)
+    subject=' '.join(x for x in ((f'Week {week}' if week else ''),kind) if x)
+    grade=' '.join(x for x in (verdict,score) if x)
+    parts=[x for x in (sid,subject,grade,step) if x]
+    line=' · '.join(parts) if parts else 'Decision delivered'
+    return line+'\n'+str(origin).rstrip('/')+'/admin'
 
 def email_value(v):
     import re
@@ -210,18 +286,20 @@ class Service(CoreService):
         self.apply_delivered(c,row,p,None)
         c.execute("UPDATE mentor_decisions SET state='DELIVERED' WHERE id=?",(row['id'],))
         kinds=['QUIZ_RESULT_READY','ASSIGNMENT_READY'] if row['kind']=='quiz' and p['verdict']!='NOT_APPROVED' else ['QUIZ_RESULT_READY'] if row['kind']=='quiz' else ['PRACTICAL_GRADED']+(['LESSON_UNLOCKED'] if p['unlockNext'] else [])
-        for kind in kinds: self._notify(c,sid,kind,{'decisionId':row['id'],'verdict':p['verdict']})
+        # In-app rows and the student line stay per kind. The owner gets one summary below, not one JSON line per kind.
+        for kind in kinds: self._notify(c,sid,kind,{'decisionId':row['id'],'verdict':p['verdict']},owner_notice=False)
         if self.config.admin_id:
-            copy='Decision copy '+row['id']+' / '+sid+'\n'+canonical(p)
-            chunks=[copy[i:i+3200] for i in range(0,len(copy),3200)]
-            for i,chunk in enumerate(chunks): c.execute('INSERT INTO outbox(id,chat,body) VALUES(?,?,?)',(uuid.uuid4().hex,self.config.admin_id,f'[{i+1}/{len(chunks)}] '+chunk))
-    def _notify(self,c,sid,kind,data,student_notice=True):
+            c.execute('INSERT INTO outbox(id,chat,body) VALUES(?,?,?)',(uuid.uuid4().hex,self.config.admin_id,_owner_decision_line(c,row,p,self.config.origin)))
+    def _notify(self,c,sid,kind,data,student_notice=True,owner_notice=True):
         body=canonical({'kind':kind,**data,'url':self.config.origin+'/progress'})
         if student_notice:
             c.execute('INSERT INTO notifications(id,student,body,created) VALUES(?,?,?,?)',(uuid.uuid4().hex,sid,body,now()))
             r=c.execute('SELECT telegram FROM students WHERE student=?',(sid,)).fetchone()
             if r and r['telegram']: c.execute('INSERT INTO outbox(id,chat,body) VALUES(?,?,?)',(uuid.uuid4().hex,r['telegram'],kind+' / نتیجه در داشبورد آماده است\n'+self.config.origin+'/progress'))
-        if self.config.admin_id: c.execute('INSERT INTO outbox(id,chat,body) VALUES(?,?,?)',(uuid.uuid4().hex,self.config.admin_id,sid+' '+kind+' '+canonical(data)))
+        if owner_notice and self.config.admin_id and kind not in _DELIVERED_KINDS:
+            label=_OWNER_EVENT_LINES.get(kind) or 'academy notice'
+            who=_student_id(sid) or 'Student'
+            c.execute('INSERT INTO outbox(id,chat,body) VALUES(?,?,?)',(uuid.uuid4().hex,self.config.admin_id,who+' · '+label+'\n'+str(self.config.origin).rstrip('/')+'/admin'))
     def override(self,did,reason):
         require(isinstance(reason,str) and 5<=len(reason)<=1000,'OVERRIDE_REASON_REQUIRED')
         with self.db.tx() as c:

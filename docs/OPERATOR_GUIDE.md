@@ -27,7 +27,7 @@ Echo is not a live chat. The header says queue review. There is no promised grad
    Send that link in private. The installer also leaves the first invite in `/etc/sfa/cohort-invite`.
 2. Tell the student what they will see: a join page, then the dashboard. The first line on the dashboard is "What to do next". Persian and English are both on the site. The language button is in the header.
 3. Telegram is optional. If you did not configure a bot token, the dashboard simply does not offer it. Students can finish with the website alone.
-4. Grading happens when Echo polls `/echo/v1/queue`, claims one item, reads the report and files, and submits a decision. You are notified only if an admin Telegram chat is configured. Otherwise watch the dashboard, or run `sudo sfa status`.
+4. Grading happens when Echo polls `/echo/v1/queue`, claims one item, reads the report and files, and submits a decision. If an admin Telegram chat is configured, each delivered grade sends one line such as `S10001 · Week 1 quiz · APPROVED 10/10 · practical assigned`, plus a link to `/admin`. That message has no feedback, grader notes, or assignment text. The full decision stays in the dashboard. Otherwise watch the dashboard, or run `sudo sfa status`.
 5. Your own account: sign up with the invite, then:
 
    ```bash
