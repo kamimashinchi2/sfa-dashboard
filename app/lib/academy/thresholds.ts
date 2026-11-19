@@ -35,8 +35,9 @@ export function claimQuizVerdict(score: number): ClaimVerdict {
 export function claimPracticalVerdict(
   total0to100: number,
   finalHardBlock: boolean,
+  routineGatePassed?: boolean | null,
 ): ClaimVerdict {
-  if (finalHardBlock) return "NOT_APPROVED";
+  if (finalHardBlock || routineGatePassed === false) return "NOT_APPROVED";
   if (total0to100 >= PRACTICAL_THRESHOLDS.approvedMin) return "APPROVED";
   if (total0to100 >= PRACTICAL_THRESHOLDS.partialMin)
     return "PARTIALLY_APPROVED";

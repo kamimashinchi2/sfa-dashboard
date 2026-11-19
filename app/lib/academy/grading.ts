@@ -253,6 +253,7 @@ export function performanceCard(input: {
   technicalMacro: number | null;
   journalPsychology: number | null;
   hardBlock: boolean;
+  routineGatePassed?: boolean | null;
 }): {
   total: number | null;
   pillars: {
@@ -271,7 +272,7 @@ export function performanceCard(input: {
     return { total: null, pillars, verdict: null, unlockEligible: false };
   }
   const total = risk + technicalMacro + journalPsychology;
-  const verdict = claimPracticalVerdict(total, input.hardBlock);
+  const verdict = claimPracticalVerdict(total, input.hardBlock, input.routineGatePassed);
   return {
     total,
     pillars,

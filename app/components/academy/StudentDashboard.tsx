@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import PracticalUpload from "./PracticalUpload";
+import DailyLogCard from "./DailyLogCard";
 import { SafeMarkdown } from "../../lib/academy/safeMarkdown";
 import { maybeLegacyImport } from "../../lib/academy/legacyImport";
 import { formatDualTime, nextStep, noticeLabel, statusLabel } from "../../lib/academy/studentCopy";
@@ -23,6 +24,7 @@ type Assignment = {
   };
   deliverables: Text[];
   dueAtISO: string;
+  dailyTasks?: { taskId: string; kind: string; task: Text }[];
 };
 
 type Me = {
@@ -396,7 +398,8 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
         ) : null}
       </section>
 
-      {me && (weekStatus === "ASSIGNMENT_ISSUED" || weekStatus === "REMEDIAL_ISSUED" || me.status === "ASSIGNMENT_ISSUED" || me.status === "REMEDIAL_ISSUED") ? (
+      {assignment?.dailyTasks ? <DailyLogCard locale={locale} tasks={assignment.dailyTasks} /> : null}
+      {me && (weekStatus === "ASSIGNMENT_ISSUED" || weekStatus === "REMEDIAL_ISSUED" || weekStatus === "PRACTICAL_OVERDUE" || me.status === "ASSIGNMENT_ISSUED" || me.status === "REMEDIAL_ISSUED" || me.status === "PRACTICAL_OVERDUE") ? (
         <PracticalUpload locale={locale} />
       ) : me ? (
         <p className="text-sm text-fog" data-testid="practical-closed">

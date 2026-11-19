@@ -16,7 +16,7 @@ export default function AudioLectureCard({ stage }: Props) {
         />
         <div className="min-w-0">
           <p className="text-[10px] font-medium tracking-[0.22em] text-teal-bright uppercase">
-            NotebookLM
+            Briefing
           </p>
           <h3 className="mt-1 font-display text-xl text-paper">
             Audio Lecture &amp; Briefing

@@ -42,22 +42,22 @@ export const stages: Stage[] = [
       "Institutional fluency starts with quote convention, session liquidity, and contract math. Trade only what you can size and journal with precision.",
     principles: [
       "Base vs quote, pip/point value, and spread as a cost of business",
-      "London–New York overlap as the primary execution window",
-      "EUR/USD and XAU/USD lot math before any discretionary entry",
+      "London and New York are the preferred sessions",
+      "Lot math with a sourced or illustrative point value before any hypothetical plan",
       "Hard stops only — mental stops are a rulebook violation",
       "Journal fields: thesis, structure, risk, outcome — every session",
     ],
     links: ESSENTIAL_LINKS,
     milestones: [
-      "Convert a stop distance into dollars risked for EUR/USD and XAU/USD",
+      "Convert a stop distance into dollars risked for EUR/USD and XAU/USD (point value from the contract spec, or labelled illustrative)",
       "Label pip, point, and spread cost on a live chart screenshot",
       "Submit one practice journal entry with thesis + risk fields complete",
     ],
     mission:
-      "Map one London–NY overlap session: annotate quote convention, spread, and a hypothetical 1.0% risk size for EUR/USD and XAU/USD. Upload the annotated journal on the academy dashboard.",
+      "Log on at least 3 weekdays, noting spread at a London and a New York observation time, and size a hypothetical 1% plan on your own paper equity. Upload the Friday contract and cost journal.",
     audioTitle: "FX Mechanics Desk Briefing",
     audioNote:
-      "NotebookLM audio overview covering pip math, sessions, and order hygiene. Placeholder until the stage recording is published.",
+      "No stage recording is published on this page.",
   },
   {
     id: 2,
@@ -66,10 +66,10 @@ export const stages: Stage[] = [
       "Liquidity is the fuel of structural shifts. Map pools above highs and below lows, then choose the order type that expresses your plan without ambiguity.",
     principles: [
       "Liquidity pools rest beyond obvious swing highs and lows",
-      "Sweeps often precede Break of Structure or Change of Character",
+      "A sweep is not an entry. A wick touch does not prove a fill",
       "Market, limit, and stop orders each encode a different intent",
-      "HTF (4H) bias frames where liquidity is meaningful; LTF (15m) times entry",
-      "Never chase a sweep — wait for displacement and retest logic",
+      "H4 and H1 for direction, M15 and M5 for execution reading",
+      "Confirmation comes after a sweep, never with it",
     ],
     links: [
       ...ESSENTIAL_LINKS.slice(0, 2),
@@ -86,10 +86,10 @@ export const stages: Stage[] = [
       "Journal a rejected chase vs a planned retest entry",
     ],
     mission:
-      "For Mission 1 market structure week: annotate HH/HL or LH/LL on 4H, locate one liquidity pool, and define the exact order type for a 15m execution plan. Cap risk at 1.0%.",
+      "Log on at least 3 weekdays marking PDH/PDL (PWH/PWL on Monday), classifying sweeps, and naming order types. Upload the Friday liquidity map journal.",
     audioTitle: "Liquidity & Order Intent Briefing",
     audioNote:
-      "NotebookLM walkthrough of pools, sweeps, and institutional order choice. Audio file placeholder.",
+      "No stage recording is published on this page.",
   },
   {
     id: 3,
@@ -97,10 +97,10 @@ export const stages: Stage[] = [
     overview:
       "Candles are narrative units. Read impulse, pullback, and rejection so entries come from price — indicators stay contextual.",
     principles: [
-      "Rejection wicks at levels beat indicator crossovers for entries",
-      "Impulse vs corrective legs define where risk belongs",
-      "Session opens and range breaks create continuation signatures",
-      "EMA / VWAP may frame context; they never replace structure",
+      "Structure words in the sources: OB, BOS, CHoCH, FVG, MSS, read on closed candles",
+      "The stop is structural invalidation beyond the sweep extreme or swing",
+      "Sweep-reversal path (Scout v3.0): confirmed sweep, closed-candle MSS, displacement, then an FVG/OB zone",
+      "MA50 and MA200 are named; no crossover rule, applied price, or shift was recovered, so they stay descriptive. RSI, Volume Profile, ZigZag and Renko have no recovered settings",
       "Screenshot standards make reviews mentor-grade",
     ],
     links: [
@@ -117,26 +117,26 @@ export const stages: Stage[] = [
       ESSENTIAL_LINKS[3],
     ],
     milestones: [
-      "Deliver three annotated charts: impulse → pullback → continuation",
-      "Write a PA thesis with zero indicator-based entry language",
-      "Score R:R ≥ 1:2 on a hypothetical entry from a marked level",
+      "Walk the sweep-reversal chain on a real chart and write where it stopped",
+      "No signal wording in any entry",
+      "Net R:R of at least 1:2 after spread on a hypothetical plan",
     ],
     mission:
-      "Capture three price-action examples this week. Each must include entry logic, hard stop, and a target that clears 1:2. Upload the screenshots with the weekly practical on the academy dashboard.",
+      "Log on at least 3 weekdays applying H4/H1 direction, M15/M5 closed-candle structure and a paper structural-stop drill. Upload the Friday week table and one Final Paper Plan.",
     audioTitle: "Price Action Narrative Briefing",
     audioNote:
-      "NotebookLM audio on impulse, rejection, and continuation literacy. Placeholder embed.",
+      "No stage recording is published on this page.",
   },
   {
     id: 4,
     title: "Fundamental Macro & Fed Policy",
     overview:
-      "Policy path and data releases shape dollar and gold regimes. Macro sets bias; price action still times the trade.",
+      "Policy path and data releases shape dollar and gold regimes. Macro bias is context, not an entry.",
     principles: [
       "Fed dual mandate and FOMC cycle are narrative — not entry signals",
-      "CPI, NFP, PCE define calendar risk and stand-down windows",
-      "USD strength regimes transmit directly into EUR/USD",
-      "Gold behaves as a real-rate and risk-sentiment hybrid",
+      "Compare Actual, Forecast, Previous and Revisions for labor and inflation releases; if the calendar was not checked write NEWS RISK: NOT ASSESSED",
+      "Do not extrapolate a macro regime from one print",
+      "Real yields are especially important for gold, but Dow and gold have no fixed inverse relationship",
       "Macro notes require bias, catalysts, and invalidation",
     ],
     links: [
@@ -154,14 +154,14 @@ export const stages: Stage[] = [
     ],
     milestones: [
       "Produce a weekly macro brief: Fed path + two data catalysts",
-      "Map the brief to EUR/USD and XAU/USD directional bias",
-      "List three sessions you would stand down for event risk",
+      "Fill the macro chain link by link and mark UNVERIFIED links",
+      "Separate the immediate reaction from the durable one",
     ],
     mission:
-      "Write this week’s macro desk note before Sunday prep. Include Fed path, two catalysts, and explicit stand-down windows. File it with your journal submission.",
+      "Log on at least 3 weekdays: release log, chain walk with UNVERIFIED links, immediate vs durable. Upload the Friday macro context journal.",
     audioTitle: "Fed Path & Macro Desk Briefing",
     audioNote:
-      "NotebookLM overview of FOMC narrative vs execution discipline. Placeholder audio.",
+      "No stage recording is published on this page.",
   },
   {
     id: 5,
@@ -169,11 +169,11 @@ export const stages: Stage[] = [
     overview:
       "Yields, equities, and the dollar transmit into FX and gold. Keep bias consistent across markets before you size risk.",
     principles: [
-      "UST yields ↔ USD ↔ EUR/USD is a primary transmission path",
-      "Real yields often inverse XAU/USD tendency",
+      "Chain order from the coordinator: yields including real yields, DXY, VIX and cross-asset response",
+      "Correlation is regime-dependent",
       "Risk-on / risk-off shows in equities, HY credit, and FX crosses",
       "DXY informs context — it is not an entry trigger",
-      "Sunday intermarket prep prevents midweek narrative drift",
+      "Timestamp every observation and avoid double counting one input",
     ],
     links: [
       {
@@ -188,15 +188,15 @@ export const stages: Stage[] = [
       ESSENTIAL_LINKS[3],
     ],
     milestones: [
-      "Chart 10Y yield vs EUR/USD over three months and narrate the link",
-      "Explain one gold move with real-yield context in ≤150 words",
-      "Update an intermarket prep sheet before the next London open",
+      "Fill a timestamped cross-asset matrix",
+      "Explain one gold move with real yields and DXY, not either alone",
+      "Fill a timestamped cross-asset matrix",
     ],
     mission:
-      "Build a one-page intermarket dashboard (yields, DXY, equities, gold). State the bias it implies for EUR/USD this week and submit with your journal.",
+      "Log on at least 3 weekdays with a cross-asset matrix; upload the Friday intermarket journal with one macro bias statement labelled not an entry.",
     audioTitle: "Yield Transmission Briefing",
     audioNote:
-      "NotebookLM audio on cross-asset bias construction. Placeholder until published.",
+      "No stage recording is published on this page.",
   },
   {
     id: 6,
@@ -204,11 +204,11 @@ export const stages: Stage[] = [
     overview:
       "Edge is measured, not asserted. Define hypotheses, sample windows, and pass/fail metrics before you scale size.",
     principles: [
-      "Tag every trade so datasets stay reviewable",
-      "Expectancy, average R, and drawdown bound honest evaluation",
-      "Small samples invite curve-fit stories — stay humble",
-      "Rule changes need before/after controlled comparison",
-      "Research notebooks must be reproducible week to week",
+      "Write a falsifiable hypothesis, the allowed data and the costs before the outcome window",
+      "Account for spread and fees",
+      "Avoid look-ahead bias and overfitting",
+      "Test out of sample and document failures",
+      "Label the result IN-SAMPLE / EXPLORATORY",
     ],
     links: [
       {
@@ -223,15 +223,15 @@ export const stages: Stage[] = [
       ESSENTIAL_LINKS[3],
     ],
     milestones: [
-      "Tag ≥20 historical examples of one setup with outcome in R",
-      "Report expectancy and max adverse excursion for that sample",
-      "Write a one-page verdict: keep, refine, or retire the setup",
+      "Preregister one observation hypothesis",
+      "Record timestamped forward rows and failures",
+      "Label the result IN-SAMPLE / EXPLORATORY",
     ],
     mission:
-      "Run a mini research sprint on one setup. Deliver tags, expectancy, and a keep/refine/retire verdict. Upload the notebook page with the weekly practical.",
+      "Log on at least 3 weekdays. On your first logged day, lock a one-line falsifiable observation hypothesis before any outcome. On Friday upload a research note labelled IN-SAMPLE / EXPLORATORY. No live rule is promoted.",
     audioTitle: "Research Hygiene Briefing",
     audioNote:
-      "NotebookLM briefing on expectancy math and sample humility. Audio placeholder.",
+      "No stage recording is published on this page.",
   },
   {
     id: 7,
@@ -241,8 +241,8 @@ export const stages: Stage[] = [
     principles: [
       "1.0% maximum risk per trade — hard academy cap",
       "Mandatory hard stop-loss; no mental stops",
-      "Forex: Lot = (Equity × risk%) ÷ (Stop Pips × 10)",
-      "Gold: Lot = (Equity × risk%) ÷ (|Entry − Stop| × 100)",
+      "Lot Size = (Equity × Risk %) ÷ (Stop Distance × Point Value), rounded down; point value sourced or labelled illustrative",
+      "Size paper plans with the source formula and show one plan rejected for net R:R below 1:2",
       "Minimum R:R 1:2; size down before widening stops",
     ],
     links: [
@@ -263,13 +263,13 @@ export const stages: Stage[] = [
     milestones: [
       "Size three EUR/USD and three XAU/USD examples to ≤1.0% risk",
       "Show a rejected trade that failed the 1:2 R:R screen",
-      "Complete a simulation sheet using the Institutional Position Sizer",
+      "Size paper plans with the source formula and show one plan rejected for net R:R below 1:2",
     ],
     mission:
-      "Use the Institutional Position Sizing Calculator on six hypothetical trades (3 FX, 3 gold). Screenshot results that pass 1:2 and one that fails. Upload the pack with the weekly practical.",
+      "Log on at least 3 weekdays: a daily paper plan on current paper equity, a paper-ledger update, a stop-doubling drill and a three-losses scenario note. On Friday upload the risk ledger and drawdown review. Recovery percentages and gap-loss labels are not required.",
     audioTitle: "Simulation Math Briefing",
     audioNote:
-      "NotebookLM audio covering academy lot formulas and R:R gates. Placeholder file.",
+      "No stage recording is published on this page.",
   },
   {
     id: 8,
@@ -280,7 +280,7 @@ export const stages: Stage[] = [
       "Weekly bias memo drawn from macro and intermarket stages",
       "Structure map + price-action plan in one coherent narrative",
       "Sized trade plan locked to Stage 7 math and the 1.0% cap",
-      "Post-trade evaluation uses Stage 6 research metrics",
+      "One release, three instruments, with the 0-5, 5-15 and 15-60 minute windows and the later session kept separate",
       "Presentation-ready notebook for Echo / mentor office hours",
     ],
     links: [
@@ -295,12 +295,12 @@ export const stages: Stage[] = [
     milestones: [
       "Submit a complete weekly notebook: bias → plan → size → review",
       "Include annotated HTF/LTF charts and risk calculations",
-      "Present findings with Echo and a clear pass/fail self-score",
+      "Write conclusions as study notes, not signals",
     ],
     mission:
-      "Ship your capstone notebook this week: macro bias, structure map, sized plan (≤1.0%), and review metrics. Upload it with the weekly practical, then discuss with Echo.",
+      "Log on at least 3 weekdays around one scheduled release and upload the Friday capstone notebook as study notes, not signals. The Final Paper Plan is required this week. A positive result leads to senior-mentor review only.",
     audioTitle: "Capstone Synthesis Briefing",
     audioNote:
-      "NotebookLM wrap-up for assembling the mentor-ready notebook. Placeholder audio.",
+      "No stage recording is published on this page.",
   },
 ];

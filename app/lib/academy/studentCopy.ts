@@ -13,6 +13,7 @@ const STATUS: Record<string, { fa: string; en: string }> = {
   QUIZ_ASSESSED: { fa: "آزمون بررسی شد", en: "Quiz reviewed" },
   ASSIGNMENT_ISSUED: { fa: "تکلیف شخصی صادر شد", en: "Personal assignment is ready" },
   REMEDIAL_ISSUED: { fa: "هفته جبرانی همین مرحله", en: "Remedial week, same stage" },
+  PRACTICAL_OVERDUE: { fa: "جمعه تمرین گذشت؛ پنجره به جمعه بعد رفت", en: "Friday passed; the window moved to the next Friday" },
   PRACTICAL_SUBMITTED: { fa: "تمرین ارسال شد؛ در انتظار Echo", en: "Practical submitted; waiting for Echo" },
   PRACTICAL_ASSESSED: { fa: "تمرین بررسی شد", en: "Practical reviewed" },
   NEXT_UNLOCKED: { fa: "درس بعدی باز شد", en: "Next lesson unlocked" },
