@@ -37,8 +37,9 @@ Flask separately spools/hashes before parsing; temp files closed in finally. All
 |---|---|---|---|---|
 |GET|`/api/v1/admin/decisions`|ADMIN session + HMAC|`none`|`{decisions:[{id,student,state,body:Decision,delivered_at}]}`|
 |GET|`/api/v1/admin/students`|ADMIN session + HMAC|`none`|`{students:[{student,display_name,email,stage,current_week,role}]}`|
-|GET|`/api/v1/assignment`|student|`none`|`{week,stage,status,assignment:Assignment or null}`|
+|GET|`/api/v1/assignment`|student|`none`|`{week,stage,status,assignment,practicalModel,planPolicy}`|
 |GET|`/api/v1/authorize/<int:stage>`|student|`none`|`{allowed:true,stage}`|
+|GET|`/api/v1/daily-log`|student|`week=current`|`{entries,countedDays,requiredDays,dueFriday,nextLockAtISO}`|
 |GET|`/api/v1/data-notice`|HMAC only|`none`|`{version:1,text:string}`|
 |GET|`/api/v1/entitlements`|student|`none`|`{unlockedStage,currentWeek,status}`|
 |GET|`/api/v1/me`|student|`none`|`Me`|
@@ -48,12 +49,15 @@ Flask separately spools/hashes before parsing; temp files closed in finally. All
 |GET|`/api/v1/quizzes/<attempt>`|student|`none`|`{attemptId,assessment:PublicAssessment,decision:Decision or null}`|
 |GET|`/api/v1/report`|student|`none`|`Report`|
 |GET|`/api/v1/responses/<int:stage>`|student|`none`|`{responses:object or null}`|
+|GET|`/echo/v1/daily-log`|Echo Bearer|`student and week query`|`{studentId,week,practicalModel,entries}`|
 |GET|`/echo/v1/files/<fid>`|Echo Bearer|`none`|`original attachment; verify digest/size from queue`|
 |GET|`/echo/v1/health`|public|`none`|`{ok:true, version:6}`|
-|GET|`/echo/v1/queue`|Echo Bearer|`none`|`{requests:[QueueItem],policy:{quizApproved:80,quizPartial:60,practicalApproved:80,practicalPartial:65,cleanWeeks:2,approvalRequired}}`|
+|GET|`/echo/v1/queue`|Echo Bearer|`none`|`{requests:[QueueItem],policy:{quizApproved,quizPartial,practicalApproved,practicalPartial,cleanWeeks,approvalRequired,dailyLogMinDays,dailyLogTimezone,practicalWindow,practicalModel,planPolicy}}`|
 |GET|`/echo/v1/students/<sid>/report`|Echo Bearer|`none`|`Report`|
 |POST|`/api/v1/admin/decisions/<did>/approve`|ADMIN session + HMAC|`{}`|`{ok:true}`|
 |POST|`/api/v1/admin/decisions/<did>/override`|ADMIN session + HMAC|`{reason}`|`{ok:true}`|
+|POST|`/api/v1/daily-log`|student|`DailyLogInput`|`DailyEntry`|
+|POST|`/api/v1/daily-log/<eid>/files`|student|`multipart one png/jpg/webp`|`{fileId,name,size,mime}`|
 |POST|`/api/v1/legacy-import`|student|`{records:object; <=500000 UTF-8 JSON chars}`|`{imported:true,verified:false,unlocksChanged:false}`|
 |POST|`/api/v1/login`|HMAC only|`{email,password}`|`{sessionToken,expiresIn:604800,me:Me}`|
 |POST|`/api/v1/logout`|student|`{}`|`{ok:true}`|
@@ -68,6 +72,7 @@ Flask separately spools/hashes before parsing; temp files closed in finally. All
 |POST|`/api/v1/telegram/connect-link`|student|`{}`|`{url,expiresIn:900}`|
 |POST|`/echo/v1/claims/<path:rid>`|Echo Bearer|`{}`|`{requestId,leaseToken,expiresAt:unixSeconds}`|
 |POST|`/echo/v1/decisions`|Echo Bearer|`{requestId,leaseToken,decision:Decision,riskEvidence?:RiskEvidence}`|`{decisionId,state:"DELIVERED" or "PENDING_APPROVAL",idempotent:boolean}`|
+|PUT|`/api/v1/daily-log/<eid>`|student|`DailyLogInput`|`DailyEntry`|
 
 ## Shared exact types
 
@@ -100,7 +105,23 @@ Flask separately spools/hashes before parsing; temp files closed in finally. All
   result including per-item studentAnswer,correctAnswer,itemHash,topic,correct,clientMismatch}.
   Missing key/hash drift => UNVERIFIED; do NOT deliver a decision.
 - QueueItem practical = {requestId:"practical:<submissionId>",studentId,week,stage,claimExpires,
-  kind:"practical_submission",files:[File]}.
+  kind:"practical_submission",files:[File],practicalModel,planPolicy:"required"|"optional",
+  weekPlanRequired:boolean,nextDueFridayISO,dailyLog:DailyLog|null}.
+  `weekPlanRequired` is the stored `weeks.plan_required` flag. `planPolicy` is the same flag as a word.
+  Stages 1–7 (M1–A7) are optional; stage 8 (A8) is required. The only source of the default is
+  `sfa_api/plan_policy.py`, copied onto the week row when it is created.
+- DailyLog is built only on the server for DAILY_LOG_V1 weeks. It includes counted days, entries,
+  revision counts, file metadata, and `weekPlanRequired`. It never includes answer keys.
+- Practical decision envelope is exactly one of `riskEvidence` (five keys, hard_block) or
+  `noPlan:true` plus `noPlanReason` (20–500 characters). Both is `PLAN_AND_NO_PLAN_CONFLICT`.
+  Neither is `RISK_EVIDENCE_REQUIRED_PENDING`. `noPlan` on a required week is `PLAN_REQUIRED_FOR_WEEK`.
+  A missing or short reason is `NO_PLAN_REASON_REQUIRED`. `noPlan` forces `finalHardBlock:false`
+  (`FINAL_HARD_BLOCK_MISMATCH` otherwise), skips the risk event, and still uses the 40/40/20
+  thresholds and, on DAILY_LOG_V1, the routine gate. An ungrounded no-trade note is an ordinary
+  technicalMacro shortfall, not a new penalty code.
+- Student daily log: `GET/POST /api/v1/daily-log`, `PUT /api/v1/daily-log/<id>`,
+  `POST /api/v1/daily-log/<id>/files`. Echo history: `GET /echo/v1/daily-log?student=&week=`.
+  Entry files use the same Echo file route as practical files. LEGACY weeks are unchanged.
 - Report = {student:{student,alias,stage,current_week},markdown:string,weaknesses:[{student,id,skill,first_week,
   evidence:JSON-string,status:"OPEN"|"IMPROVING"|"RESOLVED",last_drilled,clean_weeks,last_clean_week}],
   weeks:[{student,week,stage,state,attempt,assignment:JSON-string|null,quiz_verdict,practical_verdict}],

@@ -50,6 +50,7 @@ def main():
     for name in ('make-admin','reset-password'):
         sp.add_parser(name).add_argument('email')
     x=sp.add_parser('override'); x.add_argument('decisionId'); x.add_argument('--reason',required=True)
+    x=sp.add_parser('open-practical-window'); x.add_argument('student'); x.add_argument('--reason',required=True)
     sp.add_parser('import-legacy').add_argument('path')
     x=sp.add_parser('adopt-legacy'); x.add_argument('studentId'); x.add_argument('email')
     a=p.parse_args()
@@ -85,6 +86,7 @@ def main():
             r=c.execute('UPDATE students SET email=? WHERE student=? AND email IS NULL RETURNING student',(email_value(a.email),a.studentId)).fetchone(); require(r is not None,'Unknown/already adopted legacy account')
         print(s.reset_link(a.email))
     elif a.command=='override': s.override(a.decisionId,a.reason); print('Retracted; audit history retained; pending regrading')
+    elif a.command=='open-practical-window': print(json.dumps(s.open_practical_window(a.student,a.reason)))
     elif a.command=='import-legacy': print(json.dumps(import_sqlite(s,a.path)))
     else: print(json.dumps({'database':'ok','students':s.db.rows('SELECT count(*) AS n FROM students')[0]['n'],'pendingRequests':len(s.queue()),'approvalRequired':s.config.approval_required}))
 if __name__=='__main__': main()

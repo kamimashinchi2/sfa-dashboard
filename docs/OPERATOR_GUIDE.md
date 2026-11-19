@@ -51,6 +51,7 @@ The command prints one link, valid for 30 minutes, single use. Send it in privat
 ```bash
 sudo sfa status
 sudo sfa override DECISION_ID --reason 'What was wrong with this grade'
+sudo sfa open-practical-window STUDENT_ID --reason 'Why this exception is open'
 sudo sfa backup-now
 sudo sfa show-echo-key
 sudo sfa check-echo-key
@@ -60,6 +61,10 @@ sudo sfa rotate-echo-key
 `status` shows that the database answers and how many students and pending reviews there are.
 
 `override` works only within 24 hours of delivery, and only if the student has not already done later work. Say what was wrong. The student is told. Echo gets a new queue item.
+
+`open-practical-window` opens one exceptional practical-upload day for a student on the daily-log model, after a missed Friday. The reason is stored. It does not change the answer key and it does not print secrets. Weeks issued before this release stay on the old upload rules.
+
+On the daily-log model the Final Paper Plan is optional in M1–A7 and required only in A8. A no-plan decision uses `noPlan: true` and a reason instead of risk evidence. A8 rejects that with `PLAN_REQUIRED_FOR_WEEK`. The installer applies the new tables when it runs `sfa migrate`.
 
 `check-echo-key` prints `ok` or `mismatch`. It does not print the key. If it says mismatch, run the installer configure step again or `sudo sfa rotate-echo-key`, then restart is included in rotate.
 

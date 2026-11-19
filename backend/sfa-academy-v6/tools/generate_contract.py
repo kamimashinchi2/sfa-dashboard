@@ -79,7 +79,23 @@ text+='''
   result including per-item studentAnswer,correctAnswer,itemHash,topic,correct,clientMismatch}.
   Missing key/hash drift => UNVERIFIED; do NOT deliver a decision.
 - QueueItem practical = {requestId:"practical:<submissionId>",studentId,week,stage,claimExpires,
-  kind:"practical_submission",files:[File]}.
+  kind:"practical_submission",files:[File],practicalModel,planPolicy:"required"|"optional",
+  weekPlanRequired:boolean,nextDueFridayISO,dailyLog:DailyLog|null}.
+  `weekPlanRequired` is the stored `weeks.plan_required` flag. `planPolicy` is the same flag as a word.
+  Stages 1–7 (M1–A7) are optional; stage 8 (A8) is required. The only source of the default is
+  `sfa_api/plan_policy.py`, copied onto the week row when it is created.
+- DailyLog is built only on the server for DAILY_LOG_V1 weeks. It includes counted days, entries,
+  revision counts, file metadata, and `weekPlanRequired`. It never includes answer keys.
+- Practical decision envelope is exactly one of `riskEvidence` (five keys, hard_block) or
+  `noPlan:true` plus `noPlanReason` (20–500 characters). Both is `PLAN_AND_NO_PLAN_CONFLICT`.
+  Neither is `RISK_EVIDENCE_REQUIRED_PENDING`. `noPlan` on a required week is `PLAN_REQUIRED_FOR_WEEK`.
+  A missing or short reason is `NO_PLAN_REASON_REQUIRED`. `noPlan` forces `finalHardBlock:false`
+  (`FINAL_HARD_BLOCK_MISMATCH` otherwise), skips the risk event, and still uses the 40/40/20
+  thresholds and, on DAILY_LOG_V1, the routine gate. An ungrounded no-trade note is an ordinary
+  technicalMacro shortfall, not a new penalty code.
+- Student daily log: `GET/POST /api/v1/daily-log`, `PUT /api/v1/daily-log/<id>`,
+  `POST /api/v1/daily-log/<id>/files`. Echo history: `GET /echo/v1/daily-log?student=&week=`.
+  Entry files use the same Echo file route as practical files. LEGACY weeks are unchanged.
 - Report = {student:{student,alias,stage,current_week},markdown:string,weaknesses:[{student,id,skill,first_week,
   evidence:JSON-string,status:"OPEN"|"IMPROVING"|"RESOLVED",last_drilled,clean_weeks,last_clean_week}],
   weeks:[{student,week,stage,state,attempt,assignment:JSON-string|null,quiz_verdict,practical_verdict}],

@@ -7,7 +7,7 @@ except ImportError:  # tests/minimal environments; production installer includes
     magic=None
 from .contracts import require, Invalid
 MAX_BYTES=20*1024*1024
-ALLOWED={'.pdf':{'application/pdf'},'.png':{'image/png'},'.jpg':{'image/jpeg'},'.jpeg':{'image/jpeg'},'.txt':{'text/plain'},'.md':{'text/plain'},'.docx':{'application/zip','application/vnd.openxmlformats-officedocument.wordprocessingml.document'}}
+ALLOWED={'.pdf':{'application/pdf'},'.png':{'image/png'},'.jpg':{'image/jpeg'},'.jpeg':{'image/jpeg'},'.webp':{'image/webp'},'.txt':{'text/plain'},'.md':{'text/plain'},'.docx':{'application/zip','application/vnd.openxmlformats-officedocument.wordprocessingml.document'}}
 
 def check_file(path,name):
     ext=Path(name).suffix.lower(); require(ext in ALLOWED,'FILE_TYPE_REJECTED')
@@ -16,6 +16,7 @@ def check_file(path,name):
     elif head.startswith(b'%PDF-'): mime='application/pdf'
     elif head.startswith(b'\x89PNG\r\n\x1a\n'): mime='image/png'
     elif head.startswith(b'\xff\xd8\xff'): mime='image/jpeg'
+    elif len(head)>=12 and head.startswith(b'RIFF') and head[8:12]==b'WEBP': mime='image/webp'
     elif head.startswith(b'PK\x03\x04'): mime='application/zip'
     else:
         try:
@@ -25,6 +26,7 @@ def check_file(path,name):
     if ext=='.pdf': require(head.startswith(b'%PDF-'),'FILE_MAGIC_REJECTED')
     if ext=='.png': require(head.startswith(b'\x89PNG\r\n\x1a\n'),'FILE_MAGIC_REJECTED')
     if ext in ('.jpg','.jpeg'): require(head.startswith(b'\xff\xd8\xff'),'FILE_MAGIC_REJECTED')
+    if ext=='.webp': require(len(head)>=12 and head.startswith(b'RIFF') and head[8:12]==b'WEBP','FILE_MAGIC_REJECTED')
     if ext in ('.txt','.md'):
         try: text=path.read_text('utf-8')
         except UnicodeError: raise Invalid('TEXT_MUST_BE_UTF8')

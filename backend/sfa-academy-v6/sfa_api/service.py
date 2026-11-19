@@ -5,7 +5,9 @@ from zoneinfo import ZoneInfo
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, InvalidHashError
 from .core import CoreService, now
-from .contracts import require, canonical, validate_decision, validate_quiz, Invalid
+from .contracts import require, canonical, validate_decision, validate_quiz, Invalid, text
+from .daily import DailyMixin, require_window, server_due_friday, parse_iso
+from .plan_policy import plan_policy, plan_policy_table
 from .security import token_hash
 from .uploads import store
 
@@ -21,7 +23,7 @@ def email_value(v):
 def password_value(v):
     require(isinstance(v,str) and 12<=len(v)<=256,'PASSWORD_12_TO_256_REQUIRED'); return v
 
-class Service(CoreService):
+class Service(DailyMixin, CoreService):
     def invite(self,days=30,max_uses=100):
         require(1<=days<=365 and 1<=max_uses<=10000,'INVITE_LIMIT_INVALID')
         token=secrets.token_urlsafe(32)
@@ -38,7 +40,7 @@ class Service(CoreService):
             require(not c.execute('SELECT 1 FROM students WHERE email=?',(email,)).fetchone(),'SIGNUP_UNAVAILABLE')
             sid='S'+str(c.execute("SELECT nextval('student_number') AS n").fetchone()['n'])
             c.execute('INSERT INTO students(student,alias,enrollment_hash,email,display_name,password_hash,notice_accepted) VALUES(?,?,?,?,?,?,?)',(sid,'Learner-'+sid,token_hash(secrets.token_urlsafe(32)),email,name.strip(),ph,now()))
-            c.execute("INSERT INTO weeks(student,week,stage,state) VALUES(?,1,1,'LESSON_OPEN')",(sid,))
+            self._insert_week(c,sid,1,1,'LESSON_OPEN')
             c.execute('UPDATE invites SET uses=uses+1 WHERE hash=?',(inv['hash'],))
             self._session(c,sid,token)
             self._event(c,'join:'+sid,sid,'ACCOUNT_CREATED',{'dataNoticeVersion':1})
@@ -129,7 +131,9 @@ class Service(CoreService):
     def upload(self,s,sid,uploaded):
         with self.db.tx() as c:
             r=c.execute('SELECT * FROM submissions WHERE id=? AND student=?',(sid,s['student'])).fetchone()
-            require(r and r['state']=='DRAFT' and self._week(c,s['student'])['week']==r['week'],'DRAFT_NOT_OPEN')
+            w=self._week(c,s['student'])
+            require(r and r['state']=='DRAFT' and w['week']==r['week'],'DRAFT_NOT_OPEN')
+            require_window(self,c,w)
             require(c.execute('SELECT count(*) AS n FROM files WHERE submission=?',(sid,)).fetchone()['n']<12,'MAX_12_FILES')
             fid=uuid.uuid4().hex; data=store(uploaded.stream,self.config.root/'uploads'/s['student']/sid,fid,uploaded.filename)
             try: c.execute('INSERT INTO files(id,submission,path,digest,name,size,mime) VALUES(?,?,?,?,?,?,?)',(fid,sid,data['path'],data['digest'],data['name'],data['size'],data['mime']))
@@ -155,8 +159,16 @@ class Service(CoreService):
                 if self.db.rows('SELECT 1 FROM mentor_decisions WHERE target=?',(rid,)): continue
                 claim=self.db.rows('SELECT expires FROM claims WHERE request=? AND expires>?',(rid,now()))
                 item={'requestId':rid,'studentId':r['student'],'week':r['week'],'claimExpires':claim[0]['expires'] if claim else None}
+                wrow=self.db.rows('SELECT * FROM weeks WHERE student=? AND week=?',(r['student'],r['week']))
+                model=(wrow[0]['practical_model'] if wrow else None) or 'LEGACY'
+                stage=json.loads(r['body'])['stage'] if kind=='quiz' else r['stage']
+                week_required=bool(wrow[0]['plan_required']) if wrow and wrow[0].get('plan_required') is not None else plan_policy(stage)=='required'
+                item.update(practicalModel=model,planPolicy='required' if week_required else 'optional',weekPlanRequired=week_required,nextDueFridayISO=server_due_friday(self.local_now()).isoformat(timespec='seconds'))
                 if kind=='quiz': item.update(kind='quiz_assessment',packet=json.loads(r['body']),assessment=json.loads(r['assessment']))
-                else: item.update(kind='practical_submission',stage=r['stage'],files=self.file_list(r['id']))
+                else:
+                    packet=self.build_daily_log_packet_public(r) if model=='DAILY_LOG_V1' else None
+                    if packet is not None: packet['weekPlanRequired']=week_required
+                    item.update(kind='practical_submission',stage=r['stage'],files=self.file_list(r['id']),dailyLog=packet)
                 out.append(item)
         return out
     def file_list(self,sid):
@@ -169,10 +181,15 @@ class Service(CoreService):
             require(not r or r['expires']<=now(),'CLAIM_BUSY')
             c.execute('INSERT INTO claims VALUES(?,?,?) ON CONFLICT(request) DO UPDATE SET lease=EXCLUDED.lease,expires=EXCLUDED.expires',(rid,token_hash(token),now()+1800))
         return {'requestId':rid,'leaseToken':token,'expiresAt':now()+1800}
-    def decision(self,p,rid=None,lease=None,risk_evidence=None):
+    def decision(self,p,rid=None,lease=None,risk_evidence=None,no_plan=False,no_plan_reason=None):
         require(isinstance(p,dict),'DECISION_REQUIRED')
         isquiz=p.get('format')=='sfa-quiz-decision'; tid=p.get('attemptId') if isquiz else p.get('submissionId'); targetkey=('quiz:' if isquiz else 'practical:')+str(tid)
         require(rid==targetkey,'REQUEST_MISMATCH'); digest=token_hash(canonical(p))
+        if no_plan not in (None, False, True): raise Invalid('NO_PLAN_REASON_REQUIRED', error='NO_PLAN_REASON_REQUIRED')
+        if no_plan and risk_evidence is not None: raise Invalid('PLAN_AND_NO_PLAN_CONFLICT', error='PLAN_AND_NO_PLAN_CONFLICT')
+        if no_plan:
+            if not isinstance(no_plan_reason, str) or not 20<=len(no_plan_reason)<=500: raise Invalid('NO_PLAN_REASON_REQUIRED', error='NO_PLAN_REASON_REQUIRED')
+            text(no_plan_reason, 500)
         with self.db.tx() as c:
             old=c.execute('SELECT * FROM mentor_decisions WHERE target=? OR id=?',(rid,p.get('decisionId'))).fetchone()
             if old:
@@ -182,23 +199,36 @@ class Service(CoreService):
             r=c.execute('SELECT * FROM '+('quizzes WHERE attempt=?' if isquiz else 'submissions WHERE id=?'),(tid,)).fetchone(); require(r is not None,'TARGET_MISSING')
             target={'id':tid,'student':r['student'],'week':r['week'],'stage':json.loads(r['body'])['stage'] if isquiz else r['stage']}
             if isquiz: target['assessment']=json.loads(r['assessment'])
+            week_row=c.execute('SELECT * FROM weeks WHERE student=? AND week=?',(r['student'],r['week'])).fetchone()
+            model=(week_row['practical_model'] if week_row else None) or 'LEGACY'
             required=[w['id'] for w in c.execute("SELECT id FROM weaknesses WHERE student=? AND status!='RESOLVED'",(r['student'],))]
+            counted=self.counted_for_decision(c,r) if (not isquiz and model=='DAILY_LOG_V1') else []
             if not isquiz:
-                from .risk import hard_block
-                blocked=hard_block(risk_evidence)
-                require(p.get('finalHardBlock') is blocked,'FINAL_HARD_BLOCK_MISMATCH')
-            validate_decision(p,target,self.config,required)
-            # Dates and explicit hard-block evidence cannot be weakened by grading totals.
+                plan_required=bool(week_row['plan_required']) if week_row and week_row.get('plan_required') is not None else plan_policy(target['stage'])=='required'
+                if no_plan:
+                    if plan_required: raise Invalid('PLAN_REQUIRED_FOR_WEEK', error='PLAN_REQUIRED_FOR_WEEK')
+                    if p.get('finalHardBlock') is not False: raise Invalid('FINAL_HARD_BLOCK_MISMATCH', error='FINAL_HARD_BLOCK_MISMATCH')
+                else:
+                    from .risk import hard_block
+                    blocked=hard_block(risk_evidence)
+                    require(p.get('finalHardBlock') is blocked,'FINAL_HARD_BLOCK_MISMATCH')
+            validate_decision(p,target,self.config,required,model,self._new_week_model(),counted,bool(no_plan))
             assignment=p.get('assignment') or p.get('remedialAssignment')
             if assignment:
-                due=datetime.fromisoformat(assignment['dueAtISO'].replace('Z','+00:00')); delta=due-datetime.now(due.tzinfo)
-                require(timedelta(days=5)<=delta<=timedelta(days=9),'DUE_DATE_MUST_BE_ABOUT_ONE_WEEK')
+                due_model=model if p.get('assignment') else self._new_week_model()
+                if due_model=='DAILY_LOG_V1':
+                    require(parse_iso(assignment['dueAtISO'])==server_due_friday(self.local_now()),'DUE_DATE_MUST_BE_SERVER_FRIDAY')
+                else:
+                    due=datetime.fromisoformat(assignment['dueAtISO'].replace('Z','+00:00')); delta=due-datetime.now(due.tzinfo)
+                    require(timedelta(days=5)<=delta<=timedelta(days=9),'DUE_DATE_MUST_BE_ABOUT_ONE_WEEK')
             w=self._week(c,r['student']); require(w['week']==r['week'] and w['state']==('QUIZ_SUBMITTED' if isquiz else 'PRACTICAL_SUBMITTED'),'STALE_ASSESSMENT')
             if isquiz: require(w['attempt']==tid,'ATTEMPT_SUPERSEDED')
             state='PENDING_APPROVAL' if self.config.approval_required else 'READY'
             c.execute('INSERT INTO mentor_decisions(id,target,student,week,kind,body,digest,state,approved) VALUES(?,?,?,?,?,?,?,?,?)',(p['decisionId'],rid,r['student'],r['week'],'quiz' if isquiz else 'practical',canonical(p),digest,state,int(not self.config.approval_required)))
             row=c.execute('SELECT * FROM mentor_decisions WHERE id=?',(p['decisionId'],)).fetchone()
-            if not isquiz: self._event(c,'risk-evidence:'+p['decisionId'],r['student'],'FINAL_PLAN_RISK_EVIDENCE',risk_evidence)
+            if not isquiz and no_plan: self._event(c,'no-plan:'+p['decisionId'],r['student'],'NO_PLAN',{'noPlan':True,'noPlanReason':no_plan_reason})
+            elif not isquiz: self._event(c,'risk-evidence:'+p['decisionId'],r['student'],'FINAL_PLAN_RISK_EVIDENCE',risk_evidence)
+            if not isquiz and model=='DAILY_LOG_V1': self._event(c,'routine-gate:'+p['decisionId'],r['student'],'ROUTINE_GATE',p['routineGate'])
             if state=='READY': self.deliver(c,row,p)
             else: self._notify(c,r['student'],'DECISION_PENDING_APPROVAL',{'decisionId':p['decisionId']},student_notice=False)
             c.execute('DELETE FROM claims WHERE request=?',(rid,))
@@ -235,7 +265,7 @@ class Service(CoreService):
                 require(not c.execute('SELECT 1 FROM submissions WHERE student=? AND week=?',(sid,row['week'])).fetchone(),'PRACTICAL_STARTED_CONTACT_MENTOR')
             c.execute('UPDATE students SET stage=?,current_week=? WHERE student=?',(old['stage'],old['current_week'],sid))
             c.execute('DELETE FROM weeks WHERE student=?',(sid,))
-            for w in snapshot['weeks']: c.execute('INSERT INTO weeks(student,week,stage,state,attempt,assignment,quiz_verdict,practical_verdict) VALUES(?,?,?,?,?,?,?,?)',tuple(w[k] for k in ('student','week','stage','state','attempt','assignment','quiz_verdict','practical_verdict')))
+            for w in snapshot['weeks']: c.execute('INSERT INTO weeks(student,week,stage,state,attempt,assignment,quiz_verdict,practical_verdict,issued_at,due_friday,window_start,practical_model,resume_state,plan_required) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(w['student'],w['week'],w['stage'],w['state'],w.get('attempt'),w.get('assignment'),w.get('quiz_verdict'),w.get('practical_verdict'),w.get('issued_at'),w.get('due_friday'),w.get('window_start'),w.get('practical_model') or 'LEGACY',w.get('resume_state'), int(w['plan_required']) if w.get('plan_required') is not None else int(plan_policy(w['stage'])=='required')))
             c.execute('DELETE FROM weaknesses WHERE student=?',(sid,))
             for w in snapshot['weaknesses']: c.execute('INSERT INTO weaknesses VALUES(?,?,?,?,?,?,?,?,?)',tuple(w[k] for k in ('student','id','skill','first_week','evidence','status','last_drilled','clean_weeks','last_clean_week')))
             # Reopen assessment under a new target; immutable old decision remains in audit history.

@@ -428,6 +428,127 @@
             "dueAtISO": {
               "type": "string",
               "format": "date-time"
+            },
+            "dailyTasks": {
+              "type": "array",
+              "maxItems": 40,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "taskId",
+                  "kind",
+                  "task",
+                  "minDays"
+                ],
+                "properties": {
+                  "taskId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,40}$"
+                  },
+                  "kind": {
+                    "enum": [
+                      "CORE",
+                      "SPIRAL",
+                      "WEAKNESS"
+                    ]
+                  },
+                  "stage": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8
+                  },
+                  "skill": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "weaknessId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,160}$"
+                  },
+                  "minDays": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31
+                  },
+                  "task": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "fa",
+                      "en"
+                    ],
+                    "properties": {
+                      "fa": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      },
+                      "en": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "dailyLogRequirement": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "minDays",
+                "eligibleWeekdays",
+                "timezone",
+                "freshCount"
+              ],
+              "properties": {
+                "minDays": {
+                  "const": 3
+                },
+                "eligibleWeekdays": {
+                  "type": "array",
+                  "minItems": 5,
+                  "maxItems": 5,
+                  "items": {
+                    "enum": [
+                      "MON",
+                      "TUE",
+                      "WED",
+                      "THU",
+                      "FRI"
+                    ]
+                  }
+                },
+                "timezone": {
+                  "const": "Europe/Amsterdam"
+                },
+                "freshCount": {
+                  "const": true
+                }
+              }
+            },
+            "fridayDeliverable": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "fa",
+                "en"
+              ],
+              "properties": {
+                "fa": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2400
+                },
+                "en": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2400
+                }
+              }
             }
           }
         }
@@ -664,6 +785,127 @@
               "dueAtISO": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "dailyTasks": {
+                "type": "array",
+                "maxItems": 40,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "taskId",
+                    "kind",
+                    "task",
+                    "minDays"
+                  ],
+                  "properties": {
+                    "taskId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_.:-]{1,40}$"
+                    },
+                    "kind": {
+                      "enum": [
+                        "CORE",
+                        "SPIRAL",
+                        "WEAKNESS"
+                      ]
+                    },
+                    "stage": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 8
+                    },
+                    "skill": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "weaknessId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_.:-]{1,160}$"
+                    },
+                    "minDays": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 31
+                    },
+                    "task": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "fa",
+                        "en"
+                      ],
+                      "properties": {
+                        "fa": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1200
+                        },
+                        "en": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1200
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "dailyLogRequirement": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "minDays",
+                  "eligibleWeekdays",
+                  "timezone",
+                  "freshCount"
+                ],
+                "properties": {
+                  "minDays": {
+                    "const": 3
+                  },
+                  "eligibleWeekdays": {
+                    "type": "array",
+                    "minItems": 5,
+                    "maxItems": 5,
+                    "items": {
+                      "enum": [
+                        "MON",
+                        "TUE",
+                        "WED",
+                        "THU",
+                        "FRI"
+                      ]
+                    }
+                  },
+                  "timezone": {
+                    "const": "Europe/Amsterdam"
+                  },
+                  "freshCount": {
+                    "const": true
+                  }
+                }
+              },
+              "fridayDeliverable": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "fa",
+                  "en"
+                ],
+                "properties": {
+                  "fa": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2400
+                  },
+                  "en": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2400
+                  }
+                }
               }
             }
           }
