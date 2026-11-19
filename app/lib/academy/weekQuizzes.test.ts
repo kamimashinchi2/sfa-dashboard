@@ -30,6 +30,7 @@ describe("NotebookLM week banks", () => {
         expect(typeof answer).toBe("string");
       }
       if (item.kind === "order") {
+        // Author order is the answer key. The served payload permutes it per attempt.
         expect(answer).toEqual([0, 1, 2, 3]);
         expect(item.options).toHaveLength(4);
       }

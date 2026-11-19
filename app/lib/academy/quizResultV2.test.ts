@@ -10,13 +10,15 @@ import { withAnswers } from "./hydrateAnswers";
 import { getMission } from "./curriculum";
 import { itemHash } from "./quizHash";
 
+const SECRET = "t".repeat(48);
+
 describe("sfa-quiz-result v2", () => {
   it("builds full-item payload matching schema constraints", async () => {
     const quiz = withAnswers(getMission("M1")!.quiz);
     const items = await Promise.all(
       quiz.map(async (q, i) => ({
         itemId: q.id,
-        itemHash: await itemHash(q),
+        itemHash: itemHash(q, SECRET),
         kind: q.kind,
         displayedOrder: q.kind === "mc" ? [0, 1] : null,
         answer: {

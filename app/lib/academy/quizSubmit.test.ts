@@ -9,6 +9,7 @@ describe("quiz submission", () => {
       attemptId: "11111111-1111-1111-1111-111111111111",
       quizId: "M1",
       buildCommit: "ABCD123",
+      shuffleNonce: "ab".repeat(16),
       items: [
         { id: "M1-Q1", kind: "mc", itemHash: "a".repeat(64) },
         { id: "M1-Q2", kind: "numeric", itemHash: "b".repeat(64) },
@@ -38,6 +39,7 @@ describe("quiz submission", () => {
       attemptId: "x",
       quizId: "M1",
       buildCommit: null,
+      shuffleNonce: "ab".repeat(16),
       items: [{ id: "M1-Q1", kind: "mc" }],
       answers: {},
       touchedIds: [],

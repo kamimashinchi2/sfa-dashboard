@@ -10,6 +10,7 @@ import {
 import { buildQuizSubmission, normalizeBuildCommit } from "../../lib/academy/quizSubmit";
 import { buildDisplayedQuiz, displayToCanonicalMc } from "../../lib/academy/quizShuffle";
 import { ASSESSMENT_CRITERIA_VERSION } from "../../lib/academy/assessmentVersion";
+import { QUIZ_THRESHOLDS } from "../../lib/academy/thresholds";
 import { resolveBuildStamp } from "../../lib/academy/buildStamp";
 import {
   prefsStore,
@@ -31,6 +32,7 @@ export type QuizScoredPayload = {
 export default function QuizGate({
   items,
   quizId,
+  shuffleNonce,
   onScored,
   initialAnswers,
   initialScore: _initialScore,
@@ -39,6 +41,7 @@ export default function QuizGate({
 }: {
   items: PublicQuizItem[];
   quizId: string;
+  shuffleNonce: string;
   onScored: (score: number, weakTopics: string[], attempt: QuizAttemptRecord) => void;
   initialAnswers?: Record<string, QuizAnswer>;
   initialScore?: number | null;
@@ -167,6 +170,7 @@ export default function QuizGate({
         attemptId,
         quizId,
         buildCommit: normalizeBuildCommit(stamp.commit),
+        shuffleNonce,
         items: items.map((item) => ({
           id: item.id,
           kind: item.kind,
@@ -286,7 +290,7 @@ export default function QuizGate({
           correct: scored.correct,
           total: scored.total,
           score: scored.score,
-          numericPass: scored.score >= 80,
+          numericPass: scored.score >= QUIZ_THRESHOLDS.approvedMin,
           weakTopics: scored.weakTopics,
         },
         unverifiedClaim: true,

@@ -27,7 +27,7 @@ describe("grading gates", () => {
     expect(scoredLow.score).toBeLessThan(80);
   });
 
-  it("passing score + HARD_BLOCK retains score / holds readiness", () => {
+  it("passing quiz score + HARD_BLOCK stays a remediation, not an approval", () => {
     const r = evaluateReadiness({
       quizScore: 80,
       taskComplete: true,
@@ -36,8 +36,8 @@ describe("grading gates", () => {
       missionRequiresRisk: true,
     });
     expect(r.numericPass).toBe(true);
-    expect(r.readiness).toBe("PENDING_REVIEW");
-    expect(r.ownerReviewRequired).toBe(true);
+    expect(r.readiness).toBe("REMEDIATION");
+    expect(r.ownerReviewRequired).toBe(false);
   });
 
   it("null risk on non-risk mission is MENTOR_PENDING not remediation", () => {
@@ -52,14 +52,15 @@ describe("grading gates", () => {
     expect(r.readiness).toBe("MENTOR_PENDING");
   });
 
-  it("performance card OWNER_REVIEW_REQUIRED when total>=80 and HARD_BLOCK", () => {
+  it("performance card is NOT_APPROVED when the point total passes and HARD_BLOCK is set", () => {
     const card = performanceCard({
-      riskScore: 90,
-      technicalMacroScore: 90,
-      journalingScore: 90,
-      riskStatus: "HARD_BLOCK",
+      risk: 36,
+      technicalMacro: 36,
+      journalPsychology: 18,
+      hardBlock: true,
     });
-    expect(card.total).toBeGreaterThanOrEqual(80);
-    expect(card.advancement).toBe("OWNER_REVIEW_REQUIRED");
+    expect(card.total).toBe(90);
+    expect(card.verdict).toBe("NOT_APPROVED");
+    expect(card.unlockEligible).toBe(false);
   });
 });

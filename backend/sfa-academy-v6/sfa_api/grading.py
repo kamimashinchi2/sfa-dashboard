@@ -1,8 +1,19 @@
 """Private deterministic recomputation. No LLM call, browser key or prefix matching."""
-import json
+import json, re
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from .contracts import require
+
+COMMIT_RE = re.compile(r'[0-9a-f]{7,40}\Z')
+
+def normalize_commit(commit):
+    """Strip and lowercase. None unless the value is 7–40 hex characters.
+    The Next build stamp is a short sha; answer-key files use the full sha.
+    """
+    if not isinstance(commit, str): return None
+    commit = commit.strip().lower()
+    if COMMIT_RE.fullmatch(commit) is None: return None
+    return commit
 
 DIGITS=str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩٫٬','01234567890123456789.,')
 
@@ -17,13 +28,19 @@ def numeric(value):
     except (InvalidOperation,ValueError): return None
 
 def load_key(path,commit):
-    if not path or not commit: return None
+    if not path: return None
+    norm=normalize_commit(commit)
+    if norm is None: return None
     root=Path(path); files=sorted(root.glob('*.json')) if root.is_dir() else [root]
     matches=[]
     for file in files:
         if not file.is_file(): continue
         key=json.loads(file.read_text())
-        if key.get('format')=='sfa-answer-key' and key.get('commit')==commit: matches.append(key)
+        if key.get('format')!='sfa-answer-key': continue
+        stored=normalize_commit(key.get('commit'))
+        if stored is None: continue
+        # Short client stamps match the full key commit. Equality still matches.
+        if stored==norm or stored.startswith(norm): matches.append(key)
     require(len(matches)<=1,'Ambiguous answer keys for build commit')
     return matches[0] if matches else None
 

@@ -5,7 +5,6 @@
 import { mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 const repo = process.argv[2];
@@ -27,19 +26,31 @@ const quizzes = await import(pathToFileURL(join(tmp, "assessmentVersion.ts")).hr
 const answerSource=stripServerOnly(readFileSync(join(src,"server/answerKeyData.ts"),"utf8"));
 writeFileSync(join(tmp,"answerKeyData.ts"),answerSource);
 const {QUIZ_ANSWER_KEY}=await import(pathToFileURL(join(tmp,"answerKeyData.ts")).href);
+const {itemHash, legacyItemHash, ITEM_HASH_VERSION}=await import(pathToFileURL(join(tmp,"quizHash.ts")).href);
 const hydrate=(items)=>items.map(i=>{ const answer=QUIZ_ANSWER_KEY[i.id]; if(answer===undefined) throw new Error("Missing private answer: "+i.id); return {...i,answer}; });
 
-// Item hash = SHA-256 over canonical JSON of the scorable item content (same rule as the packet).
-function canon(v) {
-  if (v === null || typeof v !== "object") return JSON.stringify(v);
-  if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
-  return "{" + Object.keys(v).sort().map((k) => JSON.stringify(k) + ":" + canon(v[k])).join(",") + "}";
+function readHmacSecret() {
+  const file = process.env.SFA_QUIZ_ITEM_HMAC_FILE;
+  const raw = file ? readFileSync(file, "utf8") : (process.env.SFA_QUIZ_ITEM_HMAC_KEY || "");
+  const secret = String(raw).trim();
+  if (secret.length < 32) {
+    console.error("SFA_QUIZ_ITEM_HMAC_KEY or SFA_QUIZ_ITEM_HMAC_FILE is required (32+ characters). The value is not printed.");
+    process.exit(2);
+  }
+  return secret;
 }
-const itemHash = (i) => createHash("sha256").update(canon({ id: i.id, kind: i.kind, prompt: i.prompt, options: i.options ?? null, answer: i.answer }), "utf8").digest("hex");
+const secret = readHmacSecret();
 
-const out = { format: "sfa-answer-key", commit, assessmentCriteriaVersion: quizzes.ASSESSMENT_CRITERIA_VERSION, quizzes: {} };
+const out = { format: "sfa-answer-key", hashVersion: ITEM_HASH_VERSION, commit, assessmentCriteriaVersion: quizzes.ASSESSMENT_CRITERIA_VERSION, quizzes: {} };
 const add = (quizId, items) => {
-  out.quizzes[quizId] = items.map((i) => ({ itemId: i.id, kind: i.kind, answer: i.answer, remediationTopic: i.remediationTopic, optionCount: i.options?.length ?? null, itemHash: itemHash(i) }));
+  out.quizzes[quizId] = items.map((i) => {
+    const mac = itemHash(i, secret);
+    if (mac === legacyItemHash(i)) {
+      console.error("item hash collided with the legacy unsalted digest");
+      process.exit(1);
+    }
+    return { itemId: i.id, kind: i.kind, answer: i.answer, remediationTopic: i.remediationTopic, optionCount: i.options?.length ?? null, itemHash: mac, hashVersion: ITEM_HASH_VERSION };
+  });
 };
 for (const m of cur.missions) add(m.id, hydrate(m.quiz));
 for (const a of adv.advancedModules) add(a.id, hydrate(a.quiz));

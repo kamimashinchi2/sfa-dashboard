@@ -4,6 +4,17 @@ PostgreSQL integration fixture starts a real temporary cluster when pg_ctl exist
 import contextlib,json,os,shutil,socket,sqlite3,subprocess,tempfile
 from pathlib import Path
 import pytest
+
+# Tests must not be able to reach the live academy, even if a real API key is in the environment.
+os.environ['SFA_FORBID_LIVE_HOST']='1'
+_ORIGINAL_GETADDRINFO=socket.getaddrinfo
+
+def _guarded_getaddrinfo(host, *args, **kwargs):
+    if isinstance(host, str) and host.lower().rstrip('.')=='92-5-230-55.sslip.io':
+        raise OSError('Test blocked a connection to the live academy host')
+    return _ORIGINAL_GETADDRINFO(host, *args, **kwargs)
+
+socket.getaddrinfo=_guarded_getaddrinfo
 from sfa_api.config import Config
 from sfa_api.service import Service
 from sfa_api.db import DB

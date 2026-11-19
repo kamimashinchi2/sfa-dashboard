@@ -91,6 +91,8 @@ def test_installer_static_safety():
     assert 'stdbuf -oL' in s and 'BASH_XTRACEFD=4' in s and '--verbose' in s
     assert s.index("exec /opt/sfa/.venv/bin/python -m sfa_api.cli") < s.index('discover "$APP_DIR"')
     assert 'Node 22.6 or newer is required' in s and 'nvm install 22' in s
+    assert 'quiz-item-hmac-key' in s and 'SFA_QUIZ_ITEM_HMAC_FILE' in s
+    assert 'echo "$SFA_QUIZ' not in s and "printf '%s\\n' \"$SFA_QUIZ" not in s
     assert 'tar_rc' in s and 'cohort-invite is created only if missing' in s
     assert 'umask 022' in s and 'publish_opt_sfa /opt/sfa' in s
     assert 'wait_unit_http sfa-api' in s and 'last HTTP' in s

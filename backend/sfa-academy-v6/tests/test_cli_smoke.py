@@ -130,6 +130,29 @@ def test_echo_client_help_and_missing_key_is_a_clean_error():
     assert queued.returncode == 1
     assert "Echo client failed:" in queued.stderr
     assert "Traceback" not in queued.stderr
+    assert "92-5-230-55.sslip.io" not in queued.stderr
+
+
+def test_echo_client_does_not_dial_the_live_host_when_the_key_is_set():
+    script = ROOT / "echo_client.py"
+    fake_key = "k" * 40
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT)
+    env["SFA_FORBID_LIVE_HOST"] = "1"
+    env["ECHO_ACADEMY_API_KEY"] = fake_key
+    env["ECHO_ACADEMY_URL"] = "https://92-5-230-55.sslip.io"
+    refused = subprocess.run([PY, str(script), "queue"], cwd=ROOT, capture_output=True, text=True, env=env)
+    assert refused.returncode == 1
+    assert "Live academy host is forbidden" in refused.stderr
+    assert "Traceback" not in refused.stderr
+    assert fake_key not in refused.stderr
+    assert "HTTP" not in refused.stderr
+    env.pop("ECHO_ACADEMY_URL", None)
+    missing_url = subprocess.run([PY, str(script), "queue"], cwd=ROOT, capture_output=True, text=True, env=env)
+    assert missing_url.returncode == 1
+    assert "ECHO_ACADEMY_URL is required" in missing_url.stderr
+    assert "Traceback" not in missing_url.stderr
+    assert fake_key not in missing_url.stderr
 
 
 def test_generate_contract_runs_without_rewriting_the_contract():
@@ -251,7 +274,7 @@ def test_opt_sfa_permissions_are_traversable(tmp_path):
 def test_pm2_env_file_is_private_and_reachable(tmp_path):
     mod = load_configure()
     state = {"user": "app", "uid": os.getuid(), "gid": os.getgid(), "home": str(tmp_path), "path": "/usr/bin", "app": str(tmp_path), "pm2": "/usr/bin/pm2"}
-    path = mod.write_pm2_env_file(state, {"SFA_BRIDGE_URL": "http://127.0.0.1:8081", "SFA_SITE_ORIGIN": "https://example.test", "SFA_BRIDGE_SECRET": "s" * 40, "SFA_ALLOW_INSECURE_PILOT": "0", "SFA_ALLOW_CONTENT_BYPASS": "0"})
+    path = mod.write_pm2_env_file(state, {"SFA_BRIDGE_URL": "http://127.0.0.1:8081", "SFA_SITE_ORIGIN": "https://example.test", "SFA_BRIDGE_SECRET": "s" * 40, "SFA_QUIZ_ITEM_HMAC_KEY": "h" * 48, "SFA_ALLOW_INSECURE_PILOT": "0", "SFA_ALLOW_CONTENT_BYPASS": "0"})
     assert (path.stat().st_mode & 0o777) == 0o600
     assert (path.parent.stat().st_mode & 0o777) == 0o700
 
@@ -276,6 +299,21 @@ def test_stale_echo_hash_follows_the_key_file(tmp_path):
     assert (tmp_path / "echo-api-key").read_text().strip() == key
 
 
+def test_quiz_hmac_key_is_created_once_and_kept(tmp_path, capsys):
+    mod = load_configure()
+    first = mod.ensure_quiz_hmac_key(tmp_path, chown_root=False)
+    path = tmp_path / "quiz-item-hmac-key"
+    assert path.is_file() and path.read_text().strip() == first
+    assert len(first) >= 32
+    assert path.stat().st_mode & 0o777 == 0o600
+    path.write_text(first + "\n")
+    second = mod.ensure_quiz_hmac_key(tmp_path, chown_root=False)
+    assert second == first
+    captured = capsys.readouterr()
+    assert first not in captured.out
+    assert first not in captured.err
+
+
 def test_echo_key_is_created_once_and_kept(tmp_path):
     mod = load_configure()
     first = mod.ensure_echo_key(tmp_path, chown_root=False)
@@ -292,13 +330,16 @@ def test_pm2_env_does_not_leak_root_environment(tmp_path):
     mod = load_configure()
     state = {"user": "app", "uid": 1000, "gid": 1000, "home": str(tmp_path), "path": "/usr/bin:/bin", "app": "/srv/app", "pm2": "/usr/bin/pm2"}
     secret = "s" * 48
-    proc = mod.pm2_process_env(state, {"SFA_BRIDGE_SECRET": secret, "SFA_SITE_ORIGIN": "https://92-5-230-55.sslip.io", "AWS_SECRET_ACCESS_KEY": "should-not-copy"})
+    hmac_key = "h" * 48
+    proc = mod.pm2_process_env(state, {"SFA_BRIDGE_SECRET": secret, "SFA_QUIZ_ITEM_HMAC_KEY": hmac_key, "SFA_SITE_ORIGIN": "https://92-5-230-55.sslip.io", "AWS_SECRET_ACCESS_KEY": "should-not-copy"})
     assert "AWS_SECRET_ACCESS_KEY" not in proc
-    assert set(proc) == {"HOME", "USER", "LOGNAME", "PATH", "PM2_HOME", "SFA_BRIDGE_URL", "SFA_SITE_ORIGIN", "SFA_BRIDGE_SECRET", "SFA_ALLOW_INSECURE_PILOT", "SFA_ALLOW_CONTENT_BYPASS"}
+    assert set(proc) == {"HOME", "USER", "LOGNAME", "PATH", "PM2_HOME", "SFA_BRIDGE_URL", "SFA_SITE_ORIGIN", "SFA_BRIDGE_SECRET", "SFA_QUIZ_ITEM_HMAC_KEY", "SFA_ALLOW_INSECURE_PILOT", "SFA_ALLOW_CONTENT_BYPASS"}
+    assert proc["SFA_QUIZ_ITEM_HMAC_KEY"] == hmac_key
     argv = mod.runuser_argv(state, tmp_path / "pm2.env", ["restart", "sfa-dashboard", "--update-env"])
     joined = " ".join(argv)
     assert "--preserve-environment" not in joined
     assert secret not in joined
+    assert hmac_key not in joined
     assert "AWS_SECRET_ACCESS_KEY" not in joined
     assert state["app"] in argv
     stale = tmp_path / "old" / "pm2"
@@ -408,13 +449,24 @@ def test_answer_key_extractor_usage_and_repo_smoke():
     assert missing.returncode == 2
     assert "usage:" in missing.stderr
     repo = ROOT.parents[1]
+    secret = "q" * 48
+    env = os.environ.copy()
+    env["SFA_QUIZ_ITEM_HMAC_KEY"] = secret
+    env.pop("SFA_QUIZ_ITEM_HMAC_FILE", None)
     extracted = subprocess.run(
         ["node", str(script), str(repo), "c2b8f22"],
         capture_output=True,
         text=True,
+        env=env,
     )
     assert extracted.returncode == 0, extracted.stderr
+    assert secret not in extracted.stdout
+    assert secret not in extracted.stderr
     payload = json.loads(extracted.stdout)
     assert payload["format"] == "sfa-answer-key"
+    assert payload["hashVersion"] == 2
     assert payload["commit"] == "c2b8f22"
+    sample = payload["quizzes"]["M1"][0]
+    assert sample["hashVersion"] == 2
+    assert len(sample["itemHash"]) == 64
     assert set(payload["quizzes"]) == {"M1", "M2", "M3", "M4", "M5", "A6", "A7", "A8"}

@@ -37,6 +37,7 @@ const FA: Record<string, string> = {
   DOCUMENT_REQUIRED: "فقط تصویر کافی نیست. یک سند PDF، DOCX، TXT یا MD هم بفرستید.",
   DRAFT_REQUIRED: "اول یک فایل بارگذاری کنید، بعد ثبت نهایی.",
   ASSIGNMENT_REQUIRED: "تمرین عملی بعد از تأیید آزمون باز می‌شود.",
+  QUIZ_UNAVAILABLE: "آزمون الان در دسترس نیست. کمی بعد دوباره تلاش کنید.",
 };
 
 const EN: Record<string, string> = {
@@ -77,6 +78,7 @@ const EN: Record<string, string> = {
   DOCUMENT_REQUIRED: "Screenshots alone are not enough. Include a PDF, DOCX, TXT, or MD document.",
   DRAFT_REQUIRED: "Upload a file before the final submit.",
   ASSIGNMENT_REQUIRED: "The practical opens after the quiz is approved.",
+  QUIZ_UNAVAILABLE: "The quiz is unavailable right now. Try again shortly.",
 };
 
 export function bilingual(code: string): { fa: string; en: string } {

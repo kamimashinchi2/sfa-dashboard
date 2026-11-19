@@ -6,13 +6,11 @@ import {
   getPrivateQuizBank,
   stageForQuizId,
 } from "@/app/lib/academy/server/privateQuizBanks";
-import {
-  hydrateQuizAnswers,
-  toPublicQuizItem,
-} from "@/app/lib/academy/server/hydrateQuiz";
+import { hydrateQuizAnswers } from "@/app/lib/academy/server/hydrateQuiz";
 import { bilingual } from "@/app/lib/academy/server/publicErrors";
 import { readSessionToken } from "@/app/lib/academy/server/sessionCookie";
-import { itemHash } from "@/app/lib/academy/quizHash";
+import { newShuffleNonce, serveQuizAttempt } from "@/app/lib/academy/server/quizAttempt";
+import { quizItemHmacKey } from "@/app/lib/academy/server/quizHmacKey";
 import { stageNumberForId } from "@/app/lib/academy/publicCatalog";
 
 /**
@@ -113,9 +111,13 @@ export async function GET(req: Request) {
   const bank = getPrivateQuizBank(id);
   if (!bank) return noStoreJson({ error: "NO_BANK" }, 404);
   const hydrated = hydrateQuizAnswers(bank);
-  const publicQuiz = await Promise.all(
-    hydrated.map(async (item) => toPublicQuizItem(item, await itemHash(item))),
-  );
+  let served;
+  try {
+    served = serveQuizAttempt(hydrated, quizItemHmacKey(), newShuffleNonce());
+  } catch {
+    return noStoreJson({ error: "QUIZ_UNAVAILABLE", ...bilingual("QUIZ_UNAVAILABLE") }, 503);
+  }
+  const publicQuiz = served.quiz;
 
   if (missionId) {
     const mission = getPrivateMission(missionId);
@@ -129,6 +131,7 @@ export async function GET(req: Request) {
       practicalTask: mission.practicalTask,
       lessons: mission.lessons,
       quiz: publicQuiz,
+      shuffleNonce: served.shuffleNonce,
       entitlement: ent.entitlement,
     });
   }
@@ -144,6 +147,7 @@ export async function GET(req: Request) {
     practicalTask: mod.practicalTask,
     lessons: mod.lessons,
     quiz: publicQuiz,
+    shuffleNonce: served.shuffleNonce,
     entitlement: ent.entitlement,
   });
 }

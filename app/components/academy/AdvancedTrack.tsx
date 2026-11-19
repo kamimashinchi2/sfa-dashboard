@@ -73,6 +73,7 @@ function AdvancedBody({ content }: { content: AuthorizedContent }) {
       <QuizGate
         items={mod.quiz}
         quizId={mod.id}
+        shuffleNonce={content.shuffleNonce}
         readOnly={readOnly}
         mode={readOnly ? "READ_ONLY_PREVIEW" : "ASSESSED"}
         initialScore={quizScore}

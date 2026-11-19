@@ -1,0 +1,38 @@
+{
+  "quiz": { "approvedMin": 80, "partialMin": 60 },
+  "practical": {
+    "approvedMin": 80,
+    "partialMin": 65,
+    "caps": { "risk": 40, "technicalMacro": 40, "journalPsychology": 20 }
+  },
+  "quizCases": [
+    { "score": 100, "verdict": "APPROVED" },
+    { "score": 80, "verdict": "APPROVED" },
+    { "score": 79, "verdict": "PARTIALLY_APPROVED" },
+    { "score": 60, "verdict": "PARTIALLY_APPROVED" },
+    { "score": 59, "verdict": "NOT_APPROVED" },
+    { "score": 0, "verdict": "NOT_APPROVED" }
+  ],
+  "practicalCases": [
+    { "risk": 40, "technicalMacro": 40, "journalPsychology": 20, "hardBlock": false, "total": 100, "verdict": "APPROVED", "unlockEligible": true },
+    { "risk": 32, "technicalMacro": 32, "journalPsychology": 16, "hardBlock": false, "total": 80, "verdict": "APPROVED", "unlockEligible": true },
+    { "risk": 32, "technicalMacro": 31, "journalPsychology": 16, "hardBlock": false, "total": 79, "verdict": "PARTIALLY_APPROVED", "unlockEligible": true },
+    { "risk": 26, "technicalMacro": 26, "journalPsychology": 13, "hardBlock": false, "total": 65, "verdict": "PARTIALLY_APPROVED", "unlockEligible": true },
+    { "risk": 26, "technicalMacro": 26, "journalPsychology": 12, "hardBlock": false, "total": 64, "verdict": "NOT_APPROVED", "unlockEligible": false },
+    { "risk": 0, "technicalMacro": 0, "journalPsychology": 0, "hardBlock": false, "total": 0, "verdict": "NOT_APPROVED", "unlockEligible": false },
+    { "risk": 40, "technicalMacro": 40, "journalPsychology": 20, "hardBlock": true, "total": 100, "verdict": "NOT_APPROVED", "unlockEligible": false },
+    { "risk": 32, "technicalMacro": 32, "journalPsychology": 16, "hardBlock": true, "total": 80, "verdict": "NOT_APPROVED", "unlockEligible": false },
+    { "risk": 26, "technicalMacro": 26, "journalPsychology": 13, "hardBlock": true, "total": 65, "verdict": "NOT_APPROVED", "unlockEligible": false }
+  ],
+  "hardBlockCases": [
+    { "currentEquity": "10000", "riskAmount": "100", "netReward": "200", "stopType": "STRUCTURAL_HARD", "blocked": false },
+    { "currentEquity": "10000", "riskAmount": "100.00", "netReward": "200.00", "stopType": "STRUCTURAL_HARD", "blocked": false },
+    { "currentEquity": "10000", "riskAmount": "100.01", "netReward": "300", "stopType": "STRUCTURAL_HARD", "blocked": true },
+    { "currentEquity": "10000", "riskAmount": "100.00000000000000000000000000001", "netReward": "300", "stopType": "STRUCTURAL_HARD", "blocked": true },
+    { "currentEquity": "10000", "riskAmount": "100", "netReward": "199.99", "stopType": "STRUCTURAL_HARD", "blocked": true },
+    { "currentEquity": "10000", "riskAmount": "50", "netReward": "100", "stopType": "STRUCTURAL_HARD", "blocked": false },
+    { "currentEquity": "10000", "riskAmount": "50", "netReward": "99.99", "stopType": "STRUCTURAL_HARD", "blocked": true },
+    { "currentEquity": "10000", "riskAmount": "50", "netReward": "200", "stopType": "MENTAL", "blocked": true },
+    { "currentEquity": "10000", "riskAmount": "50", "netReward": "200", "stopType": "NONE", "blocked": true }
+  ]
+}

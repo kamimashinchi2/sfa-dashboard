@@ -1,6 +1,11 @@
 import type { Attempt, RiskStatus } from "./contracts";
 import type { QuizItem } from "./curriculum";
-import { canonicalize, decCompare, normalizeNumericText } from "./decimal";
+import { canonicalize, decCompare, decMul, normalizeNumericText, parseDec } from "./decimal";
+import {
+  claimPracticalVerdict,
+  QUIZ_THRESHOLDS,
+  type ClaimVerdict,
+} from "./thresholds";
 
 export type QuizAnswer = string | number | number[] | null | undefined;
 
@@ -137,8 +142,11 @@ export function scoreQuiz(
 }
 
 /**
- * Practice unlock: score >= 80, tasks complete, no unresolved practical risk hold.
- * Passing score + HARD_BLOCK retains numeric pass but holds readiness.
+ * Practice unlock: quiz score at the shared approved minimum, tasks complete,
+ * no unresolved practical risk hold.
+ * A HARD_BLOCK is not an approval path. The quiz number can still be a pass,
+ * but readiness stays remediation and nothing unlocks. The only human exception
+ * is the server's time-boxed mentor override.
  * A null risk result for a non-risk task is not failure.
  * MENTOR_PENDING / PENDING_REVIEW are distinct from REMEDIATION.
  */
@@ -151,7 +159,7 @@ export function evaluateReadiness(input: {
 }): Pick<Attempt, "numericPass" | "readiness" | "riskStatus"> & {
   ownerReviewRequired: boolean;
 } {
-  const numericPass = input.quizScore >= 80;
+  const numericPass = input.quizScore >= QUIZ_THRESHOLDS.approvedMin;
   const requiresRisk = input.missionRequiresRisk === true;
   const riskHold =
     requiresRisk &&
@@ -179,10 +187,10 @@ export function evaluateReadiness(input: {
 
   if (requiresRisk && input.riskStatus === "HARD_BLOCK") {
     return {
-      numericPass: true,
+      numericPass,
       riskStatus: input.riskStatus,
-      readiness: "PENDING_REVIEW",
-      ownerReviewRequired: true,
+      readiness: "REMEDIATION",
+      ownerReviewRequired: false,
     };
   }
 
@@ -234,67 +242,71 @@ export function evaluateReadiness(input: {
   };
 }
 
-/** PerformanceCard pillars 40/40/20 — never auto-invent psychology. */
+/**
+ * Practical pillars are already points: risk 0–40, technicalMacro 0–40,
+ * journalPsychology 0–20. The total is their sum (0–100), the same rule the
+ * Python grader uses. A hard block is NOT_APPROVED and does not unlock,
+ * whatever the total is.
+ */
 export function performanceCard(input: {
-  riskScore: number | null;
-  technicalMacroScore: number | null;
-  journalingScore: number | null;
-  riskStatus: RiskStatus | null;
+  risk: number | null;
+  technicalMacro: number | null;
+  journalPsychology: number | null;
+  hardBlock: boolean;
 }): {
   total: number | null;
-  pillars: { risk: number | null; technicalMacro: number | null; journaling: number | null };
-  advancement: "NUMERIC_OK" | "OWNER_REVIEW_REQUIRED" | "INCOMPLETE";
+  pillars: {
+    risk: number | null;
+    technicalMacro: number | null;
+    journalPsychology: number | null;
+  };
+  verdict: ClaimVerdict | null;
+  unlockEligible: boolean;
 } {
-  const { riskScore, technicalMacroScore, journalingScore, riskStatus } = input;
-  if (
-    riskScore === null ||
-    technicalMacroScore === null ||
-    journalingScore === null
-  ) {
-    return {
-      total: null,
-      pillars: {
-        risk: riskScore,
-        technicalMacro: technicalMacroScore,
-        journaling: journalingScore,
-      },
-      advancement: "INCOMPLETE",
-    };
+  const risk = pillarPoints(input.risk, 40);
+  const technicalMacro = pillarPoints(input.technicalMacro, 40);
+  const journalPsychology = pillarPoints(input.journalPsychology, 20);
+  const pillars = { risk, technicalMacro, journalPsychology };
+  if (risk === null || technicalMacro === null || journalPsychology === null) {
+    return { total: null, pillars, verdict: null, unlockEligible: false };
   }
-  const total = Math.round(
-    0.4 * riskScore + 0.4 * technicalMacroScore + 0.2 * journalingScore,
-  );
-  if (total >= 80 && riskStatus === "HARD_BLOCK") {
-    return {
-      total,
-      pillars: {
-        risk: riskScore,
-        technicalMacro: technicalMacroScore,
-        journaling: journalingScore,
-      },
-      advancement: "OWNER_REVIEW_REQUIRED",
-    };
-  }
-  if (total >= 80) {
-    return {
-      total,
-      pillars: {
-        risk: riskScore,
-        technicalMacro: technicalMacroScore,
-        journaling: journalingScore,
-      },
-      advancement: "NUMERIC_OK",
-    };
-  }
+  const total = risk + technicalMacro + journalPsychology;
+  const verdict = claimPracticalVerdict(total, input.hardBlock);
   return {
     total,
-    pillars: {
-      risk: riskScore,
-      technicalMacro: technicalMacroScore,
-      journaling: journalingScore,
-    },
-    advancement: "INCOMPLETE",
+    pillars,
+    verdict,
+    unlockEligible: verdict !== "NOT_APPROVED",
   };
+}
+
+function pillarPoints(value: number | null, cap: number): number | null {
+  if (value === null) return null;
+  if (!Number.isInteger(value) || value < 0 || value > cap) return null;
+  return value;
+}
+
+/**
+ * Final-plan hard block. Same three rules as Python `risk.hard_block`:
+ * mental or missing structural stop, risk above 1% of equity, or net reward
+ * below twice the risk. Exact 1% and exact 1:2 are not blocks.
+ */
+export function practicalHardBlock(evidence: {
+  currentEquity: string;
+  riskAmount: string;
+  netReward: string;
+  stopType: string;
+}): boolean {
+  if (evidence.stopType !== "STRUCTURAL_HARD") return true;
+  const equity = parseDec(evidence.currentEquity);
+  const risk = parseDec(evidence.riskAmount);
+  const reward = parseDec(evidence.netReward);
+  if (!equity.ok || !risk.ok || !reward.ok) {
+    throw new Error("RISK_INPUT_UNVERIFIED");
+  }
+  if (decCompare(decMul(risk.value, "100"), equity.value) > 0) return true;
+  if (decCompare(reward.value, decMul(risk.value, "2")) < 0) return true;
+  return false;
 }
 
 /** Compact ISO for attempt ids: 20261109T134155Z → 20261109T134155Z (no ms/punct extras). */

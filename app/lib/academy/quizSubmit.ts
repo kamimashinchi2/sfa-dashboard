@@ -1,7 +1,7 @@
 /**
- * Canonical quiz submission for POST /api/mentor/quizzes.
- * Callers must already restore canonical MC/order indexes (quizShuffle).
- * This module does not know answer keys.
+ * Quiz submission for POST /api/mentor/quizzes.
+ * MC and order answers are indexes into the served option list.
+ * The server maps those back to the author key. This module does not know answers.
  */
 
 export type QuizSubmitItem = {
@@ -17,6 +17,7 @@ export type QuizSubmitBody = {
   attemptId: string;
   quizId: string;
   buildCommit: string | null;
+  shuffleNonce: string;
   items: QuizSubmitItem[];
 };
 
@@ -29,11 +30,15 @@ export function buildQuizSubmission(input: {
   attemptId: string;
   quizId: string;
   buildCommit: string | null;
+  shuffleNonce: string;
   items: { id: string; kind: "mc" | "numeric" | "order"; itemHash?: string }[];
   answers: Record<string, unknown>;
   touchedIds: Iterable<string>;
   skippedIds: Iterable<string>;
 }): { ok: true; body: QuizSubmitBody } | { ok: false; error: string } {
+  if (!/^[0-9a-f]{32}$/.test(input.shuffleNonce)) {
+    return { ok: false, error: "SHUFFLE_NONCE_REQUIRED" };
+  }
   const touched = new Set(input.touchedIds);
   const skipped = new Set(input.skippedIds);
   const items: QuizSubmitItem[] = [];
@@ -74,6 +79,7 @@ export function buildQuizSubmission(input: {
       attemptId: input.attemptId,
       quizId: input.quizId,
       buildCommit: normalizeBuildCommit(input.buildCommit),
+      shuffleNonce: input.shuffleNonce,
       items,
     },
   };
