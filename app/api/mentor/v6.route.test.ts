@@ -18,6 +18,8 @@ vi.mock("next/headers", () => ({
 }));
 
 import { GET as contentGET } from "./content/route";
+import { getPrivateQuizBank } from "@/app/lib/academy/server/privateQuizBanks";
+import { optionPermutation, serveQuizAttempt } from "@/app/lib/academy/server/quizAttempt";
 import { POST as linkPOST } from "./link-code/route";
 import { POST as quizScorePOST } from "./quiz-score/route";
 import { GET, POST } from "./[...slug]/route";
@@ -35,6 +37,7 @@ function clearEnv() {
   delete process.env.SFA_ALLOW_INSECURE_PILOT;
   delete process.env.SFA_ALLOW_CONTENT_BYPASS;
   delete process.env.SFA_CONTENT_BYPASS_STAGE;
+  delete process.env.SFA_QUIZ_ITEM_HMAC_KEY;
 }
 
 function setEnv(origin = ORIGIN) {
@@ -354,5 +357,115 @@ describe("account API proxy", () => {
   it("retired link-code and quiz-score routes stay gone", async () => {
     expect((await linkPOST()).status).toBe(410);
     expect((await quizScorePOST()).status).toBe(410);
+  });
+
+  it("serves a shuffled quiz whose hashes are not unsalted answer digests", async () => {
+    process.env.SFA_QUIZ_ITEM_HMAC_KEY = "h".repeat(48);
+    jar.set("__Host-sfa_session", "student-a", {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const target = String(url);
+        if (target.includes("/api/v1/authorize/1")) {
+          return new Response(JSON.stringify({ allowed: true, stage: 1 }), { status: 200 });
+        }
+        if (target.includes("/api/v1/entitlements")) {
+          return new Response(
+            JSON.stringify({ unlockedStage: 1, currentWeek: 1, status: "LESSON_OPEN" }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ error: "UNEXPECTED" }), { status: 500 });
+      }),
+    );
+    const first = await contentGET(new Request(`${ORIGIN}/api/mentor/content?missionId=M1`));
+    const second = await contentGET(new Request(`${ORIGIN}/api/mentor/content?missionId=M1`));
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    const body = await first.json();
+    const again = await second.json();
+    const bank = getPrivateQuizBank("M1");
+    expect(bank).toBeTruthy();
+    const expected = serveQuizAttempt(bank!, process.env.SFA_QUIZ_ITEM_HMAC_KEY, body.shuffleNonce);
+    expect(body.quiz).toEqual(expected.quiz);
+    expect(body.shuffleNonce).toMatch(/^[0-9a-f]{32}$/);
+    expect(again.shuffleNonce).not.toBe(body.shuffleNonce);
+    expect(JSON.stringify(body.quiz)).not.toMatch(/"answer"|"rationale"|correctAnswer|QUIZ_ANSWER_KEY/);
+    expect(body.quiz.some((item: { kind: string }) => item.kind === "order")).toBe(true);
+    expect(body.quiz.some((item: { kind: string }) => item.kind === "mc")).toBe(true);
+  });
+
+  it("maps served quiz indexes back to the author key before the bridge sees them", async () => {
+    const hmac = "h".repeat(48);
+    process.env.SFA_QUIZ_ITEM_HMAC_KEY = hmac;
+    jar.set("__Host-sfa_session", "student-a", {});
+    const bank = getPrivateQuizBank("M1")!;
+    let nonce = "0".repeat(32);
+    let served = serveQuizAttempt(bank, hmac, nonce);
+    for (let i = 0; i < 30; i++) {
+      nonce = i.toString(16).padStart(32, "0");
+      served = serveQuizAttempt(bank, hmac, nonce);
+      const moved = served.quiz.some((item) => {
+        if (item.kind !== "mc" || !item.options) return false;
+        const author = bank.find((row) => row.id === item.id)!;
+        const correct = JSON.stringify(author.options![author.answer as number]);
+        return item.options.findIndex((option) => JSON.stringify(option) === correct) !== 1;
+      });
+      if (moved) break;
+    }
+    const items = served.quiz.map((item) => {
+      const author = bank.find((row) => row.id === item.id)!;
+      let studentAnswer: number | string | number[] | null = null;
+      if (item.kind === "mc") {
+        const correct = JSON.stringify(author.options![author.answer as number]);
+        studentAnswer = item.options!.findIndex((option) => JSON.stringify(option) === correct);
+      } else if (item.kind === "order") {
+        const perm = optionPermutation(item.id, item.options!.length, hmac, nonce);
+        studentAnswer = (author.answer as number[]).map((authorIndex) => perm.indexOf(authorIndex));
+      } else {
+        studentAnswer = String(author.answer);
+      }
+      return {
+        itemId: item.id,
+        itemHash: item.itemHash,
+        kind: item.kind,
+        studentAnswer,
+        touched: true,
+        reflection: null,
+      };
+    });
+    let forwarded = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        forwarded = String(init?.body ?? "");
+        return new Response(JSON.stringify({ attemptId: "a", assessment: { status: "RECOMPUTED" }, decision: null }), {
+          status: 200,
+        });
+      }),
+    );
+    const res = await POST(
+      jsonReq("/api/mentor/quizzes", {
+        attemptId: "11111111-1111-1111-1111-111111111111",
+        quizId: "M1",
+        buildCommit: "ca0dd51",
+        shuffleNonce: nonce,
+        items,
+      }),
+      { params: Promise.resolve({ slug: ["quizzes"] }) },
+    );
+    expect(res.status).toBe(200);
+    const upstream = JSON.parse(forwarded) as {
+      shuffleNonce?: string;
+      items: { kind: string; itemId: string; studentAnswer: number | number[] | string }[];
+    };
+    expect(upstream.shuffleNonce).toBeUndefined();
+    for (const item of upstream.items) {
+      if (item.kind === "mc") expect(item.studentAnswer).toBe(1);
+      if (item.kind === "order") expect(item.studentAnswer).toEqual([0, 1, 2, 3]);
+    }
+    const mc = items.find((item) => item.kind === "mc" && item.studentAnswer !== 1);
+    expect(mc).toBeTruthy();
+    expect(forwarded).not.toContain(hmac);
   });
 });

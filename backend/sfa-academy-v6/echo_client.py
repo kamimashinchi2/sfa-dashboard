@@ -23,15 +23,29 @@ def validate_envelope(p):
     if p['requestId']!=expected: raise ValueError('Request target mismatch')
     return p
 
+LIVE_HOST='92-5-230-55.sslip.io'
+
+def live_host_forbidden():
+    return os.environ.get('SFA_FORBID_LIVE_HOST')=='1'
+
 class Client:
     def __init__(self,url=None,key=None):
-        self.url=(url or os.environ.get('ECHO_ACADEMY_URL','https://92-5-230-55.sslip.io')).rstrip('/')
+        forbid=live_host_forbidden()
+        raw=url or os.environ.get('ECHO_ACADEMY_URL')
+        if not raw and not forbid: raw='https://'+LIVE_HOST
+        # Read the key before the live-host check so a missing key stays a clean error.
         self.key=key or os.environ['ECHO_ACADEMY_API_KEY']
+        if forbid and not raw: raise ValueError('ECHO_ACADEMY_URL is required when the live host is forbidden')
+        self.url=(raw or '').rstrip('/')
         u=urlparse(self.url)
+        host=(u.hostname or '').lower().rstrip('.')
+        if forbid and host==LIVE_HOST: raise ValueError('Live academy host is forbidden in tests')
         if u.scheme!='https' and not (u.scheme=='http' and u.hostname in ('127.0.0.1','localhost','::1')): raise ValueError('HTTPS required')
         if u.username or u.query or u.fragment or u.path: raise ValueError('Root URL required')
         if len(self.key)<32: raise ValueError('API key missing/short')
     def call(self,method,path,body=None,stream=False):
+        host=(urlparse(self.url).hostname or '').lower().rstrip('.')
+        if live_host_forbidden() and host==LIVE_HOST: raise ValueError('Live academy host is forbidden in tests')
         r=requests.request(method,self.url+'/echo/v1/'+path,headers={'Authorization':'Bearer '+self.key},json=body,timeout=(5,90),allow_redirects=False,stream=stream)
         if not 200<=r.status_code<300: raise ValueError('Academy API HTTP '+str(r.status_code))
         return r if stream else r.json()

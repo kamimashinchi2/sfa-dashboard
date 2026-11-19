@@ -1,6 +1,8 @@
 /**
  * After `npm run build`, fail if the client static bundle contains the private
  * answer key or a server-only provenance marker.
+ * API payload leaks (reversible item hashes, fixed option slots, identity
+ * order) are covered by app/lib/academy/quizLeak.test.ts and the content route test.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";

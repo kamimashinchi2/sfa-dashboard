@@ -338,10 +338,16 @@ fi
 export PYTHONPATH=/opt/sfa
 stage 'answer key'
 # Current build private answer key (server answerKeyData.ts hydration; never a public asset).
+# configure already created /etc/sfa/quiz-item-hmac-key. Copy it for the PM2 user.
+# The path is not the secret. Do not print the file.
 install -d -m 750 -o root -g sfa /etc/sfa/answer-keys
+PM2_HOME=$(/opt/sfa/.venv/bin/python "$HELPER" get home)
+PM2_GROUP=$(id -gn "$PM2_USER")
+install -d -m 700 -o "$PM2_USER" -g "$PM2_GROUP" "$PM2_HOME/.sfa"
+install -m 600 -o "$PM2_USER" -g "$PM2_GROUP" /etc/sfa/quiz-item-hmac-key "$PM2_HOME/.sfa/quiz-item-hmac-key"
 COMMIT=$(git -C "$APP_DIR" rev-parse HEAD)
 KEY_TMP=$(mktemp /etc/sfa/answer-keys/.key-XXXXXX)
-if ! runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" node /opt/sfa/tools/extract_answer_key.mjs "$APP_DIR" "$COMMIT" > "$KEY_TMP" 2> /var/log/sfa-key-extract.log; then
+if ! runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" "SFA_QUIZ_ITEM_HMAC_FILE=$PM2_HOME/.sfa/quiz-item-hmac-key" node /opt/sfa/tools/extract_answer_key.mjs "$APP_DIR" "$COMMIT" > "$KEY_TMP" 2> /var/log/sfa-key-extract.log; then
   die 'Private answer-key extraction failed; old bridge left running. Review /var/log/sfa-key-extract.log privately.'
 fi
 install -m 640 -o root -g sfa "$KEY_TMP" "/etc/sfa/answer-keys/$COMMIT.json"

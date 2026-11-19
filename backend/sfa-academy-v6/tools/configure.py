@@ -4,7 +4,7 @@ import argparse,hashlib,json,os,pwd,re,secrets,shlex,shutil,subprocess,time
 from pathlib import Path
 from dotenv import dotenv_values
 P=Path('/etc/sfa'); STATE=P/'install-state.json'
-SFA_ENV_KEYS=('SFA_BRIDGE_URL','SFA_SITE_ORIGIN','SFA_BRIDGE_SECRET','SFA_ALLOW_INSECURE_PILOT','SFA_ALLOW_CONTENT_BYPASS')
+SFA_ENV_KEYS=('SFA_BRIDGE_URL','SFA_SITE_ORIGIN','SFA_BRIDGE_SECRET','SFA_QUIZ_ITEM_HMAC_KEY','SFA_ALLOW_INSECURE_PILOT','SFA_ALLOW_CONTENT_BYPASS')
 def safe_write(path,data,uid=0,gid=0,mode=0o600):
     path=Path(path); path.parent.mkdir(parents=True,exist_ok=True)
     temp=path.with_name(path.name+'.new'); temp.write_text(data); os.chmod(temp,mode)
@@ -72,6 +72,36 @@ def ensure_echo_key(directory=None, chown_root=True):
     written=path.read_text().strip()
     if not written: raise RuntimeError('echo-api-key was not created')
     return written
+def ensure_quiz_hmac_key(directory=None, chown_root=True):
+    """Create /etc/sfa/quiz-item-hmac-key mode 0600. A rerun keeps the existing key.
+    The value is the HMAC secret for quiz item hashes. Never print it.
+    """
+    directory=Path(directory or P)
+    directory.mkdir(parents=True, exist_ok=True)
+    try: os.chmod(directory, 0o750)
+    except PermissionError: pass
+    path=directory/'quiz-item-hmac-key'
+    existing=''
+    if path.is_file():
+        try: existing=path.read_text().strip()
+        except OSError: existing=''
+    key=existing if len(existing)>=32 else secrets.token_urlsafe(48)
+    safe_write(path, key+'\n', 0, 0, 0o600)
+    fd=os.open(path, os.O_RDWR)
+    try: os.fsync(fd)
+    finally: os.close(fd)
+    try:
+        dirfd=os.open(directory, os.O_RDONLY)
+        try: os.fsync(dirfd)
+        finally: os.close(dirfd)
+    except OSError: pass
+    if chown_root:
+        try: os.chown(path, 0, 0)
+        except PermissionError: pass
+    os.chmod(path, 0o600)
+    written=path.read_text().strip()
+    if len(written)<32: raise RuntimeError('quiz-item-hmac-key was not created')
+    return written
 def echo_key_hash(key_text):
     """SHA-256 of the key file contents. Never reuse a hash stored in sfa.env."""
     return hashlib.sha256(key_text.strip().encode()).hexdigest()
@@ -80,8 +110,9 @@ def apply_echo_hash(env, key_text):
     updated['ECHO_API_KEY_HASH']=echo_key_hash(key_text)
     return updated
 def configure(domain):
-    # Key first: a PostgreSQL or later failure must not skip creating it, and a rerun must not rotate it.
+    # Keys first: a PostgreSQL or later failure must not skip creating them, and a rerun must not rotate them.
     ensure_echo_key(P)
+    quiz_hmac=ensure_quiz_hmac_key(P)
     state=json.loads(STATE.read_text()); user=pwd.getpwnam('sfa'); app=Path(state['app']); envfile=P/'sfa.env'; env=dict(dotenv_values(envfile)) if envfile.exists() else {}
     # Preserve only explicitly named bridge settings; never copy personal Google credentials.
     candidates=[Path(p)/'.env' for p in state['legacy']]+[app/'.env',app/'.env.local',Path('/opt/sfa-bridge/.env'),Path('/opt/sfa_bridge/.env'),Path(state['home'])/'sfa_bridge/.env',Path(state['home'])/'sfa-bridge/.env']
@@ -109,7 +140,7 @@ def configure(domain):
     psql("ALTER ROLE sfa WITH LOGIN PASSWORD '"+dbpass+"';")
     if psql("SELECT 1 FROM pg_database WHERE datname='sfa';")!='1': psql('CREATE DATABASE sfa OWNER sfa;')
     elif psql("SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname='sfa';")!='sfa': raise ValueError('Existing database is not academy-owned')
-    env.update({'SFA_DB_PASSWORD':dbpass,'DATABASE_URL':'postgresql://sfa:'+dbpass+'@127.0.0.1/sfa','SFA_BRIDGE_SECRET':env.get('SFA_BRIDGE_SECRET') or secrets.token_hex(32),'SESSION_SECRET':env.get('SESSION_SECRET') or secrets.token_hex(32),'SFA_SITE_ORIGIN':'https://'+domain,'SFA_DATA_DIR':'/var/lib/sfa','ANSWER_KEY_PATH':'/etc/sfa/answer-keys','APPROVAL_REQUIRED':env.get('APPROVAL_REQUIRED','false'),'TELEGRAM_BOT_TOKEN':env.get('TELEGRAM_BOT_TOKEN') or oldenv.get('TELEGRAM_BOT_TOKEN',''),'ADMIN_CHAT_ID':env.get('ADMIN_CHAT_ID') or oldenv.get('ADMIN_CHAT_ID','0'),'TELEGRAM_BOT_USERNAME':env.get('TELEGRAM_BOT_USERNAME','')})
+    env.update({'SFA_DB_PASSWORD':dbpass,'DATABASE_URL':'postgresql://sfa:'+dbpass+'@127.0.0.1/sfa','SFA_BRIDGE_SECRET':env.get('SFA_BRIDGE_SECRET') or secrets.token_hex(32),'SFA_QUIZ_ITEM_HMAC_KEY':quiz_hmac,'SESSION_SECRET':env.get('SESSION_SECRET') or secrets.token_hex(32),'SFA_SITE_ORIGIN':'https://'+domain,'SFA_DATA_DIR':'/var/lib/sfa','ANSWER_KEY_PATH':'/etc/sfa/answer-keys','APPROVAL_REQUIRED':env.get('APPROVAL_REQUIRED','false'),'TELEGRAM_BOT_TOKEN':env.get('TELEGRAM_BOT_TOKEN') or oldenv.get('TELEGRAM_BOT_TOKEN',''),'ADMIN_CHAT_ID':env.get('ADMIN_CHAT_ID') or oldenv.get('ADMIN_CHAT_ID','0'),'TELEGRAM_BOT_USERNAME':env.get('TELEGRAM_BOT_USERNAME','')})
     # Always the current key file. A previous ECHO_API_KEY_HASH in sfa.env is discarded.
     env=apply_echo_hash(env, (P/'echo-api-key').read_text())
     safe_write(envfile,'\n'.join(k+'='+json.dumps(str(v or '')) for k,v in env.items())+'\n',user.pw_uid,user.pw_gid)
@@ -117,7 +148,7 @@ def configure(domain):
     # Merge Next env without parsing arbitrary shell syntax; strip obsolete security escape hatches.
     f=app/'.env.local'; original=f.read_text() if f.exists() else ''
     if f.exists(): safe_write(app/('.env.local.pre-sfa6-'+str(time.time_ns())),original,state['uid'],state['gid'])
-    replacements={'SFA_BRIDGE_URL':'http://127.0.0.1:8081','SFA_BRIDGE_SECRET':env['SFA_BRIDGE_SECRET'],'SFA_SITE_ORIGIN':'https://'+domain,'HOSTNAME':'127.0.0.1'}
+    replacements={'SFA_BRIDGE_URL':'http://127.0.0.1:8081','SFA_BRIDGE_SECRET':env['SFA_BRIDGE_SECRET'],'SFA_QUIZ_ITEM_HMAC_KEY':quiz_hmac,'SFA_SITE_ORIGIN':'https://'+domain,'HOSTNAME':'127.0.0.1'}
     retired={'SFA_ALLOW_INSECURE_PILOT','SFA_ALLOW_INSECURE_COOKIE','SFA_ALLOW_CONTENT_BYPASS'}
     lines=[line for line in original.splitlines() if line.split('=',1)[0].strip().removeprefix('export ') not in set(replacements)|retired]
     lines += [k+'='+json.dumps(v) for k,v in replacements.items()]
@@ -192,6 +223,7 @@ def pm2_process_env(state, sfa_env):
         'SFA_BRIDGE_URL':str(sfa_env.get('SFA_BRIDGE_URL') or 'http://127.0.0.1:8081'),
         'SFA_SITE_ORIGIN':str(sfa_env.get('SFA_SITE_ORIGIN') or ''),
         'SFA_BRIDGE_SECRET':str(sfa_env.get('SFA_BRIDGE_SECRET') or ''),
+        'SFA_QUIZ_ITEM_HMAC_KEY':str(sfa_env.get('SFA_QUIZ_ITEM_HMAC_KEY') or ''),
         'SFA_ALLOW_INSECURE_PILOT':'0',
         'SFA_ALLOW_CONTENT_BYPASS':'0',
     }
@@ -206,7 +238,7 @@ def write_pm2_env_file(state, proc_env):
     except PermissionError: pass
     os.chmod(folder, 0o700)
     path=folder/'pm2.env'
-    lines=[key+'='+shlex.quote(proc_env[key]) for key in ('SFA_BRIDGE_URL','SFA_SITE_ORIGIN','SFA_BRIDGE_SECRET','SFA_ALLOW_INSECURE_PILOT','SFA_ALLOW_CONTENT_BYPASS')]
+    lines=[key+'='+shlex.quote(proc_env[key]) for key in ('SFA_BRIDGE_URL','SFA_SITE_ORIGIN','SFA_BRIDGE_SECRET','SFA_QUIZ_ITEM_HMAC_KEY','SFA_ALLOW_INSECURE_PILOT','SFA_ALLOW_CONTENT_BYPASS')]
     safe_write(path, '\n'.join(lines)+'\n', int(state['uid']), int(state['gid']), 0o600)
     os.chmod(path, 0o600)
     return path

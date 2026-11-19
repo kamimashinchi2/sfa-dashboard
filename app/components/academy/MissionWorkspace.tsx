@@ -159,6 +159,7 @@ function MissionBody({
       <QuizGate
         items={mission.quiz}
         quizId={mission.id}
+        shuffleNonce={mission.shuffleNonce}
         readOnly={readOnly}
         mode={readOnly ? "READ_ONLY_PREVIEW" : "ASSESSED"}
         initialScore={quizScore}

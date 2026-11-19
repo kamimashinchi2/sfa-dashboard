@@ -15,6 +15,9 @@ import {
   readSessionToken,
   setSessionCookie,
 } from "./sessionCookie";
+import { getPrivateQuizBank } from "./privateQuizBanks";
+import { canonicalizeQuizSubmission } from "./quizAttempt";
+import { quizItemHmacKey } from "./quizHmacKey";
 import {
   discardSpool,
   MAX_UPLOAD_BYTES,
@@ -97,6 +100,38 @@ function isMultipart(slug: string[], method: string): boolean {
   return method === "POST" && slug.length === 3 && slug[0] === "practicals" && slug[2] === "files";
 }
 
+function rewriteQuizSubmission(
+  raw: Uint8Array,
+): { ok: true; bytes: Uint8Array } | { ok: false; code: string; status: number } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(raw));
+  } catch {
+    return { ok: false, code: "VALIDATION_FAILED", status: 400 };
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return { ok: false, code: "VALIDATION_FAILED", status: 400 };
+  }
+  const quizId = (parsed as { quizId?: unknown }).quizId;
+  if (typeof quizId !== "string") {
+    return { ok: false, code: "VALIDATION_FAILED", status: 400 };
+  }
+  let secret: string;
+  try {
+    secret = quizItemHmacKey();
+  } catch {
+    return { ok: false, code: "QUIZ_UNAVAILABLE", status: 503 };
+  }
+  const bank = getPrivateQuizBank(quizId);
+  if (!bank) return { ok: false, code: "VALIDATION_FAILED", status: 400 };
+  const mapped = canonicalizeQuizSubmission(parsed, bank, secret);
+  if (!mapped.ok) return { ok: false, code: "VALIDATION_FAILED", status: 400 };
+  const encoded = new TextEncoder().encode(JSON.stringify(mapped.body));
+  const bytes = new Uint8Array(encoded.byteLength);
+  bytes.set(encoded);
+  return { ok: true, bytes };
+}
+
 export async function proxyMentor(
   req: Request,
   method: "GET" | "POST",
@@ -149,6 +184,13 @@ export async function proxyMentor(
     const raw = new Uint8Array(await req.arrayBuffer());
     if (raw.byteLength > cap) return errorResponse("PAYLOAD_TOO_LARGE", 413);
     bodyBytes = raw;
+  }
+
+  if (method === "POST" && key === "quizzes") {
+    const rewritten = rewriteQuizSubmission(bodyBytes);
+    if (!rewritten.ok) return errorResponse(rewritten.code, rewritten.status);
+    bodyBytes = new Uint8Array(rewritten.bytes.byteLength);
+    bodyBytes.set(rewritten.bytes);
   }
 
   const proxied = await proxyToBridge({

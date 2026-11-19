@@ -18,6 +18,8 @@ export type AuthorizedContent = {
   practicalTask: Text;
   lessons: Lesson[];
   quiz: PublicQuizItem[];
+  /** Per-attempt server shuffle. Sent back with the submission; not a permutation map. */
+  shuffleNonce: string;
   entitlement: {
     unlockedStage: number;
     currentWeek: number;
