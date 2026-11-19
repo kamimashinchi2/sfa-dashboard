@@ -59,6 +59,8 @@ export default function DailyLogCard({
   const [oneLine, setOneLine] = useState("");
   const [freshness, setFreshness] = useState<(typeof FRESH)[number]>("UNKNOWN");
   const [calendar, setCalendar] = useState("");
+  const [dayCall, setDayCall] = useState<"TRADE" | "NO_TRADE">("NO_TRADE");
+  const [dayCallReason, setDayCallReason] = useState("");
 
   const load = async () => {
     const res = await fetch("/api/mentor/daily-log?week=current", { credentials: "same-origin", cache: "no-store" });
@@ -89,6 +91,8 @@ export default function DailyLogCard({
         spiralApplication,
         selfCheck,
         paperPlan: null,
+        dayCall,
+        dayCallReason: dayCall === "NO_TRADE" ? dayCallReason : "",
       }),
     });
     const body = (await res.json().catch(() => ({}))) as { fa?: string; en?: string; error?: string };
@@ -149,6 +153,20 @@ export default function DailyLogCard({
               </li>
             ))}
           </ul>
+          <div className="flex flex-wrap gap-2" data-testid="day-call">
+            <button type="button" className={`min-h-11 border px-3 ${dayCall === "TRADE" ? "border-gold text-gold-soft" : "border-line text-fog"}`} onClick={() => setDayCall("TRADE")}>
+              {locale === "fa" ? "امروز معامله" : "Trade today"}
+            </button>
+            <button type="button" className={`min-h-11 border px-3 ${dayCall === "NO_TRADE" ? "border-gold text-gold-soft" : "border-line text-fog"}`} onClick={() => setDayCall("NO_TRADE")}>
+              {locale === "fa" ? "امروز بدون معامله" : "No trade today"}
+            </button>
+          </div>
+          {dayCall === "NO_TRADE" ? (
+            <label className="block">
+              {locale === "fa" ? "دلیل کوتاه، با timestamp، یا Observed reaction unavailable" : "Short reason from timestamped readings, or Observed reaction unavailable"}
+              <input className="mt-1 w-full border border-line bg-ink px-2 py-2" value={dayCallReason} onChange={(e) => setDayCallReason(e.target.value)} />
+            </label>
+          ) : null}
           <p className="text-xs text-fog">
             {locale === "fa"
               ? "ساعت و session را سرور پر می‌کند و قابل ویرایش نیست."

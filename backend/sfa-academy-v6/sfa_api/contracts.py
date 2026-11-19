@@ -136,7 +136,7 @@ def validate_routine_gate(gate,cfg,counted):
         require(eid in rejected_ids,'Counted day needs a rejection reason')
     require(type(gate['passed']) is bool and gate['passed']==(gate['genuineDays']>=gate['requiredDays']),'Routine gate passed flag mismatch')
 
-def validate_decision(o,target,cfg,required_weaknesses=(),model='LEGACY',remedial_model=None,counted=None,no_plan=False):
+def validate_decision(o,target,cfg,required_weaknesses=(),model='LEGACY',remedial_model=None,counted=None,no_plan=False,plan_missing=False):
     from .grading import verdict
     base='format schemaVersion decisionId studentId week stage verdict feedback weaknessUpdates habitChecklist echoNotes'
     isquiz=o.get('format')=='sfa-quiz-decision'
@@ -170,10 +170,15 @@ def validate_decision(o,target,cfg,required_weaknesses=(),model='LEGACY',remedia
         if v1:
             validate_routine_gate(o['routineGate'],cfg,counted or [])
             gate_failed=not o['routineGate']['passed']
-        if no_plan: require(o['finalHardBlock'] is False,'NO_PLAN_HARD_BLOCK')
-        expected=verdict(sum(o['scores'].values()),cfg.practical_approved,cfg.practical_partial,(False if no_plan else o['finalHardBlock']) or gate_failed)
-        require(o['verdict']==expected,'Practical verdict mismatch')
-        allow=expected!='NOT_APPROVED' and o['stage']<8; require(o['unlockNext']==allow,'Invalid unlockNext')
+        if no_plan or plan_missing: require(o['finalHardBlock'] is False,'FINAL_HARD_BLOCK_MISMATCH')
+        if plan_missing:
+            require(o['verdict']=='NOT_APPROVED','PLAN_MISSING_REMEDIAL_ONLY')
+            require(o['unlockNext'] is False,'PLAN_MISSING_REMEDIAL_ONLY')
+            expected='NOT_APPROVED'
+        else:
+            expected=verdict(sum(o['scores'].values()),cfg.practical_approved,cfg.practical_partial,(False if no_plan else o['finalHardBlock']) or gate_failed)
+            require(o['verdict']==expected,'Practical verdict mismatch')
+            allow=expected!='NOT_APPROVED' and o['stage']<8; require(o['unlockNext']==allow,'Invalid unlockNext')
         require(isinstance(o['flaws'],list) and len(o['flaws'])<=30,'Invalid flaws')
         for f in o['flaws']: text(f,1000)
         if expected=='NOT_APPROVED':

@@ -167,8 +167,17 @@ def counted_days(rows, **kw):
 
 def validate_daily_payload(payload, assignment, now_dt):
     require(isinstance(payload, dict), 'DAILY_LOG_INVALID')
-    allowed = {'taskIds', 'routine', 'observations', 'currentApplication', 'spiralApplication', 'paperPlan', 'selfCheck'}
+    allowed = {'taskIds', 'routine', 'observations', 'currentApplication', 'spiralApplication', 'paperPlan', 'selfCheck', 'dayCall', 'dayCallReason'}
     require(set(payload) <= allowed, 'DAILY_LOG_INVALID')
+    day_call = payload.get('dayCall')
+    require(day_call in ('TRADE', 'NO_TRADE'), 'DAY_CALL_REQUIRED')
+    day_reason = payload.get('dayCallReason')
+    if day_reason in (None, ''):
+        day_reason = None
+    else:
+        require(isinstance(day_reason, str) and len(day_reason) <= 500, 'DAY_CALL_REASON_INVALID')
+        text(day_reason, 500)
+        day_reason = day_reason.strip()
     raw_ids = payload.get('taskIds') or []
     require(isinstance(raw_ids, list) and len(raw_ids) <= 40, 'DAILY_LOG_INVALID')
     known = {t['taskId'] for t in _tasks(assignment) if isinstance(t, dict)}
@@ -220,7 +229,7 @@ def validate_daily_payload(payload, assignment, now_dt):
         'paperPlan': paper,
         'selfCheck': self_check.strip(),
     }
-    return {'taskIds': task_ids, 'fields': fields}
+    return {'taskIds': task_ids, 'dayCall': day_call, 'dayCallReason': day_reason, 'fields': fields}
 
 
 def student_entry(row, files, now_dt):
@@ -239,6 +248,8 @@ def student_entry(row, files, now_dt):
         'locked': now_dt >= locked_at,
         'revisionCount': int(row['revision']),
         'taskIds': body.get('taskIds') or [],
+        'dayCall': body.get('dayCall'),
+        'dayCallReason': body.get('dayCallReason'),
         'fields': body.get('fields') or {},
         'files': [{'fileId': f['id'], 'name': f['name'], 'size': f['size'], 'mime': f['mime']} for f in files],
     }
@@ -549,6 +560,7 @@ class DailyMixin:
             files = _files_for(c, e['id'])
             packet_entries.append(echo_entry(e, files, submitted_dt))
         days = sorted({parse_date(e['local_date']).isoformat() for e in chosen})
+        calls = trade_call_summary(entries)
         return {
             'timezone': 'Europe/Amsterdam',
             'assignmentIssuedAtISO': iso(issued_dt) if issued_dt else None,
@@ -558,6 +570,10 @@ class DailyMixin:
             'requiredDays': self.config.daily_log_min_days,
             'countedDays': len(days),
             'countedLocalDates': days,
+            'tradeDays': calls['tradeDays'],
+            'noTradeDays': calls['noTradeDays'],
+            'tradesOnNoTradeDays': calls['tradesOnNoTradeDays'],
+            'tradeOnNoTradeDay': calls['tradeOnNoTradeDay'],
             'entries': packet_entries,
             '_countedIds': sorted(chosen_ids),
         }
@@ -567,9 +583,46 @@ class DailyMixin:
             packet=self.build_daily_log_packet(c, submission)
         if packet: packet.pop('_countedIds', None)
         return packet
+
     def counted_for_decision(self, c, submission):
         packet = self.build_daily_log_packet(c, submission)
         if not packet:
             return []
         ids = set(packet.pop('_countedIds'))
         return [{'entryId': e['entryId'], 'localDate': e['localDate']} for e in packet['entries'] if e['entryId'] in ids]
+
+def _recorded_trade(body):
+    return (body.get('fields') or {}).get('paperPlan') is not None
+
+def trade_call_summary(rows):
+    """Per local date. A recorded trade is dayCall TRADE or a paper plan. No numeric penalty."""
+    by = {}
+    for row in rows:
+        body = _entry_body(row)
+        local = parse_date(row['local_date']).isoformat()
+        slot = by.setdefault(local, {'calls': set(), 'plan': False})
+        call = body.get('dayCall')
+        if call:
+            slot['calls'].add(call)
+        if _recorded_trade(body):
+            slot['plan'] = True
+    trade_days = []
+    no_trade_days = []
+    flagged = []
+    for local, slot in by.items():
+        recorded = 'TRADE' in slot['calls'] or slot['plan']
+        if recorded:
+            trade_days.append(local)
+        if slot['calls'] == {'NO_TRADE'} and not slot['plan']:
+            no_trade_days.append(local)
+        if 'NO_TRADE' in slot['calls'] and recorded:
+            flagged.append(local)
+    trade_days.sort(); no_trade_days.sort(); flagged.sort()
+    return {'tradeDays': len(trade_days), 'noTradeDays': len(no_trade_days), 'tradesOnNoTradeDays': len(flagged), 'tradeOnNoTradeDay': flagged, 'recordedTrades': len(trade_days)}
+
+def week_has_recorded_trade(rows):
+    for row in rows:
+        body = _entry_body(row)
+        if body.get('dayCall') == 'TRADE' or _recorded_trade(body):
+            return True
+    return False

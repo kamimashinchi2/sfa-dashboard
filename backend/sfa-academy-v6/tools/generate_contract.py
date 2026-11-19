@@ -91,8 +91,21 @@ text+='''
   Neither is `RISK_EVIDENCE_REQUIRED_PENDING`. `noPlan` on a required week is `PLAN_REQUIRED_FOR_WEEK`.
   A missing or short reason is `NO_PLAN_REASON_REQUIRED`. `noPlan` forces `finalHardBlock:false`
   (`FINAL_HARD_BLOCK_MISMATCH` otherwise), skips the risk event, and still uses the 40/40/20
-  thresholds and, on DAILY_LOG_V1, the routine gate. An ungrounded no-trade note is an ordinary
-  technicalMacro shortfall, not a new penalty code.
+  thresholds and, on DAILY_LOG_V1, the routine gate. `noPlan` is rejected with
+  `NO_PLAN_REQUIRES_ZERO_TRADES` when the week's log has any `dayCall:"TRADE"` or any paper plan.
+  An ungrounded no-trade note is an ordinary technicalMacro shortfall, not a new penalty code.
+- Each DAILY_LOG_V1 entry requires `dayCall:"TRADE"|"NO_TRADE"` and may include a short `dayCallReason`.
+  The queue `dailyLog` adds `tradeDays`, `noTradeDays`, `tradesOnNoTradeDays`, and `tradeOnNoTradeDay`
+  (dates). The server does not subtract points for that flag.
+- A8 with no Final Paper Plan uses envelope `reasonCode:"PLAN_MISSING_REMEDIAL"` and no `riskEvidence`
+  and no `noPlan`. Stored `verdict` stays `NOT_APPROVED` (there is no REMEDIAL verdict), `unlockNext`
+  is false, `finalHardBlock` is false, and `remedialAssignment` is required. Delivery then follows the
+  existing remedial path: the assessed week stores `practical_verdict=NOT_APPROVED`, and the next week
+  row is `REMEDIAL_ISSUED` at the same stage, with a new due Friday. Any other verdict with this code
+  is `PLAN_MISSING_REMEDIAL_ONLY`. The code on a week that does not require a plan is `PLAN_MISSING_A8_ONLY`.
+  Student notifications, the student dashboard, and the owner Telegram line say
+  "plan missing: redo and re-upload" / "طرح نیست: دوباره انجام دهید و دوباره بارگذاری کنید",
+  not "not approved". `noPlan` on A8 is still `PLAN_REQUIRED_FOR_WEEK`.
 - Student daily log: `GET/POST /api/v1/daily-log`, `PUT /api/v1/daily-log/<id>`,
   `POST /api/v1/daily-log/<id>/files`. Echo history: `GET /echo/v1/daily-log?student=&week=`.
   Entry files use the same Echo file route as practical files. LEGACY weeks are unchanged.

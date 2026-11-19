@@ -179,14 +179,17 @@ def create_app(config=None):
     def claim(rid): return svc.claim(rid)
     @ep('POST','/echo/v1/decisions','{requestId,leaseToken,decision:Decision,riskEvidence?:RiskEvidence}','{decisionId,state:"DELIVERED"|"PENDING_APPROVAL",idempotent:boolean}',auth='Echo Bearer')
     def decision():
-        p=payload(); allowed={'requestId','leaseToken','decision','riskEvidence','noPlan','noPlanReason'}
+        p=payload(); allowed={'requestId','leaseToken','decision','riskEvidence','noPlan','noPlanReason','reasonCode'}
         require({'requestId','leaseToken','decision'}<=set(p)<=allowed,'DECISION_ENVELOPE_REQUIRED')
-        has_risk='riskEvidence' in p; has_no='noPlan' in p
+        has_risk='riskEvidence' in p; has_no='noPlan' in p; has_missing='reasonCode' in p
+        if has_missing and p.get('reasonCode')!='PLAN_MISSING_REMEDIAL': raise Invalid('PLAN_MISSING_REMEDIAL_ONLY', error='PLAN_MISSING_REMEDIAL_ONLY')
+        if has_missing and (has_risk or has_no): raise Invalid('PLAN_AND_NO_PLAN_CONFLICT', error='PLAN_AND_NO_PLAN_CONFLICT')
         if has_risk and has_no: raise Invalid('PLAN_AND_NO_PLAN_CONFLICT', error='PLAN_AND_NO_PLAN_CONFLICT')
+        if has_missing: return svc.decision(p['decision'],p['requestId'],p['leaseToken'],None,False,None,True)
         if has_no:
             if p.get('noPlan') is not True: raise Invalid('NO_PLAN_REASON_REQUIRED', error='NO_PLAN_REASON_REQUIRED')
-            return svc.decision(p['decision'],p['requestId'],p['leaseToken'],None,True,p.get('noPlanReason'))
-        return svc.decision(p['decision'],p['requestId'],p['leaseToken'],p.get('riskEvidence') if has_risk else None,False,None)
+            return svc.decision(p['decision'],p['requestId'],p['leaseToken'],None,True,p.get('noPlanReason'),False)
+        return svc.decision(p['decision'],p['requestId'],p['leaseToken'],p.get('riskEvidence') if has_risk else None,False,None,False)
     return app
 
 if __name__=='__main__': create_app().run('127.0.0.1',8081)

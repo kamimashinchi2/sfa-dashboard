@@ -25,6 +25,10 @@ const NOTICE: Record<string, { fa: string; en: string }> = {
   QUIZ_RESULT_READY: { fa: "نتیجه آزمون آماده است", en: "Quiz result is ready" },
   ASSIGNMENT_READY: { fa: "تکلیف شخصی آماده است", en: "Personal assignment is ready" },
   PRACTICAL_GRADED: { fa: "تمرین عملی نمره گرفت", en: "Practical was graded" },
+  PLAN_MISSING_REUPLOAD: {
+    fa: "طرح نیست: دوباره انجام دهید و دوباره بارگذاری کنید",
+    en: "plan missing: redo and re-upload",
+  },
   LESSON_UNLOCKED: { fa: "درس بعدی باز شد", en: "Next lesson unlocked" },
   DECISION_RETRACTED: { fa: "یک نمره در ۲۴ ساعت اصلاح شد", en: "A grade was corrected within 24 hours" },
   DECISION_PENDING_APPROVAL: { fa: "نمره منتظر تأیید مدیر است", en: "Grade is waiting for an admin" },

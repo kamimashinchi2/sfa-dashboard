@@ -6,7 +6,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, InvalidHashError
 from .core import CoreService, now
 from .contracts import require, canonical, validate_decision, validate_quiz, Invalid, text
-from .daily import DailyMixin, require_window, server_due_friday, parse_iso
+from .daily import DailyMixin, require_window, server_due_friday, parse_iso, week_has_recorded_trade
 from .plan_policy import plan_policy, plan_policy_table
 from .security import token_hash
 from .uploads import store
@@ -14,6 +14,8 @@ from .uploads import store
 PASSWORDS=PasswordHasher(time_cost=3,memory_cost=65536,parallelism=2)
 DUMMY=PASSWORDS.hash(secrets.token_urlsafe(32))
 NOTICE='Your learning work and grades are stored on the academy server; Echo and the academy mentor review them. No live trading or sensitive account documents required. / تمرین‌ها و نمرات در سرور آکادمی ذخیره و توسط Echo و منتور بررسی می‌شوند. اطلاعات حساس حساب نفرستید.'
+PLAN_MISSING_EN='plan missing: redo and re-upload'
+PLAN_MISSING_FA='طرح نیست: دوباره انجام دهید و دوباره بارگذاری کنید'
 
 def email_value(v):
     import re
@@ -181,11 +183,12 @@ class Service(DailyMixin, CoreService):
             require(not r or r['expires']<=now(),'CLAIM_BUSY')
             c.execute('INSERT INTO claims VALUES(?,?,?) ON CONFLICT(request) DO UPDATE SET lease=EXCLUDED.lease,expires=EXCLUDED.expires',(rid,token_hash(token),now()+1800))
         return {'requestId':rid,'leaseToken':token,'expiresAt':now()+1800}
-    def decision(self,p,rid=None,lease=None,risk_evidence=None,no_plan=False,no_plan_reason=None):
+    def decision(self,p,rid=None,lease=None,risk_evidence=None,no_plan=False,no_plan_reason=None,plan_missing=False):
         require(isinstance(p,dict),'DECISION_REQUIRED')
         isquiz=p.get('format')=='sfa-quiz-decision'; tid=p.get('attemptId') if isquiz else p.get('submissionId'); targetkey=('quiz:' if isquiz else 'practical:')+str(tid)
         require(rid==targetkey,'REQUEST_MISMATCH'); digest=token_hash(canonical(p))
         if no_plan not in (None, False, True): raise Invalid('NO_PLAN_REASON_REQUIRED', error='NO_PLAN_REASON_REQUIRED')
+        if plan_missing and (no_plan or risk_evidence is not None): raise Invalid('PLAN_AND_NO_PLAN_CONFLICT', error='PLAN_AND_NO_PLAN_CONFLICT')
         if no_plan and risk_evidence is not None: raise Invalid('PLAN_AND_NO_PLAN_CONFLICT', error='PLAN_AND_NO_PLAN_CONFLICT')
         if no_plan:
             if not isinstance(no_plan_reason, str) or not 20<=len(no_plan_reason)<=500: raise Invalid('NO_PLAN_REASON_REQUIRED', error='NO_PLAN_REASON_REQUIRED')
@@ -205,14 +208,18 @@ class Service(DailyMixin, CoreService):
             counted=self.counted_for_decision(c,r) if (not isquiz and model=='DAILY_LOG_V1') else []
             if not isquiz:
                 plan_required=bool(week_row['plan_required']) if week_row and week_row.get('plan_required') is not None else plan_policy(target['stage'])=='required'
-                if no_plan:
+                logged=list(c.execute('SELECT * FROM daily_entries WHERE student=? AND week=?',(r['student'],r['week'])))
+                if plan_missing:
+                    if not plan_required: raise Invalid('PLAN_MISSING_A8_ONLY', error='PLAN_MISSING_A8_ONLY')
+                elif no_plan:
                     if plan_required: raise Invalid('PLAN_REQUIRED_FOR_WEEK', error='PLAN_REQUIRED_FOR_WEEK')
+                    if week_has_recorded_trade(logged): raise Invalid('NO_PLAN_REQUIRES_ZERO_TRADES', error='NO_PLAN_REQUIRES_ZERO_TRADES')
                     if p.get('finalHardBlock') is not False: raise Invalid('FINAL_HARD_BLOCK_MISMATCH', error='FINAL_HARD_BLOCK_MISMATCH')
                 else:
                     from .risk import hard_block
                     blocked=hard_block(risk_evidence)
                     require(p.get('finalHardBlock') is blocked,'FINAL_HARD_BLOCK_MISMATCH')
-            validate_decision(p,target,self.config,required,model,self._new_week_model(),counted,bool(no_plan))
+            validate_decision(p,target,self.config,required,model,self._new_week_model(),counted,bool(no_plan),plan_missing)
             assignment=p.get('assignment') or p.get('remedialAssignment')
             if assignment:
                 due_model=model if p.get('assignment') else self._new_week_model()
@@ -226,7 +233,8 @@ class Service(DailyMixin, CoreService):
             state='PENDING_APPROVAL' if self.config.approval_required else 'READY'
             c.execute('INSERT INTO mentor_decisions(id,target,student,week,kind,body,digest,state,approved) VALUES(?,?,?,?,?,?,?,?,?)',(p['decisionId'],rid,r['student'],r['week'],'quiz' if isquiz else 'practical',canonical(p),digest,state,int(not self.config.approval_required)))
             row=c.execute('SELECT * FROM mentor_decisions WHERE id=?',(p['decisionId'],)).fetchone()
-            if not isquiz and no_plan: self._event(c,'no-plan:'+p['decisionId'],r['student'],'NO_PLAN',{'noPlan':True,'noPlanReason':no_plan_reason})
+            if not isquiz and plan_missing: self._event(c,'plan-missing:'+p['decisionId'],r['student'],'PLAN_MISSING_REMEDIAL',{'decisionId':p['decisionId'],'reasonCode':'PLAN_MISSING_REMEDIAL'})
+            elif not isquiz and no_plan: self._event(c,'no-plan:'+p['decisionId'],r['student'],'NO_PLAN',{'noPlan':True,'noPlanReason':no_plan_reason})
             elif not isquiz: self._event(c,'risk-evidence:'+p['decisionId'],r['student'],'FINAL_PLAN_RISK_EVIDENCE',risk_evidence)
             if not isquiz and model=='DAILY_LOG_V1': self._event(c,'routine-gate:'+p['decisionId'],r['student'],'ROUTINE_GATE',p['routineGate'])
             if state=='READY': self.deliver(c,row,p)
@@ -239,9 +247,13 @@ class Service(DailyMixin, CoreService):
         c.execute('UPDATE mentor_decisions SET snapshot=?,delivered_at=? WHERE id=?',(canonical(snapshot),now(),row['id']))
         self.apply_delivered(c,row,p,None)
         c.execute("UPDATE mentor_decisions SET state='DELIVERED' WHERE id=?",(row['id'],))
-        kinds=['QUIZ_RESULT_READY','ASSIGNMENT_READY'] if row['kind']=='quiz' and p['verdict']!='NOT_APPROVED' else ['QUIZ_RESULT_READY'] if row['kind']=='quiz' else ['PRACTICAL_GRADED']+(['LESSON_UNLOCKED'] if p['unlockNext'] else [])
-        for kind in kinds: self._notify(c,sid,kind,{'decisionId':row['id'],'verdict':p['verdict']})
-        if self.config.admin_id:
+        plan_missing=c.execute('SELECT 1 FROM events WHERE id=?',('plan-missing:'+row['id'],)).fetchone() is not None
+        if plan_missing and row['kind']=='practical':
+            self._notify(c,sid,'PLAN_MISSING_REUPLOAD',{'decisionId':row['id'],'reasonCode':'PLAN_MISSING_REMEDIAL','en':PLAN_MISSING_EN,'fa':PLAN_MISSING_FA})
+        else:
+            kinds=['QUIZ_RESULT_READY','ASSIGNMENT_READY'] if row['kind']=='quiz' and p['verdict']!='NOT_APPROVED' else ['QUIZ_RESULT_READY'] if row['kind']=='quiz' else ['PRACTICAL_GRADED']+(['LESSON_UNLOCKED'] if p['unlockNext'] else [])
+            for kind in kinds: self._notify(c,sid,kind,{'decisionId':row['id'],'verdict':p['verdict']})
+        if self.config.admin_id and not plan_missing:
             copy='Decision copy '+row['id']+' / '+sid+'\n'+canonical(p)
             chunks=[copy[i:i+3200] for i in range(0,len(copy),3200)]
             for i,chunk in enumerate(chunks): c.execute('INSERT INTO outbox(id,chat,body) VALUES(?,?,?)',(uuid.uuid4().hex,self.config.admin_id,f'[{i+1}/{len(chunks)}] '+chunk))
@@ -250,8 +262,12 @@ class Service(DailyMixin, CoreService):
         if student_notice:
             c.execute('INSERT INTO notifications(id,student,body,created) VALUES(?,?,?,?)',(uuid.uuid4().hex,sid,body,now()))
             r=c.execute('SELECT telegram FROM students WHERE student=?',(sid,)).fetchone()
-            if r and r['telegram']: c.execute('INSERT INTO outbox(id,chat,body) VALUES(?,?,?)',(uuid.uuid4().hex,r['telegram'],kind+' / نتیجه در داشبورد آماده است\n'+self.config.origin+'/progress'))
-        if self.config.admin_id: c.execute('INSERT INTO outbox(id,chat,body) VALUES(?,?,?)',(uuid.uuid4().hex,self.config.admin_id,sid+' '+kind+' '+canonical(data)))
+            if r and r['telegram']:
+                text_line=PLAN_MISSING_EN+'\n'+PLAN_MISSING_FA+'\n'+self.config.origin+'/progress' if kind=='PLAN_MISSING_REUPLOAD' else kind+' / نتیجه در داشبورد آماده است\n'+self.config.origin+'/progress'
+                c.execute('INSERT INTO outbox(id,chat,body) VALUES(?,?,?)',(uuid.uuid4().hex,r['telegram'],text_line))
+        if self.config.admin_id:
+            admin_line=sid+' '+PLAN_MISSING_EN+' / '+PLAN_MISSING_FA if kind=='PLAN_MISSING_REUPLOAD' else sid+' '+kind+' '+canonical(data)
+            c.execute('INSERT INTO outbox(id,chat,body) VALUES(?,?,?)',(uuid.uuid4().hex,self.config.admin_id,admin_line))
     def override(self,did,reason):
         require(isinstance(reason,str) and 5<=len(reason)<=1000,'OVERRIDE_REASON_REQUIRED')
         with self.db.tx() as c:
@@ -290,4 +306,8 @@ class Service(DailyMixin, CoreService):
             stamp=datetime.fromtimestamp(e['created'],ZoneInfo('Europe/Amsterdam')).isoformat()
             md+='\n## '+stamp+' Europe/Amsterdam — '+e['kind']+'\n```json\n'+e['body']+'\n```\n'
         md+='\n## Weaknesses\n```json\n'+canonical(weaknesses)+'\n```\n'
-        return {'student':rows[0],'markdown':md,'weaknesses':weaknesses,'weeks':weeks,'decisions':[{**d,'body':json.loads(d['body'])} for d in decisions]}
+        codes={}
+        for e in events:
+            if e['kind']=='PLAN_MISSING_REMEDIAL':
+                parsed=json.loads(e['body']); codes[parsed.get('decisionId')]=parsed.get('reasonCode')
+        return {'student':rows[0],'markdown':md,'weaknesses':weaknesses,'weeks':weeks,'decisions':[{**d,'reasonCode':codes.get(d['id']),'body':json.loads(d['body'])} for d in decisions]}

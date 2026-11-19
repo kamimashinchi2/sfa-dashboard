@@ -49,6 +49,7 @@ type Notification = {
 type DecisionView = {
   id?: string;
   state?: string;
+  reasonCode?: string | null;
   body?: {
     verdict?: string;
     feedback?: Text;
@@ -384,10 +385,14 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
         {latest?.body ? (
           <div className="border border-gold/40 p-3 text-sm" data-testid="echo-verdict">
             <p className="text-gold-soft">
-              Echo · {latest.body.verdict} · {latest.body.format === "sfa-quiz-decision" ? "quiz" : "practical"}
+              {latest.reasonCode === "PLAN_MISSING_REMEDIAL"
+                ? locale === "fa"
+                  ? "طرح نیست: دوباره انجام دهید و دوباره بارگذاری کنید"
+                  : "plan missing: redo and re-upload"
+                : `Echo · ${latest.body.verdict} · ${latest.body.format === "sfa-quiz-decision" ? "quiz" : "practical"}`}
             </p>
             <p className="mt-2 text-fog">{text(latest.body.feedback, locale)}</p>
-            {latest.body.verdict === "NOT_APPROVED" ? (
+            {latest.reasonCode === "PLAN_MISSING_REMEDIAL" ? null : latest.body.verdict === "NOT_APPROVED" ? (
               <p className="mt-2 text-xs text-fog">
                 {locale === "fa"
                   ? "این نتیجه درس بعدی را باز نمی‌کند. برای آزمون: مطالعه و تکرار. برای تمرین: هفته جبرانی در همین مرحله."
