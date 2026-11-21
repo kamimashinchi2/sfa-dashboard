@@ -37,6 +37,39 @@ type LogView = {
 
 const FRESH = ["FRESH", "RECENT", "STALE", "UNKNOWN"] as const;
 
+const PAPER_FIELDS = [
+  ["equity", "Paper equity", "سرمایه کاغذی"],
+  ["riskPct", "Size / risk %", "اندازه / درصد ریسک"],
+  ["entry", "Entry", "ورود"],
+  ["stopLevel", "Hard stop", "استاپ سخت"],
+  ["stopType", "Stop type", "نوع استاپ"],
+  ["pointValue", "Point value", "ارزش پوینت"],
+  ["pointValueSource", "Point-value source", "منبع ارزش پوینت"],
+  ["lot", "Lot", "لات"],
+  ["spreadCosts", "Spread and costs", "اسپرد و هزینه"],
+  ["target", "Target", "هدف"],
+  ["netRR", "Net R:R", "نسبت خالص"],
+] as const;
+
+const CONDITIONAL_FIELDS = [
+  ["condition", "Condition", "شرط"],
+  ["entry", "Entry", "ورود"],
+  ["stop", "Stop", "استاپ"],
+  ["target", "Target", "هدف"],
+  ["sizeRisk", "Size / risk", "اندازه / ریسک"],
+] as const;
+
+type PaperKey = (typeof PAPER_FIELDS)[number][0];
+type ConditionalKey = (typeof CONDITIONAL_FIELDS)[number][0];
+
+function blank<K extends string>(fields: readonly (readonly [K, string, string])[]): Record<K, string> {
+  return Object.fromEntries(fields.map(([key]) => [key, ""])) as Record<K, string>;
+}
+
+function linesOf(value: string): string[] {
+  return value.split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
 function line(value: Text | null | undefined, locale: "fa" | "en"): string {
   if (!value) return "";
   return locale === "fa" ? value.fa : value.en;
@@ -60,7 +93,9 @@ export default function DailyLogCard({
   const [freshness, setFreshness] = useState<(typeof FRESH)[number]>("UNKNOWN");
   const [calendar, setCalendar] = useState("");
   const [dayCall, setDayCall] = useState<"TRADE" | "NO_TRADE">("NO_TRADE");
-  const [dayCallReason, setDayCallReason] = useState("");
+  const [grounding, setGrounding] = useState("");
+  const [paper, setPaper] = useState<Record<PaperKey, string>>(() => blank(PAPER_FIELDS));
+  const [conditional, setConditional] = useState<Record<ConditionalKey, string>>(() => blank(CONDITIONAL_FIELDS));
 
   const load = async () => {
     const res = await fetch("/api/mentor/daily-log?week=current", { credentials: "same-origin", cache: "no-store" });
@@ -90,9 +125,14 @@ export default function DailyLogCard({
         currentApplication,
         spiralApplication,
         selfCheck,
-        paperPlan: null,
         dayCall,
-        dayCallReason: dayCall === "NO_TRADE" ? dayCallReason : "",
+        dayCallReason: "",
+        groundingRefs: dayCall === "NO_TRADE" ? linesOf(grounding) : [],
+        paperPlan: dayCall === "TRADE" ? paper : null,
+        conditionalPlan:
+          dayCall === "NO_TRADE" && Object.values(conditional).some((value) => value.trim())
+            ? conditional
+            : null,
       }),
     });
     const body = (await res.json().catch(() => ({}))) as { fa?: string; en?: string; error?: string };
@@ -161,12 +201,53 @@ export default function DailyLogCard({
               {locale === "fa" ? "امروز بدون معامله" : "No trade today"}
             </button>
           </div>
-          {dayCall === "NO_TRADE" ? (
-            <label className="block">
-              {locale === "fa" ? "دلیل کوتاه، با timestamp، یا Observed reaction unavailable" : "Short reason from timestamped readings, or Observed reaction unavailable"}
-              <input className="mt-1 w-full border border-line bg-ink px-2 py-2" value={dayCallReason} onChange={(e) => setDayCallReason(e.target.value)} />
-            </label>
-          ) : null}
+          {dayCall === "TRADE" ? (
+            <fieldset className="space-y-2 border border-line p-3" data-testid="paper-plan">
+              <legend className="px-1 text-paper">{locale === "fa" ? "پلن کاغذی" : "Paper plan"}</legend>
+              <p className="text-xs text-fog">{locale === "fa" ? "شبیه‌سازی است، سفارش نیست." : "Simulated, not an order."}</p>
+              {PAPER_FIELDS.map(([key, en, fa]) => (
+                <label key={key} className="block">
+                  {locale === "fa" ? fa : en}
+                  <input
+                    className="mt-1 w-full border border-line bg-ink px-2 py-2"
+                    data-testid={`paper-${key}`}
+                    value={paper[key]}
+                    onChange={(event) => setPaper((cur) => ({ ...cur, [key]: event.target.value }))}
+                  />
+                </label>
+              ))}
+            </fieldset>
+          ) : (
+            <div className="space-y-2">
+              <label className="block">
+                {locale === "fa"
+                  ? "خوانش‌های دارای timestamp، هر کدام یک خط. یا دقیقاً Observed reaction unavailable"
+                  : "Timestamped readings, one per line. Or exactly Observed reaction unavailable"}
+                <textarea
+                  className="mt-1 w-full border border-line bg-ink px-2 py-2"
+                  data-testid="grounding-refs"
+                  value={grounding}
+                  onChange={(event) => setGrounding(event.target.value)}
+                />
+              </label>
+              <details className="border border-line p-3" data-testid="conditional-plan">
+                <summary className="cursor-pointer text-paper">{locale === "fa" ? "پلن شرطی (اختیاری)" : "Conditional plan (optional)"}</summary>
+                <div className="mt-2 space-y-2">
+                  {CONDITIONAL_FIELDS.map(([key, en, fa]) => (
+                    <label key={key} className="block">
+                      {locale === "fa" ? fa : en}
+                      <input
+                        className="mt-1 w-full border border-line bg-ink px-2 py-2"
+                        data-testid={`conditional-${key}`}
+                        value={conditional[key]}
+                        onChange={(event) => setConditional((cur) => ({ ...cur, [key]: event.target.value }))}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </details>
+            </div>
+          )}
           <p className="text-xs text-fog">
             {locale === "fa"
               ? "ساعت و session را سرور پر می‌کند و قابل ویرایش نیست."
@@ -204,7 +285,7 @@ export default function DailyLogCard({
             {locale === "fa" ? "خودارزیابی" : "Self-check"}
             <textarea className="mt-1 w-full border border-line bg-ink px-2 py-2" value={selfCheck} onChange={(e) => setSelfCheck(e.target.value)} />
           </label>
-          <p className="text-xs text-fog">{locale === "fa" ? "پلن کاغذی در گزارش روزانه اختیاری است. شبیه‌سازی است، سفارش نیست." : "The paper plan on a daily entry is optional. Simulated, not an order."}</p>
+          <p className="text-xs text-fog">{locale === "fa" ? "امروز معامله: پلن کاغذی را کامل کنید. امروز بدون معامله: پلن شرطی اختیاری است و معامله حساب نمی‌شود." : "Trade today needs the paper plan. A conditional plan on a no-trade day is optional and is not a trade."}</p>
           <button type="submit" className="min-h-11 bg-gold px-4 text-sm font-semibold text-ink">
             {locale === "fa" ? "ذخیره گزارش امروز" : "Save today's log"}
           </button>
