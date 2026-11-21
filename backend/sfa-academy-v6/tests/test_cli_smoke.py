@@ -105,10 +105,12 @@ def test_sfa_cli_help_for_every_command():
         ["override"],
         ["import-legacy"],
         ["adopt-legacy"],
+        ["test-account"],
+        ["open-practical-window"],
     ]
     top = run([PY, "-m", "sfa_api.cli", "--help"])
     assert top.returncode == 0
-    assert "invite" in top.stdout and "adopt-legacy" in top.stdout
+    assert "invite" in top.stdout and "adopt-legacy" in top.stdout and "test-account" in top.stdout
     missing = run([PY, "-m", "sfa_api.cli"])
     assert missing.returncode == 2
     for cmd in commands[1:]:
@@ -417,6 +419,29 @@ def test_nginx_site_passes_nginx_t(tmp_path):
     )
     checked = subprocess.run([nginx, "-t", "-c", str(conf)], capture_output=True, text=True)
     assert checked.returncode == 0, checked.stderr
+
+
+def test_test_account_help_and_operator_argv_parse_before_config():
+    help_run = run([PY, "-m", "sfa_api.cli", "test-account", "--help"])
+    assert help_run.returncode == 0
+    assert "--week" in help_run.stdout and "--reason" in help_run.stdout and "--off" in help_run.stdout
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT)
+    env.pop("ECHO_ACADEMY_API_KEY", None)
+    for key in ("DATABASE_URL", "SFA_BRIDGE_SECRET", "ECHO_API_KEY_HASH", "SFA_SITE_ORIGIN", "SFA_ENV"):
+        env.pop(key, None)
+    result = subprocess.run(
+        [PY, "-m", "sfa_api.cli", "test-account", "S10001", "--week", "2", "--reason", "bot E2E test"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode != 0
+    assert "run install.sh to finish setup (missing /etc/sfa/sfa.env)" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert "unrecognized arguments" not in result.stderr
+    assert "bot E2E test" not in result.stderr
 
 
 def test_sfa_missing_config_is_a_clear_message():

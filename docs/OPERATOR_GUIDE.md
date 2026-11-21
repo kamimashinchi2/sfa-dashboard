@@ -52,6 +52,8 @@ The command prints one link, valid for 30 minutes, single use. Send it in privat
 sudo sfa status
 sudo sfa override DECISION_ID --reason 'What was wrong with this grade'
 sudo sfa open-practical-window STUDENT_ID --reason 'Why this exception is open'
+sudo sfa test-account S10001 --week 2 --reason "bot E2E test"
+sudo sfa test-account S10001 --off
 sudo sfa backup-now
 sudo sfa show-echo-key
 sudo sfa check-echo-key
@@ -111,6 +113,28 @@ Once a week, same day:
 A positive stage 8 practical does not graduate the student. The dashboard says they are waiting for the senior mentor. There is no stage 9.
 
 In the session, use the report on their dashboard. It is the history of quizzes, practicals, and weaknesses. You decide what "finished" means in conversation. The site will not print a diploma.
+
+## One-session daily-log test
+
+This is only for the designated test student, kami, student id S10001. Every other student keeps the normal rules: a log counts on a weekday, the day locks at Amsterdam midnight, and the practical file uploads only on the due Friday.
+
+After you deploy, the installer runs `sfa migrate` and adds the test-account flag. It stays off until you mark one student. Then run:
+
+```bash
+sudo sfa test-account S10001 --week 2 --reason "bot E2E test"
+```
+
+The reason is required and is stored in the audit log. The command marks only S10001. Week 2 must already exist for that student. It switches that week to the daily-log model, sets the issue time, the due Friday, and whether a plan is required, and leaves the week ready for Echo to accept a daily-log assignment. It does not print the Echo key, the answer key, or any other secret.
+
+The bot can then, in one sitting, submit the quiz if it is still open, receive the daily-log assignment, log a trade day and no-trade days on weekdays inside that window, and upload the Friday file the same day. On kami's daily card, a menu labelled "Test date (test account only)" lists the weekdays after the issue date through the due Friday. The saved log uses the date she picks. Echo's packet marks those chosen days `testBackdated` so the grade is not mistaken for a normal weekday. Other students do not see the menu, and their daily-log response does not include a test mode or those dates. A student who is not marked cannot send a test date.
+
+When the test is finished, turn the flag off. The week stays on the daily-log model, and the weekday, midnight, and Friday rules apply again:
+
+```bash
+sudo sfa test-account S10001 --off
+```
+
+If that week already has a submitted practical, this command does not delete it. Use a week that has not been submitted yet.
 
 ## After you pull new code
 

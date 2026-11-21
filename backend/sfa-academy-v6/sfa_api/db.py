@@ -31,6 +31,9 @@ class DB:
             if not c.execute('SELECT 1 FROM schema_migrations WHERE version=2').fetchone():
                 _script(c.c, Path(__file__).with_name('migration_002.sql').read_text())
                 c.execute('INSERT INTO schema_migrations VALUES(2)')
+            if not c.execute('SELECT 1 FROM schema_migrations WHERE version=3').fetchone():
+                _script(c.c, Path(__file__).with_name('migration_003.sql').read_text())
+                c.execute('INSERT INTO schema_migrations VALUES(3)')
     @contextmanager
     def tx(self):
         with psycopg.connect(self.url,row_factory=dict_row) as c:

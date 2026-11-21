@@ -7,7 +7,8 @@ import hashlib, json, re, uuid
 from datetime import datetime, timedelta, date
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation, localcontext
 from zoneinfo import ZoneInfo
-from .contracts import Invalid, canonical, ident, require, text
+from .contracts import Invalid, SID, canonical, ident, require, text
+from .plan_policy import plan_policy
 
 AMSTERDAM = ZoneInfo('Europe/Amsterdam')
 # Preferred-session label from the Amsterdam clock. London cash is the morning
@@ -141,11 +142,55 @@ def structural_ok(body, assignment, stage):
     return True
 
 
-def entry_counts(row, *, assignment, stage, issued_date, due, window_start, submitted_unix, now_dt):
+def allowed_test_dates(issued_date, due):
+    """Weekdays strictly after the issue date, through the due Friday."""
+    if issued_date is None or due is None or due <= issued_date:
+        return []
+    dates = []
+    cursor = issued_date + timedelta(days=1)
+    for _ in range(62):
+        if cursor > due:
+            break
+        if cursor.weekday() < 5:
+            dates.append(cursor.isoformat())
+        cursor += timedelta(days=1)
+    return dates
+
+
+def _student_is_test(c, student_id):
+    row = c.execute('SELECT is_test_account FROM students WHERE student=?', (student_id,)).fetchone()
+    return bool(row and row['is_test_account'])
+
+
+def _split_test_date(payload, test_account, issued_date, due, now_dt):
+    """testLocalDate is ignored when absent. A non-test account cannot send it."""
+    if not isinstance(payload, dict) or 'testLocalDate' not in payload:
+        return payload, now_dt.date(), False
+    supplied = payload['testLocalDate']
+    rest = {k: v for k, v in payload.items() if k != 'testLocalDate'}
+    if not test_account:
+        raise Invalid('TEST_DATE_NOT_ALLOWED', error='TEST_DATE_NOT_ALLOWED')
+    if not isinstance(supplied, str) or re.fullmatch(r'\d{4}-\d{2}-\d{2}', supplied) is None:
+        raise Invalid('TEST_DATE_INVALID', error='TEST_DATE_INVALID')
+    try:
+        local = date.fromisoformat(supplied)
+    except ValueError:
+        raise Invalid('TEST_DATE_INVALID', error='TEST_DATE_INVALID')
+    if local.weekday() >= 5:
+        raise Invalid('TEST_DATE_NOT_WEEKDAY', error='TEST_DATE_NOT_WEEKDAY')
+    if issued_date is None or not local > issued_date:
+        raise Invalid('TEST_DATE_BEFORE_ISSUE', error='TEST_DATE_BEFORE_ISSUE')
+    if due is None or local > due:
+        raise Invalid('TEST_DATE_AFTER_DUE', error='TEST_DATE_AFTER_DUE')
+    return rest, local, True
+
+
+def entry_counts(row, *, assignment, stage, issued_date, due, window_start, submitted_unix, now_dt, test_account=False):
     if not row.get('eligible'):
         return False
     local = parse_date(row['local_date'])
-    if local.weekday() >= 5:
+    # Test accounts skip the weekend and midnight-lock gates. Everyone else keeps both.
+    if local.weekday() >= 5 and not test_account:
         return False
     if issued_date is not None and not local > issued_date:
         return False
@@ -155,9 +200,10 @@ def entry_counts(row, *, assignment, stage, issued_date, due, window_start, subm
         return False
     if submitted_unix is not None and int(row['created']) > int(submitted_unix):
         return False
-    locked = now_dt >= next_local_midnight(local)
-    if not locked and (due is None or local != due):
-        return False
+    if not test_account:
+        locked = now_dt >= next_local_midnight(local)
+        if not locked and (due is None or local != due):
+            return False
     return structural_ok(_entry_body(row), assignment, stage)
 
 
@@ -306,6 +352,9 @@ def echo_entry(row, files, now_dt):
     view = student_entry(row, files, now_dt)
     view['files'] = [{'fileId': f['id'], 'name': f['name'], 'size': f['size'], 'digest': f['digest'], 'mime': f['mime']} for f in files]
     view['contentDigest'] = content_digest(body, digests)
+    # Grading can see that the calendar day was chosen for a test account, not taken from the clock.
+    if row.get('test_backdated'):
+        view['testBackdated'] = True
     return view
 
 
@@ -347,6 +396,8 @@ def roll_if_overdue(svc, c, row):
 
 def window_open(svc, c, row, now_dt):
     if model_of(row) != 'DAILY_LOG_V1':
+        return True
+    if _student_is_test(c, row['student']):
         return True
     if not row.get('due_friday'):
         return False
@@ -390,7 +441,7 @@ def _count_context(svc, c, row, submitted_unix=None):
     issued, due, start = _bounds(row)
     assignment = _load_assignment(row)
     entries = list(c.execute('SELECT * FROM daily_entries WHERE student=? AND week=? ORDER BY created, id', (row['student'], row['week'])))
-    kw = dict(assignment=assignment, stage=row['stage'], issued_date=issued, due=due, window_start=start, submitted_unix=submitted_unix, now_dt=now_dt)
+    kw = dict(assignment=assignment, stage=row['stage'], issued_date=issued, due=due, window_start=start, submitted_unix=submitted_unix, now_dt=now_dt, test_account=_student_is_test(c, row['student']))
     return entries, kw, assignment, now_dt
 
 
@@ -456,7 +507,11 @@ class DailyMixin:
                 due_d = parse_date(due)
                 opens, closes = iso(friday_open(due_d)), iso(friday_close(due_d))
                 open_now = window_open(self, c, target, now_dt)
-        return {
+            test_dates = None
+            if not inactive and _student_is_test(c, target['student']):
+                issued, due_day, _start = _bounds(target)
+                test_dates = allowed_test_dates(issued, due_day)
+        body = {
             'entries': views,
             'countedDays': counted if not inactive else 0,
             'requiredDays': self.config.daily_log_min_days,
@@ -471,56 +526,86 @@ class DailyMixin:
             'warning': warning,
             'previousWeeks': previous,
         }
+        if test_dates is not None:
+            body['testMode'] = True
+            body['allowedDates'] = test_dates
+        return body
+
+    def _is_test_student(self, student_id):
+        rows = self.db.rows('SELECT is_test_account FROM students WHERE student=?', (student_id,))
+        return bool(rows and rows[0].get('is_test_account'))
+
+    def _daily_rate_ok(self, student_id):
+        if self._is_test_student(student_id):
+            return True
+        return self.db.rate('daily:' + student_id, int(self.local_now().timestamp()), 30, 60)
 
     def create_daily_entry(self, student, payload):
-        if not self.db.rate('daily:' + student['student'], int(self.local_now().timestamp()), 30, 60):
+        if not self._daily_rate_ok(student['student']):
             raise Invalid('RATE_LIMITED', error='RATE_LIMITED')
         now_dt = self.local_now()
         with self.db.tx() as c:
             row, assignment = self._open_log_row(c, student['student'])
-            local = now_dt.date()
+            test = _student_is_test(c, student['student'])
+            issued, due, _start = _bounds(row)
+            payload, local, backdated = _split_test_date(payload, test, issued, due, now_dt)
             n = c.execute('SELECT count(*) AS n FROM daily_entries WHERE student=? AND week=? AND local_date=?', (student['student'], row['week'], local.isoformat())).fetchone()['n']
             require(n < 3, 'DAILY_ENTRY_LIMIT')
             body = validate_daily_payload(payload, assignment, now_dt)
-            eligible = local.weekday() < 5
-            reason = None if eligible else 'WEEKEND'
+            if test:
+                eligible, reason = True, None
+            else:
+                eligible = local.weekday() < 5
+                reason = None if eligible else 'WEEKEND'
             digest = content_digest(body, [])
             eid = 'de_' + uuid.uuid4().hex
             unix = int(now_dt.timestamp())
-            c.execute('''INSERT INTO daily_entries(id,student,week,stage,local_date,created,updated,body,digest,revision,eligible,ineligible_reason)
-                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
-                      (eid, student['student'], row['week'], row['stage'], local.isoformat(), unix, unix, canonical(body), digest, 1, 1 if eligible else 0, reason))
+            c.execute('''INSERT INTO daily_entries(id,student,week,stage,local_date,created,updated,body,digest,revision,eligible,ineligible_reason,test_backdated)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                      (eid, student['student'], row['week'], row['stage'], local.isoformat(), unix, unix, canonical(body), digest, 1, 1 if eligible else 0, reason, 1 if backdated else 0))
             _append_revision(c, eid, 1, body, digest, unix)
             stored = dict(c.execute('SELECT * FROM daily_entries WHERE id=?', (eid,)).fetchone())
         return student_entry(stored, [], now_dt)
 
     def update_daily_entry(self, student, entry_id, payload):
-        if not self.db.rate('daily:' + student['student'], int(self.local_now().timestamp()), 30, 60):
+        if not self._daily_rate_ok(student['student']):
             raise Invalid('RATE_LIMITED', error='RATE_LIMITED')
         now_dt = self.local_now()
         with self.db.tx() as c:
             row, assignment = self._open_log_row(c, student['student'])
+            test = _student_is_test(c, student['student'])
             entry = c.execute('SELECT * FROM daily_entries WHERE id=? AND student=?', (entry_id, student['student'])).fetchone()
             require(entry is not None and entry['week'] == row['week'], 'ENTRY_NOT_FOUND')
-            local = parse_date(entry['local_date'])
-            if now_dt >= next_local_midnight(local):
-                raise Invalid('DAY_LOCKED', error='DAY_LOCKED')
+            issued, due, _start = _bounds(row)
+            supplied = isinstance(payload, dict) and 'testLocalDate' in payload
+            if supplied:
+                payload, local, backdated = _split_test_date(payload, test, issued, due, now_dt)
+                n = c.execute('SELECT count(*) AS n FROM daily_entries WHERE student=? AND week=? AND local_date=? AND id!=?', (student['student'], row['week'], local.isoformat(), entry_id)).fetchone()['n']
+                require(n < 3, 'DAILY_ENTRY_LIMIT')
+            else:
+                local = parse_date(entry['local_date'])
+                backdated = bool(entry.get('test_backdated'))
+                if not test and now_dt >= next_local_midnight(local):
+                    raise Invalid('DAY_LOCKED', error='DAY_LOCKED')
             body = validate_daily_payload(payload, assignment, now_dt)
             digest = _refresh_digest(c, entry_id, body)
-            # Weekend flag stays with the original local date, not the edit clock.
-            eligible = local.weekday() < 5
-            reason = None if eligible else 'WEEKEND'
+            # Weekend flag stays with the entry's local date, not the edit clock.
+            if test:
+                eligible, reason = True, None
+            else:
+                eligible = local.weekday() < 5
+                reason = None if eligible else 'WEEKEND'
             revision = int(entry['revision']) + 1
             unix = int(now_dt.timestamp())
-            c.execute('UPDATE daily_entries SET updated=?, body=?, digest=?, revision=?, eligible=?, ineligible_reason=? WHERE id=?',
-                      (unix, canonical(body), digest, revision, 1 if eligible else 0, reason, entry_id))
+            c.execute('UPDATE daily_entries SET local_date=?, updated=?, body=?, digest=?, revision=?, eligible=?, ineligible_reason=?, test_backdated=? WHERE id=?',
+                      (local.isoformat(), unix, canonical(body), digest, revision, 1 if eligible else 0, reason, 1 if backdated else 0, entry_id))
             _append_revision(c, entry_id, revision, body, digest, unix)
             stored = dict(c.execute('SELECT * FROM daily_entries WHERE id=?', (entry_id,)).fetchone())
             files = _files_for(c, entry_id)
         return student_entry(stored, files, now_dt)
 
     def add_daily_file(self, student, entry_id, uploaded):
-        if not self.db.rate('daily:' + student['student'], int(self.local_now().timestamp()), 30, 60):
+        if not self._daily_rate_ok(student['student']):
             raise Invalid('RATE_LIMITED', error='RATE_LIMITED')
         from pathlib import Path
         from .uploads import store
@@ -530,10 +615,11 @@ class DailyMixin:
         require(ext in ('.png', '.jpg', '.jpeg', '.webp'), 'FILE_TYPE_REJECTED')
         with self.db.tx() as c:
             row, _assignment = self._open_log_row(c, student['student'])
+            test = _student_is_test(c, student['student'])
             entry = c.execute('SELECT * FROM daily_entries WHERE id=? AND student=?', (entry_id, student['student'])).fetchone()
             require(entry is not None and entry['week'] == row['week'], 'ENTRY_NOT_FOUND')
             local = parse_date(entry['local_date'])
-            if now_dt >= next_local_midnight(local):
+            if not test and now_dt >= next_local_midnight(local):
                 raise Invalid('DAY_LOCKED', error='DAY_LOCKED')
             require(c.execute('SELECT count(*) AS n FROM daily_entry_files WHERE entry=?', (entry_id,)).fetchone()['n'] < 4, 'MAX_4_SCREENSHOTS')
             fid = 'df_' + uuid.uuid4().hex
@@ -638,6 +724,69 @@ class DailyMixin:
             return []
         ids = set(packet.pop('_countedIds'))
         return [{'entryId': e['entryId'], 'localDate': e['localDate']} for e in packet['entries'] if e['entryId'] in ids]
+
+    def _named_student(self, c, student_id):
+        require(isinstance(student_id, str) and SID.fullmatch(student_id) is not None, 'STUDENT_NOT_FOUND')
+        row = c.execute('SELECT * FROM students WHERE student=?', (student_id,)).fetchone()
+        require(row is not None and row['student'] == student_id, 'STUDENT_NOT_FOUND')
+        return dict(row)
+
+    def enable_test_account(self, student_id, week, reason):
+        """Mark one named student and switch that student's week to DAILY_LOG_V1.
+
+        Refuses any other id. The week must already belong to that student.
+        """
+        require(type(week) is int and 1 <= week <= 10000, 'WEEK_INVALID')
+        require(isinstance(reason, str) and 5 <= len(reason) <= 1000, 'OVERRIDE_REASON_REQUIRED')
+        text(reason, 1000)
+        now_dt = self.local_now()
+        issued = int(now_dt.timestamp())
+        due = server_due_friday(now_dt).date().isoformat()
+        start = window_start_after_issue(now_dt).isoformat()
+        with self.db.tx() as c:
+            student = self._named_student(c, student_id)
+            row = c.execute('SELECT * FROM weeks WHERE student=? AND week=?', (student_id, week)).fetchone()
+            require(row is not None and row['student'] == student_id, 'WEEK_NOT_FOUND')
+            row = dict(row)
+            stage = int(row['stage'])
+            required = 1 if plan_policy(stage) == 'required' else 0
+            state = row['state']
+            if state not in ('LESSON_OPEN', 'QUIZ_SUBMITTED', 'QUIZ_ASSESSED'):
+                state = 'LESSON_OPEN'
+            new_stage = stage if int(student['stage']) < stage else int(student['stage'])
+            c.execute('UPDATE students SET is_test_account=1, current_week=?, stage=? WHERE student=?', (week, new_stage, student_id))
+            marked = c.execute('SELECT student, is_test_account FROM students WHERE student=?', (student_id,)).fetchone()
+            require(marked is not None and marked['student'] == student_id and marked['is_test_account'], 'STUDENT_NOT_FOUND')
+            c.execute('UPDATE weeks SET practical_model=?, issued_at=?, due_friday=?, window_start=?, plan_required=?, state=? WHERE student=? AND week=?',
+                      ('DAILY_LOG_V1', issued, due, start, required, state, student_id, week))
+            stored = c.execute('SELECT practical_model, state, plan_required FROM weeks WHERE student=? AND week=?', (student_id, week)).fetchone()
+            require(stored['practical_model'] == 'DAILY_LOG_V1' and stored['state'] == state, 'WEEK_NOT_FOUND')
+            self._event(c, 'test-account:' + uuid.uuid4().hex, student_id, 'TEST_ACCOUNT_ENABLED', {
+                'student': student_id, 'week': week, 'reason': reason, 'practicalModel': 'DAILY_LOG_V1',
+                'state': state, 'dueFriday': due, 'planRequired': bool(required),
+            })
+        return {
+            'student': student_id,
+            'isTestAccount': True,
+            'week': week,
+            'practicalModel': 'DAILY_LOG_V1',
+            'state': state,
+            'issuedAt': issued,
+            'dueFriday': due,
+            'windowStart': start,
+            'planRequired': bool(required),
+        }
+
+    def disable_test_account(self, student_id):
+        """Clear the flag on the named test student. The week model is left as it is."""
+        with self.db.tx() as c:
+            student = self._named_student(c, student_id)
+            require(student['is_test_account'], 'TEST_ACCOUNT_REQUIRED')
+            c.execute('UPDATE students SET is_test_account=0 WHERE student=?', (student_id,))
+            cleared = c.execute('SELECT student, is_test_account FROM students WHERE student=?', (student_id,)).fetchone()
+            require(cleared is not None and cleared['student'] == student_id and not cleared['is_test_account'], 'STUDENT_NOT_FOUND')
+            self._event(c, 'test-account-off:' + uuid.uuid4().hex, student_id, 'TEST_ACCOUNT_DISABLED', {'student': student_id})
+        return {'student': student_id, 'isTestAccount': False}
 
 def trade_call_summary(rows):
     """Per local date. Only dayCall TRADE is a trade. conditionalPlan never counts.

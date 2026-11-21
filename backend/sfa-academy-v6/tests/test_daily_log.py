@@ -506,6 +506,218 @@ def test_legacy_week_is_unchanged(svc, account):
     assert view['active'] is False and view['practicalModel']=='LEGACY'
     assert svc.db.rows('SELECT practical_model FROM weeks WHERE student=?', (s['student'],))[0]['practical_model']=='LEGACY'
 
+def _daily_assignment(base, due_iso):
+    stage = base['stage']
+    tasks = [{'taskId': 'C1', 'kind': 'CORE', 'stage': stage, 'skill': 'core', 'task': {'fa': 'کار اصلی این هفته.', 'en': 'Core task for this week.'}, 'minDays': 1}]
+    for drill in base['weaknessDrills']:
+        tasks.append({'taskId': 'W-' + drill['weaknessId'], 'kind': 'WEAKNESS', 'weaknessId': drill['weaknessId'], 'skill': 'Risk', 'task': drill['task'], 'minDays': 1})
+    for prior in range(1, stage):
+        tasks.append({'taskId': f'S{prior}', 'kind': 'SPIRAL', 'stage': prior, 'skill': 'prior', 'task': {'fa': 'مرور مرحله قبل.', 'en': 'Spiral task from an earlier stage.'}, 'minDays': 1})
+    return {**base, 'dueAtISO': due_iso, 'dailyTasks': tasks, 'dailyLogRequirement': {'minDays': 3, 'eligibleWeekdays': ['MON', 'TUE', 'WED', 'THU', 'FRI'], 'timezone': 'Europe/Amsterdam', 'freshCount': True}, 'fridayDeliverable': {'fa': 'جمعه', 'en': 'Friday file.'}}
+
+def _weekdays_in_window(issued, start, due, count=3):
+    days = []
+    cursor = issued + timedelta(days=1)
+    while cursor <= due and len(days) < count:
+        if cursor.weekday() < 5 and cursor >= start:
+            days.append(cursor)
+        cursor += timedelta(days=1)
+    return days
+
+def test_non_test_daily_log_has_no_test_mode_or_allowed_dates(svc, account):
+    s, _ = account
+    legacy = svc.daily_log_view(s)
+    assert legacy['active'] is False
+    assert 'testMode' not in legacy and 'allowedDates' not in legacy
+    _arm(svc, s, at(2026, 11, 24, 9))
+    view = svc.daily_log_view(s)
+    assert view['active'] is True
+    assert 'testMode' not in view and 'allowedDates' not in view
+    blob = json.dumps(view)
+    assert 'testMode' not in blob and 'allowedDates' not in blob
+    svc.clock = lambda: at(2026, 11, 21, 12)
+    svc.enable_test_account(s['student'], 1, 'bot E2E test')
+    flagged = svc.daily_log_view(s)
+    assert flagged['testMode'] is True
+    from datetime import date as Date
+    row = svc.db.rows('SELECT issued_at, due_friday FROM weeks WHERE student=? AND week=1', (s['student'],))[0]
+    issued = datetime.fromtimestamp(int(row['issued_at']), TZ).date()
+    due = Date.fromisoformat(row['due_friday'])
+    expect = []
+    cursor = issued + timedelta(days=1)
+    while cursor <= due:
+        if cursor.weekday() < 5:
+            expect.append(cursor.isoformat())
+        cursor += timedelta(days=1)
+    assert flagged['allowedDates'] == expect
+    assert expect and all(issued < Date.fromisoformat(day) <= due and Date.fromisoformat(day).weekday() < 5 for day in expect)
+    token = svc.invite().rsplit('/', 1)[1]
+    other = svc.auth(svc.signup({'inviteToken': token, 'email': 'plain@example.test', 'displayName': 'Plain Learner', 'password': 'correct horse battery staple', 'acceptDataNotice': True}))
+    _arm(svc, other, at(2026, 11, 24, 9))
+    plain = svc.daily_log_view(other)
+    assert plain['active'] is True
+    assert 'testMode' not in plain and 'allowedDates' not in plain
+    assert 'testMode' not in json.dumps(plain) and 'allowedDates' not in json.dumps(plain)
+
+def test_non_test_student_keeps_weekend_friday_window_and_rejects_test_date(svc, account):
+    s, _ = account
+    _arm(svc, s, at(2026, 11, 24, 9))
+    with pytest.raises(Invalid, match='TEST_DATE_NOT_ALLOWED'):
+        svc.create_daily_entry(s, {**_entry(), 'testLocalDate': '2026-11-25'})
+    with pytest.raises(Invalid, match='PRACTICAL_WINDOW_CLOSED') as exc:
+        svc.draft(s)
+    assert exc.value.extra['opensAtISO'].startswith('2026-11-27T00:00:00')
+    unix = int(at(2026, 11, 24, 9).timestamp())
+    with svc.db.tx() as c:
+        c.execute('DELETE FROM rate WHERE key=?', ('daily:' + s['student'],))
+        c.execute('INSERT INTO rate VALUES(?,?,?)', ('daily:' + s['student'], unix, 30))
+    with pytest.raises(Invalid, match='RATE_LIMITED'):
+        svc.create_daily_entry(s, _entry())
+    with svc.db.tx() as c:
+        c.execute('DELETE FROM rate WHERE key=?', ('daily:' + s['student'],))
+    svc.clock = lambda: at(2026, 11, 28, 11)
+    saved = svc.create_daily_entry(s, _entry())
+    assert saved['eligible'] is False and saved['ineligibleReason'] == 'WEEKEND'
+    assert 'testBackdated' not in saved
+    assert not svc.db.rows('SELECT is_test_account FROM students WHERE student=?', (s['student'],))[0]['is_test_account']
+
+def test_test_account_command_refuses_other_students_and_off_restores_rules(svc, account):
+    s, _ = account
+    with pytest.raises(Invalid, match='STUDENT_NOT_FOUND'):
+        svc.enable_test_account('S99999', 1, 'bot E2E test')
+    with pytest.raises(Invalid, match='WEEK_NOT_FOUND'):
+        svc.enable_test_account(s['student'], 9, 'bot E2E test')
+    with pytest.raises(Invalid, match='OVERRIDE_REASON_REQUIRED'):
+        svc.enable_test_account(s['student'], 1, 'no')
+    with pytest.raises(Invalid, match='TEST_ACCOUNT_REQUIRED'):
+        svc.disable_test_account(s['student'])
+    token = svc.invite().rsplit('/', 1)[1]
+    other = svc.auth(svc.signup({'inviteToken': token, 'email': 'other@example.test', 'displayName': 'Other Learner', 'password': 'correct horse battery staple', 'acceptDataNotice': True}))
+    marked = svc.enable_test_account(s['student'], 1, 'bot E2E test')
+    assert marked['student'] == s['student'] and marked['isTestAccount'] is True and marked['practicalModel'] == 'DAILY_LOG_V1'
+    assert marked['planRequired'] is False and marked['dueFriday'] and marked['issuedAt']
+    assert not svc.db.rows('SELECT is_test_account FROM students WHERE student=?', (other['student'],))[0]['is_test_account']
+    assert 'TEST_ACCOUNT_ENABLED' in [e['kind'] for e in svc.db.rows('SELECT kind FROM events WHERE student=?', (s['student'],))]
+    assert svc.disable_test_account(s['student'])['isTestAccount'] is False
+    assert 'TEST_ACCOUNT_DISABLED' in [e['kind'] for e in svc.db.rows('SELECT kind FROM events WHERE student=?', (s['student'],))]
+    _arm(svc, s, at(2026, 11, 28, 11))
+    saved = svc.create_daily_entry(s, _entry())
+    assert saved['ineligibleReason'] == 'WEEKEND'
+    with pytest.raises(Invalid, match='TEST_DATE_NOT_ALLOWED'):
+        svc.create_daily_entry(s, {**_entry(), 'testLocalDate': '2026-11-24'})
+    _arm(svc, other, at(2026, 11, 24, 9))
+    with pytest.raises(Invalid, match='PRACTICAL_WINDOW_CLOSED'):
+        svc.draft(other)
+
+def test_test_account_runs_daily_log_in_one_session(svc, account, bank):
+    import threading
+    from datetime import date as Date
+    from werkzeug.serving import make_server
+    import sfa_api.app as app_module
+    from echo_client import Client
+    from sfa_api.daily import server_due_friday
+    from .test_units import input_quiz
+    from .vectors import qdecision
+    s, _ = account
+    when = at(2026, 11, 21, 12)  # Saturday. The whole flow uses this clock.
+    svc.clock = lambda: when
+    switched = svc.enable_test_account(s['student'], 1, 'bot E2E test')
+    assert switched['state'] == 'LESSON_OPEN' and switched['practicalModel'] == 'DAILY_LOG_V1'
+    quiz = input_quiz()
+    svc.quiz_submit(quiz, s)
+    stored_quiz = json.loads(svc.db.rows('SELECT body FROM quizzes WHERE attempt=?', (quiz['attemptId'],))[0]['body'])
+    mentor = qdecision(svc, stored_quiz)
+    mentor['assignment'] = _daily_assignment(mentor['assignment'], server_due_friday(svc.local_now()).isoformat(timespec='seconds'))
+    original = app_module.Service
+    app_module.Service = lambda _config: svc
+    server = None
+    thread = None
+    try:
+        app = app_module.create_app(svc.config)
+        server = make_server('127.0.0.1', 0, app, threaded=False)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        client = Client('http://127.0.0.1:' + str(server.server_port), 'e' * 48)
+        rid = 'quiz:' + quiz['attemptId']
+        lease = client.call('POST', 'claims/' + rid, {})['leaseToken']
+        assert client.submit({'requestId': rid, 'leaseToken': lease, 'decision': mentor})['state'] == 'DELIVERED'
+        issued_row = svc.db.rows('SELECT issued_at, due_friday, window_start, state, assignment FROM weeks WHERE student=? AND week=1', (s['student'],))[0]
+        assert issued_row['state'] == 'ASSIGNMENT_ISSUED'
+        assert 'dailyTasks' in json.loads(issued_row['assignment'])
+        issued = datetime.fromtimestamp(int(issued_row['issued_at']), TZ).date()
+        due = Date.fromisoformat(issued_row['due_friday'])
+        start = Date.fromisoformat(issued_row['window_start'])
+        weekend = issued + timedelta(days=1)
+        while weekend.weekday() < 5:
+            weekend += timedelta(days=1)
+        later = due + timedelta(days=1)
+        while later.weekday() >= 5:
+            later += timedelta(days=1)
+        with pytest.raises(Invalid, match='TEST_DATE_INVALID'):
+            svc.create_daily_entry(s, {**_entry(), 'testLocalDate': '25-11-2026'})
+        with pytest.raises(Invalid, match='TEST_DATE_NOT_WEEKDAY'):
+            svc.create_daily_entry(s, {**_entry(), 'testLocalDate': weekend.isoformat()})
+        before = issued - timedelta(days=1)
+        while before.weekday() >= 5:
+            before -= timedelta(days=1)
+        with pytest.raises(Invalid, match='TEST_DATE_BEFORE_ISSUE'):
+            svc.create_daily_entry(s, {**_entry(), 'testLocalDate': before.isoformat()})
+        with pytest.raises(Invalid, match='TEST_DATE_AFTER_DUE'):
+            svc.create_daily_entry(s, {**_entry(), 'testLocalDate': later.isoformat()})
+        days = _weekdays_in_window(issued, start, due)
+        assert len(days) == 3 and all(day.weekday() < 5 and issued < day <= due for day in days)
+        unix = int(when.timestamp())
+        with svc.db.tx() as c:
+            c.execute('DELETE FROM rate WHERE key=?', ('daily:' + s['student'],))
+            c.execute('INSERT INTO rate VALUES(?,?,?)', ('daily:' + s['student'], unix, 30))
+        quiet = _entry()
+        quiet['dayCallReason'] = ''
+        quiet['groundingRefs'] = ['EURUSD bid 1.0850 at 10:15 Amsterdam']
+        quiet['conditionalPlan'] = _conditional()
+        trade = svc.create_daily_entry(s, {**_trade(), 'testLocalDate': days[0].isoformat()})
+        no_trade = svc.create_daily_entry(s, {**quiet, 'testLocalDate': days[1].isoformat()})
+        third = svc.create_daily_entry(s, {**_entry(), 'testLocalDate': days[2].isoformat()})
+        assert trade['eligible'] and no_trade['eligible'] and third['eligible']
+        assert no_trade['fields']['conditionalPlan']['condition'].startswith('WAIT')
+        assert svc.daily_log_view(s)['countedDays'] == 3
+        # The chosen day has passed local midnight, and the test account can still edit it.
+        edit_at = datetime(days[0].year, days[0].month, days[0].day, 10, tzinfo=TZ) + timedelta(days=1)
+        assert edit_at.date() <= due
+        svc.clock = lambda edit_at=edit_at: edit_at
+        edited = svc.update_daily_entry(s, trade['entryId'], _trade())
+        assert edited['revisionCount'] == 2 and edited['localDate'] == days[0].isoformat()
+        svc.clock = lambda: when
+        assert svc.daily_log_view(s)['windowOpen'] is True
+        sid = svc.draft(s)
+        svc.upload(s, sid, FileStorage(stream=io.BytesIO(b'Friday document uploaded in the same session.'), filename='work.txt'))
+        assert svc.submit_practical(s, sid) == sid
+        item = next(i for i in client.call('GET', 'queue')['requests'] if i['requestId'] == 'practical:' + sid)
+        packet = item['dailyLog']
+        assert packet['tradeDays'] == 1 and packet['noTradeDays'] >= 1 and packet['countedDays'] == 3
+        assert all(entry.get('testBackdated') is True for entry in packet['entries'])
+        assert 'correctAnswer' not in json.dumps(packet) and 'answerKey' not in json.dumps(packet)
+        gate = _counted_gate(packet, True)
+        decision = _v3(svc, sid, 90, gate, blocked=False)
+        prid = 'practical:' + sid
+        please = client.call('POST', 'claims/' + prid, {})['leaseToken']
+        assert client.submit({'requestId': prid, 'leaseToken': please, 'decision': decision, 'riskEvidence': risk_evidence(decision)})['state'] == 'DELIVERED'
+    finally:
+        if server is not None:
+            server.shutdown()
+            thread.join(5)
+            server.server_close()
+        app_module.Service = original
+    feedback = svc.quiz_feedback(s, quiz['attemptId'])
+    log = svc.daily_log_view(s, '1')
+    student = svc.report(s['student'], audience='student')
+    blob = json.dumps({'quiz': feedback, 'log': log, 'report': student})
+    for banned in ('correctAnswer', 'answerKey', 'ECHO_ACADEMY_API_KEY', 'sfa-answer-key', 'testBackdated', 'contentDigest'):
+        assert banned not in blob
+    assert 'routineGate' not in json.dumps(log) and 'scores' not in json.dumps(log)
+    assert 'routineGate' not in json.dumps(feedback) and 'scores' not in json.dumps(feedback)
+    assert feedback['assessment']['items'] and all(set(item) == {'itemId', 'correct'} for item in feedback['assessment']['items'])
+    assert svc.entitlements(s['student'])['unlockedStage'] == 2
+
 def test_missing_evidence_still_pending(svc, account):
     s, _ = account
     _open(svc, s, 2)

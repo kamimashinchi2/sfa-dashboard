@@ -51,6 +51,11 @@ def main():
         sp.add_parser(name).add_argument('email')
     x=sp.add_parser('override'); x.add_argument('decisionId'); x.add_argument('--reason',required=True)
     x=sp.add_parser('open-practical-window'); x.add_argument('student'); x.add_argument('--reason',required=True)
+    x=sp.add_parser('test-account', help='Mark one student as a test account and switch one of their weeks to the daily log')
+    x.add_argument('studentId')
+    x.add_argument('--week', type=int, help='Week number to switch to DAILY_LOG_V1')
+    x.add_argument('--reason', help='Why this student is a test account (required unless --off)')
+    x.add_argument('--off', action='store_true', help='Clear the test-account flag for this student')
     sp.add_parser('import-legacy').add_argument('path')
     x=sp.add_parser('adopt-legacy'); x.add_argument('studentId'); x.add_argument('email')
     a=p.parse_args()
@@ -87,6 +92,13 @@ def main():
         print(s.reset_link(a.email))
     elif a.command=='override': s.override(a.decisionId,a.reason); print('Retracted; audit history retained; pending regrading')
     elif a.command=='open-practical-window': print(json.dumps(s.open_practical_window(a.student,a.reason)))
+    elif a.command=='test-account':
+        if a.off:
+            require(a.week is None and not a.reason,'TEST_ACCOUNT_OFF')
+            print(json.dumps(s.disable_test_account(a.studentId)))
+        else:
+            require(a.week is not None,'WEEK_REQUIRED')
+            print(json.dumps(s.enable_test_account(a.studentId,a.week,a.reason)))
     elif a.command=='import-legacy': print(json.dumps(import_sqlite(s,a.path)))
     else: print(json.dumps({'database':'ok','students':s.db.rows('SELECT count(*) AS n FROM students')[0]['n'],'pendingRequests':len(s.queue()),'approvalRequired':s.config.approval_required}))
 if __name__=='__main__': main()

@@ -33,6 +33,8 @@ type LogView = {
   warning: Text | null;
   entries: Entry[];
   state: string;
+  testMode?: boolean;
+  allowedDates?: string[];
 };
 
 const FRESH = ["FRESH", "RECENT", "STALE", "UNKNOWN"] as const;
@@ -96,6 +98,7 @@ export default function DailyLogCard({
   const [grounding, setGrounding] = useState("");
   const [paper, setPaper] = useState<Record<PaperKey, string>>(() => blank(PAPER_FIELDS));
   const [conditional, setConditional] = useState<Record<ConditionalKey, string>>(() => blank(CONDITIONAL_FIELDS));
+  const [testDate, setTestDate] = useState("");
 
   const load = async () => {
     const res = await fetch("/api/mentor/daily-log?week=current", { credentials: "same-origin", cache: "no-store" });
@@ -133,6 +136,7 @@ export default function DailyLogCard({
           dayCall === "NO_TRADE" && Object.values(conditional).some((value) => value.trim())
             ? conditional
             : null,
+        ...(view.testMode && testDate ? { testLocalDate: testDate } : {}),
       }),
     });
     const body = (await res.json().catch(() => ({}))) as { fa?: string; en?: string; error?: string };
@@ -173,6 +177,24 @@ export default function DailyLogCard({
             void save();
           }}
         >
+          {view.testMode ? (
+            <label className="block">
+              {locale === "fa" ? "تاریخ آزمون (فقط حساب آزمایشی)" : "Test date (test account only)"}
+              <select
+                className="mt-1 w-full border border-line bg-ink px-2 py-2"
+                data-testid="test-date"
+                value={testDate}
+                onChange={(event) => setTestDate(event.target.value)}
+              >
+                <option value="">{locale === "fa" ? "انتخاب تاریخ" : "Choose a date"}</option>
+                {(view.allowedDates ?? []).map((day) => (
+                  <option key={day} value={day}>
+                    {day}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <ul className="space-y-1">
             {tasks.map((task) => (
               <li key={task.taskId}>
