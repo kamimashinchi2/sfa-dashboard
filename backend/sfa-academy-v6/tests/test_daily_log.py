@@ -718,6 +718,137 @@ def test_test_account_runs_daily_log_in_one_session(svc, account, bank):
     assert feedback['assessment']['items'] and all(set(item) == {'itemId', 'correct'} for item in feedback['assessment']['items'])
     assert svc.entitlements(s['student'])['unlockedStage'] == 2
 
+def test_practical_list_is_the_current_week_and_model(svc, account):
+    s, _ = account
+    with svc.db.tx() as c:
+        c.execute("INSERT INTO submissions(id,student,stage,state,created,week) VALUES(?,?,?,?,?,?)",
+                  ('sub-w1', s['student'], 1, 'DELIVERED', 1, 1))
+        c.execute("UPDATE weeks SET state='NEXT_UNLOCKED', practical_model='LEGACY' WHERE student=? AND week=1", (s['student'],))
+        c.execute("UPDATE students SET current_week=2, stage=2 WHERE student=?", (s['student'],))
+        c.execute("INSERT INTO weeks(student,week,stage,state,practical_model,plan_required) VALUES(?,?,?,?,?,?)",
+                  (s['student'], 2, 2, 'ASSIGNMENT_ISSUED', 'DAILY_LOG_V1', 0))
+    opened = svc.list_practicals(s)
+    assert opened['currentWeek'] == 2 and opened['practicalModel'] == 'DAILY_LOG_V1'
+    assert opened['submissions'] == []
+    with svc.db.tx() as c:
+        c.execute("INSERT INTO submissions(id,student,stage,state,created,week) VALUES(?,?,?,?,?,?)",
+                  ('sub-w2', s['student'], 2, 'QUEUED', 2, 2))
+    locked = svc.list_practicals(s)
+    assert [row['id'] for row in locked['submissions']] == ['sub-w2']
+    assert locked['submissions'][0]['state'] == 'QUEUED'
+    assert locked['submissions'][0]['practicalModel'] == 'DAILY_LOG_V1'
+    assert locked['submissions'][0]['week'] == 2
+
+def test_student_report_and_quiz_feedback_omit_mentor_notes(svc, account, bank):
+    from .test_units import grade_quiz
+    s, _ = account
+    attempt, decision, rid, lease = grade_quiz(svc, s)
+    assert decision['echoNotes']
+    svc.decision(decision, rid, lease)
+    feedback = svc.quiz_feedback(s, attempt['attemptId'])
+    student = svc.report(s['student'], audience='student')
+    full = svc.report(s['student'])
+    blob = json.dumps({'feedback': feedback, 'student': student})
+    assert 'echoNotes' not in blob
+    assert decision['echoNotes'] not in blob
+    assert 'correctAnswer' not in blob
+    assert 'noPlanReason' not in blob
+    assert feedback['decision']['verdict'] == 'APPROVED'
+    assert feedback['decision']['feedback']['en']
+    assert feedback['assessment']['items'] and all(set(item) == {'itemId', 'correct'} for item in feedback['assessment']['items'])
+    assert full['decisions'][-1]['body']['echoNotes'] == decision['echoNotes']
+    assert decision['echoNotes'] in full['markdown']
+    reason = 'No trade. Timestamped readings at 14:35 show the chain unresolved.'
+    _grade(svc, s, 2, 90, {'noPlan': True, 'noPlanReason': reason})
+    hidden = svc.report(s['student'], audience='student')
+    mentor = svc.report(s['student'])
+    assert reason not in hidden['markdown'] and 'noPlanReason' not in hidden['markdown']
+    assert reason in mentor['markdown'] and 'noPlanReason' in mentor['markdown']
+
+def test_each_uncounted_day_has_a_student_safe_reason(svc, account):
+    s, _ = account
+    _arm(svc, s, at(2026, 11, 23, 15), stage=2)
+    early = svc.create_daily_entry(s, _entry())
+    assert early['countReason'] == 'BEFORE_ISSUE'
+    svc.clock = lambda: at(2026, 11, 24, 10)
+    gap = svc.create_daily_entry(s, _entry())
+    assert gap['countReason'] == 'NOT_LOCKED'
+    svc.clock = lambda: at(2026, 11, 25, 10)
+    reasons = {e['entryId']: e['countReason'] for e in svc.daily_log_view(s)['entries']}
+    assert reasons[early['entryId']] == 'BEFORE_ISSUE'
+    assert reasons[gap['entryId']] == 'NO_SPIRAL_TASK'
+    assert svc.daily_log_view(s)['countedDays'] == 0
+    svc.clock = lambda: at(2026, 11, 28, 11)
+    weekend = svc.create_daily_entry(s, _entry())
+    assert weekend['countReason'] == 'WEEKEND' and weekend['ineligibleReason'] == 'WEEKEND'
+    blob = json.dumps(svc.daily_log_view(s))
+    for banned in ('echoNotes', 'correctAnswer', 'score', 'contentDigest', 'answerKey'):
+        assert banned not in blob
+
+def test_after_due_and_after_submission_are_named(svc, account):
+    s, _ = account
+    _arm(svc, s, at(2026, 11, 27, 12))
+    counted = svc.create_daily_entry(s, _entry())
+    assert counted['countReason'] is None
+    with svc.db.tx() as c:
+        c.execute('''INSERT INTO daily_entries(id,student,week,stage,local_date,created,updated,body,digest,revision,eligible,ineligible_reason)
+                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
+                  ('de_late', s['student'], 1, 1, '2026-11-30', 1, 1, '{}', 'd', 1, 1, None))
+    late = next(e for e in svc.daily_log_view(s)['entries'] if e['entryId'] == 'de_late')
+    assert late['countReason'] == 'AFTER_DUE'
+    sid = _submit_friday(svc, s)
+    submitted = svc.db.rows('SELECT submitted_at FROM submissions WHERE id=?', (sid,))[0]['submitted_at']
+    with svc.db.tx() as c:
+        c.execute('''INSERT INTO daily_entries(id,student,week,stage,local_date,created,updated,body,digest,revision,eligible,ineligible_reason)
+                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
+                  ('de_after', s['student'], 1, 1, '2026-11-27', int(submitted) + 30, int(submitted) + 30, '{}', 'd', 1, 1, None))
+    after = next(e for e in svc.daily_log_view(s, '1')['entries'] if e['entryId'] == 'de_after')
+    assert after['countReason'] == 'AFTER_SUBMISSION'
+
+def test_normal_days_can_hold_two_entries_and_still_count_once(svc, account):
+    s, _ = account
+    _arm(svc, s, at(2026, 11, 24, 9))
+    for _ in range(3):
+        svc.create_daily_entry(s, _entry())
+    with pytest.raises(Invalid, match='DAILY_ENTRY_LIMIT'):
+        svc.create_daily_entry(s, _entry())
+    assert len(svc.db.rows('SELECT id FROM daily_entries WHERE student=?', (s['student'],))) == 3
+    sid = _submit_friday(svc, s)
+    packet = next(i['dailyLog'] for i in svc.queue() if i['requestId'] == 'practical:' + sid)
+    assert len(packet['entries']) == 3
+    assert packet['countedDays'] == 1
+
+def test_test_date_resave_revises_and_the_packet_has_one_row(svc, account):
+    s, _ = account
+    svc.clock = lambda: at(2026, 11, 21, 12)
+    svc.enable_test_account(s['student'], 1, 'bot E2E test')
+    with svc.db.tx() as c:
+        c.execute("UPDATE weeks SET state='ASSIGNMENT_ISSUED', assignment=? WHERE student=? AND week=1",
+                  (json.dumps(_assign(1)), s['student']))
+    day = svc.daily_log_view(s)['allowedDates'][0]
+    first = svc.create_daily_entry(s, {**_entry(), 'testLocalDate': day})
+    assert first['revisionCount'] == 1 and first['localDate'] == day
+    svc.clock = lambda: at(2026, 11, 26, 15)
+    second = svc.create_daily_entry(s, {**_entry(), 'testLocalDate': day, 'observations': 'Updated reading at 11:00 on the broker screen.'})
+    assert second['entryId'] == first['entryId'] and second['revisionCount'] == 2
+    assert second['fields']['observations'].startswith('Updated')
+    assert len(svc.db.rows('SELECT id FROM daily_entries WHERE student=? AND local_date=?', (s['student'], day))) == 1
+    stored = svc.db.rows('SELECT * FROM daily_entries WHERE id=?', (first['entryId'],))[0]
+    with svc.db.tx() as c:
+        c.execute('''INSERT INTO daily_entries(id,student,week,stage,local_date,created,updated,body,digest,revision,eligible,ineligible_reason,test_backdated)
+                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                  ('de_old', stored['student'], stored['week'], stored['stage'], stored['local_date'],
+                   stored['created'], int(stored['updated']) - 5, stored['body'], stored['digest'], 1, 1, None, 1))
+    shown = [e for e in svc.daily_log_view(s)['entries'] if e['localDate'] == day]
+    assert [e['entryId'] for e in shown] == [first['entryId']]
+    sid = svc.draft(s)
+    svc.upload(s, sid, FileStorage(stream=io.BytesIO(b'Friday document uploaded after the revision.'), filename='work.txt'))
+    svc.submit_practical(s, sid)
+    packet = next(i['dailyLog'] for i in svc.queue() if i['requestId'] == 'practical:' + sid)
+    assert [e['entryId'] for e in packet['entries'] if e['localDate'] == day] == [first['entryId']]
+    assert 'countReason' not in json.dumps(packet)
+    assert packet['entries'][0].get('testBackdated') is True
+
 def test_missing_evidence_still_pending(svc, account):
     s, _ = account
     _open(svc, s, 2)

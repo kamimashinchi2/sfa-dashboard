@@ -125,21 +125,24 @@ def _tasks(assignment):
     return tasks if isinstance(tasks, list) else []
 
 
-def structural_ok(body, assignment, stage):
+def structural_reason(body, assignment, stage):
+    """Student-safe code when the entry text cannot count. None when it can."""
     ids = set(body.get('taskIds') or [])
     tasks = _tasks(assignment)
     cores = {t['taskId'] for t in tasks if isinstance(t, dict) and t.get('kind') == 'CORE'}
     spirals = {t['taskId'] for t in tasks if isinstance(t, dict) and t.get('kind') == 'SPIRAL'}
     if not ids & cores:
-        return False
+        return 'NO_CORE_TASK'
     if stage >= 2 and not ids & spirals:
-        return False
+        return 'NO_SPIRAL_TASK'
     fields = body.get('fields') or {}
-    if not str(fields.get('observations') or '').strip():
-        return False
-    if not str(fields.get('currentApplication') or '').strip():
-        return False
-    return True
+    if not str(fields.get('observations') or '').strip() or not str(fields.get('currentApplication') or '').strip():
+        return 'INCOMPLETE'
+    return None
+
+
+def structural_ok(body, assignment, stage):
+    return structural_reason(body, assignment, stage) is None
 
 
 def allowed_test_dates(issued_date, due):
@@ -185,26 +188,35 @@ def _split_test_date(payload, test_account, issued_date, due, now_dt):
     return rest, local, True
 
 
-def entry_counts(row, *, assignment, stage, issued_date, due, window_start, submitted_unix, now_dt, test_account=False):
-    if not row.get('eligible'):
-        return False
+def entry_count_reason(row, *, assignment, stage, issued_date, due, window_start, submitted_unix, now_dt, test_account=False):
+    """None when the entry counts. Otherwise a short student-safe code.
+
+    The checks stay in the same order as the count itself. Test accounts skip the
+    weekend and midnight-lock gates. Everyone else keeps both.
+    """
     local = parse_date(row['local_date'])
-    # Test accounts skip the weekend and midnight-lock gates. Everyone else keeps both.
-    if local.weekday() >= 5 and not test_account:
-        return False
+    if not row.get('eligible') or (local.weekday() >= 5 and not test_account):
+        return 'WEEKEND'
     if issued_date is not None and not local > issued_date:
-        return False
+        return 'BEFORE_ISSUE'
     if window_start is not None and local < window_start:
-        return False
+        return 'BEFORE_WINDOW'
     if due is not None and local > due:
-        return False
+        return 'AFTER_DUE'
     if submitted_unix is not None and int(row['created']) > int(submitted_unix):
-        return False
+        return 'AFTER_SUBMISSION'
     if not test_account:
         locked = now_dt >= next_local_midnight(local)
         if not locked and (due is None or local != due):
-            return False
-    return structural_ok(_entry_body(row), assignment, stage)
+            return 'NOT_LOCKED'
+    return structural_reason(_entry_body(row), assignment, stage)
+
+
+def entry_counts(row, *, assignment, stage, issued_date, due, window_start, submitted_unix, now_dt, test_account=False):
+    return entry_count_reason(
+        row, assignment=assignment, stage=stage, issued_date=issued_date, due=due,
+        window_start=window_start, submitted_unix=submitted_unix, now_dt=now_dt, test_account=test_account,
+    ) is None
 
 
 def counted_entries(rows, **kw):
@@ -217,6 +229,39 @@ def counted_entries(rows, **kw):
 
 def counted_days(rows, **kw):
     return sorted({parse_date(r['local_date']).isoformat() for r in counted_entries(rows, **kw)})
+
+
+def _row_rank(row):
+    return (int(row.get('revision') or 0), int(row.get('updated') or 0), str(row.get('id') or ''))
+
+
+def collapse_test_duplicates(rows):
+    """Keep one test-backdated row per local date (the latest revision).
+
+    A normal student may still have up to three entries on the same day.
+    Those rows are not test-backdated and stay in the list. Day counting is
+    already one count per distinct date.
+    """
+    newest = {}
+    for row in rows:
+        if not row.get('test_backdated'):
+            continue
+        key = parse_date(row['local_date']).isoformat()
+        prev = newest.get(key)
+        if prev is None or _row_rank(row) > _row_rank(prev):
+            newest[key] = row
+    out = []
+    seen = set()
+    for row in rows:
+        if not row.get('test_backdated'):
+            out.append(row)
+            continue
+        key = parse_date(row['local_date']).isoformat()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(newest[key])
+    return out
 
 
 def _filled(value, limit, code):
@@ -440,7 +485,7 @@ def _count_context(svc, c, row, submitted_unix=None):
     now_dt = svc.local_now()
     issued, due, start = _bounds(row)
     assignment = _load_assignment(row)
-    entries = list(c.execute('SELECT * FROM daily_entries WHERE student=? AND week=? ORDER BY created, id', (row['student'], row['week'])))
+    entries = collapse_test_duplicates(list(c.execute('SELECT * FROM daily_entries WHERE student=? AND week=? ORDER BY created, id', (row['student'], row['week']))))
     kw = dict(assignment=assignment, stage=row['stage'], issued_date=issued, due=due, window_start=start, submitted_unix=submitted_unix, now_dt=now_dt, test_account=_student_is_test(c, row['student']))
     return entries, kw, assignment, now_dt
 
@@ -477,15 +522,17 @@ class DailyMixin:
             submitted_unix = submitted['submitted_at'] if submitted and submitted.get('submitted_at') else None
             entries, kw, assignment, now_dt = _count_context(self, c, target, submitted_unix)
             days = [] if inactive else counted_days(entries, **kw)
-            views = [] if inactive else [student_entry(e, _files_for(c, e['id']), now_dt) for e in entries]
+            views = [] if inactive else [self._student_log_entry(c, target, e, _files_for(c, e['id']), now_dt, submitted_unix) for e in entries]
             previous = []
             if week in (None, '', 'current'):
                 for old in c.execute('SELECT * FROM weeks WHERE student=? AND week<? ORDER BY week', (student['student'], current['week'])):
                     old = dict(old)
                     if model_of(old) != 'DAILY_LOG_V1':
                         continue
-                    old_entries = list(c.execute('SELECT * FROM daily_entries WHERE student=? AND week=? ORDER BY created, id', (old['student'], old['week'])))
-                    previous.append({'week': old['week'], 'stage': old['stage'], 'readOnly': True, 'entries': [student_entry(e, _files_for(c, e['id']), now_dt) for e in old_entries]})
+                    old_submitted = c.execute("SELECT submitted_at FROM submissions WHERE student=? AND week=? AND state IN ('QUEUED','DELIVERED') ORDER BY created DESC", (old['student'], old['week'])).fetchone()
+                    old_unix = old_submitted['submitted_at'] if old_submitted and old_submitted.get('submitted_at') else None
+                    old_entries = collapse_test_duplicates(list(c.execute('SELECT * FROM daily_entries WHERE student=? AND week=? ORDER BY created, id', (old['student'], old['week']))))
+                    previous.append({'week': old['week'], 'stage': old['stage'], 'readOnly': True, 'entries': [self._student_log_entry(c, old, e, _files_for(c, e['id']), now_dt, old_unix) for e in old_entries]})
             due = target.get('due_friday')
             required = self.config.daily_log_min_days
             counted = len(days)
@@ -540,6 +587,38 @@ class DailyMixin:
             return True
         return self.db.rate('daily:' + student_id, int(self.local_now().timestamp()), 30, 60)
 
+    def _student_log_entry(self, c, week_row, stored, files, now_dt, submitted_unix=None):
+        view = student_entry(stored, files, now_dt)
+        issued, due, start = _bounds(week_row)
+        view['countReason'] = entry_count_reason(
+            stored,
+            assignment=_load_assignment(week_row),
+            stage=week_row['stage'],
+            issued_date=issued,
+            due=due,
+            window_start=start,
+            submitted_unix=submitted_unix,
+            now_dt=now_dt,
+            test_account=_student_is_test(c, week_row['student']),
+        )
+        return view
+
+    def _revise_daily_row(self, c, entry, assignment, payload, now_dt, test, local, backdated):
+        body = validate_daily_payload(payload, assignment, now_dt)
+        digest = _refresh_digest(c, entry['id'], body)
+        if test:
+            eligible, reason = True, None
+        else:
+            eligible = local.weekday() < 5
+            reason = None if eligible else 'WEEKEND'
+        revision = int(entry['revision']) + 1
+        unix = int(now_dt.timestamp())
+        c.execute('UPDATE daily_entries SET local_date=?, updated=?, body=?, digest=?, revision=?, eligible=?, ineligible_reason=?, test_backdated=? WHERE id=?',
+                  (local.isoformat(), unix, canonical(body), digest, revision, 1 if eligible else 0, reason, 1 if backdated else 0, entry['id']))
+        _append_revision(c, entry['id'], revision, body, digest, unix)
+        stored = dict(c.execute('SELECT * FROM daily_entries WHERE id=?', (entry['id'],)).fetchone())
+        return stored, _files_for(c, entry['id'])
+
     def create_daily_entry(self, student, payload):
         if not self._daily_rate_ok(student['student']):
             raise Invalid('RATE_LIMITED', error='RATE_LIMITED')
@@ -549,6 +628,16 @@ class DailyMixin:
             test = _student_is_test(c, student['student'])
             issued, due, _start = _bounds(row)
             payload, local, backdated = _split_test_date(payload, test, issued, due, now_dt)
+            # A test date that already has an entry is a revision, including after midnight.
+            # Normal students keep the three-entry cap and always insert.
+            if test and backdated:
+                existing = c.execute(
+                    'SELECT * FROM daily_entries WHERE student=? AND week=? AND local_date=? ORDER BY revision DESC, updated DESC, id DESC',
+                    (student['student'], row['week'], local.isoformat()),
+                ).fetchone()
+                if existing:
+                    stored, files = self._revise_daily_row(c, existing, assignment, payload, now_dt, test, local, True)
+                    return self._student_log_entry(c, row, stored, files, now_dt)
             n = c.execute('SELECT count(*) AS n FROM daily_entries WHERE student=? AND week=? AND local_date=?', (student['student'], row['week'], local.isoformat())).fetchone()['n']
             require(n < 3, 'DAILY_ENTRY_LIMIT')
             body = validate_daily_payload(payload, assignment, now_dt)
@@ -565,7 +654,7 @@ class DailyMixin:
                       (eid, student['student'], row['week'], row['stage'], local.isoformat(), unix, unix, canonical(body), digest, 1, 1 if eligible else 0, reason, 1 if backdated else 0))
             _append_revision(c, eid, 1, body, digest, unix)
             stored = dict(c.execute('SELECT * FROM daily_entries WHERE id=?', (eid,)).fetchone())
-        return student_entry(stored, [], now_dt)
+            return self._student_log_entry(c, row, stored, [], now_dt)
 
     def update_daily_entry(self, student, entry_id, payload):
         if not self._daily_rate_ok(student['student']):
@@ -587,22 +676,11 @@ class DailyMixin:
                 backdated = bool(entry.get('test_backdated'))
                 if not test and now_dt >= next_local_midnight(local):
                     raise Invalid('DAY_LOCKED', error='DAY_LOCKED')
-            body = validate_daily_payload(payload, assignment, now_dt)
-            digest = _refresh_digest(c, entry_id, body)
-            # Weekend flag stays with the entry's local date, not the edit clock.
-            if test:
-                eligible, reason = True, None
-            else:
-                eligible = local.weekday() < 5
-                reason = None if eligible else 'WEEKEND'
-            revision = int(entry['revision']) + 1
-            unix = int(now_dt.timestamp())
-            c.execute('UPDATE daily_entries SET local_date=?, updated=?, body=?, digest=?, revision=?, eligible=?, ineligible_reason=?, test_backdated=? WHERE id=?',
-                      (local.isoformat(), unix, canonical(body), digest, revision, 1 if eligible else 0, reason, 1 if backdated else 0, entry_id))
-            _append_revision(c, entry_id, revision, body, digest, unix)
-            stored = dict(c.execute('SELECT * FROM daily_entries WHERE id=?', (entry_id,)).fetchone())
-            files = _files_for(c, entry_id)
-        return student_entry(stored, files, now_dt)
+            # Test accounts may revise a backdated day after Amsterdam midnight.
+            stored, files = self._revise_daily_row(c, entry, assignment, payload, now_dt, test, local, backdated)
+            submitted = c.execute("SELECT submitted_at FROM submissions WHERE student=? AND week=? AND state IN ('QUEUED','DELIVERED') ORDER BY created DESC", (row['student'], row['week'])).fetchone()
+            submitted_unix = submitted['submitted_at'] if submitted and submitted.get('submitted_at') else None
+            return self._student_log_entry(c, row, stored, files, now_dt, submitted_unix)
 
     def add_daily_file(self, student, entry_id, uploaded):
         if not self._daily_rate_ok(student['student']):
@@ -647,7 +725,7 @@ class DailyMixin:
             row = c.execute('SELECT * FROM weeks WHERE student=? AND week=?', (student_id, int(week))).fetchone()
             require(row is not None, 'WEEK_NOT_FOUND')
             row = dict(row)
-            entries = list(c.execute('SELECT * FROM daily_entries WHERE student=? AND week=? ORDER BY local_date, created, id', (student_id, int(week))))
+            entries = collapse_test_duplicates(list(c.execute('SELECT * FROM daily_entries WHERE student=? AND week=? ORDER BY local_date, created, id', (student_id, int(week)))))
             out = [echo_entry(e, _files_for(c, e['id']), now_dt) for e in entries]
         return {'studentId': student_id, 'week': int(week), 'practicalModel': model_of(row), 'entries': out}
 

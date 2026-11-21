@@ -183,4 +183,119 @@ describe("daily log card", () => {
     const saved = posts.at(-1) as { testLocalDate?: string };
     expect(saved.testLocalDate).toBe("2026-11-24");
   });
+
+  it("loads an existing test date and saves it as an update", async () => {
+    const calls: { url: string; method: string; body: { observations?: string; testLocalDate?: string } }[] = [];
+    const dates = ["2026-11-24", "2026-11-25"];
+    const entry = {
+      entryId: "de_existing",
+      localDate: "2026-11-25",
+      eligible: true,
+      ineligibleReason: null,
+      countReason: null,
+      locked: false,
+      revisionCount: 1,
+      taskIds: ["C1"],
+      dayCall: "NO_TRADE",
+      fields: {
+        observations: "Existing observation",
+        currentApplication: "Applied the lesson.",
+        spiralApplication: "Reviewed the prior level.",
+        selfCheck: "No signal.",
+        groundingRefs: ["EURUSD bid 1.0850 at 10:15 Amsterdam"],
+        paperPlan: null,
+        conditionalPlan: null,
+        routine: {
+          time: "10:15",
+          session: "LONDON",
+          calendar: "NEWS RISK: NOT ASSESSED",
+          freshness: "FRESH",
+          oneLine: "I waited for the checklist.",
+        },
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "POST" || init?.method === "PUT") {
+          calls.push({ url, method: init.method, body: JSON.parse(String(init.body)) });
+          return jsonResponse({ entryId: "de_existing", revisionCount: 2 });
+        }
+        return jsonResponse({ ...view, testMode: true, allowedDates: dates, entries: [entry] });
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(<DailyLogCard locale="en" tasks={tasks} />);
+    });
+    await flush();
+
+    const select = container.querySelector("[data-testid=test-date]") as HTMLSelectElement;
+    await act(async () => {
+      setSelect(select, "2026-11-25");
+    });
+    const values = [...container.querySelectorAll("textarea")].map((node) => (node as HTMLTextAreaElement).value);
+    expect(values).toContain("Existing observation");
+
+    await act(async () => {
+      container?.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect(calls.at(-1)?.method).toBe("PUT");
+    expect(calls.at(-1)?.url).toBe("/api/mentor/daily-log/de_existing");
+    expect(calls.at(-1)?.body.testLocalDate).toBe("2026-11-25");
+    expect(calls.at(-1)?.body.observations).toBe("Existing observation");
+
+    await act(async () => {
+      setSelect(select, "2026-11-24");
+    });
+    const cleared = [...container.querySelectorAll("textarea")].map((node) => (node as HTMLTextAreaElement).value);
+    expect(cleared.every((value) => value === "")).toBe(true);
+  });
+
+  it("shows a bilingual reason when a day does not count", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({
+          ...view,
+          countedDays: 2,
+          entries: [
+            {
+              entryId: "de_gap",
+              localDate: "2026-11-25",
+              eligible: true,
+              ineligibleReason: null,
+              countReason: "NO_SPIRAL_TASK",
+              locked: false,
+              revisionCount: 1,
+              taskIds: ["C1"],
+              fields: {
+                observations: "",
+                currentApplication: "",
+                spiralApplication: "",
+                selfCheck: "",
+                routine: { time: "10:00", session: "LONDON", calendar: "", freshness: "UNKNOWN", oneLine: "" },
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(<DailyLogCard locale="en" tasks={tasks} />);
+    });
+    await flush();
+    const reason = container.querySelector("[data-testid=count-reason]")?.textContent ?? "";
+    expect(reason).toContain("spiral task");
+    expect(reason).toContain("کار مرور");
+    expect(reason).not.toMatch(/score|echoNotes|correctAnswer/i);
+  });
 });

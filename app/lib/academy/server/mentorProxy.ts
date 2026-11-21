@@ -134,7 +134,7 @@ function rewriteQuizSubmission(
 
 export async function proxyMentor(
   req: Request,
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT",
   slug: string[],
 ): Promise<Response> {
   const key = slug.join("/");
@@ -147,7 +147,7 @@ export async function proxyMentor(
   const hmacOnly = HMAC_ONLY.has(key);
   const clientIp = trustedClientIp(req);
 
-  if (method === "POST") {
+  if (method !== "GET") {
     const origin = requireExactOrigin(req);
     if (!origin.ok) return errorResponse(origin.code, origin.status);
   }
@@ -165,7 +165,7 @@ export async function proxyMentor(
     return proxyUpload(req, path, clientIp);
   }
 
-  if (method === "POST") {
+  if (method !== "GET") {
     const ct = req.headers.get("content-type") ?? "";
     if (!ct.includes("application/json")) {
       return errorResponse("UNSUPPORTED_MEDIA", 415);
@@ -179,7 +179,7 @@ export async function proxyMentor(
   }
 
   let bodyBytes = new Uint8Array(0);
-  if (method === "POST") {
+  if (method !== "GET") {
     const cap = key === "legacy-import" ? LEGACY_CAP : JSON_CAP;
     const raw = new Uint8Array(await req.arrayBuffer());
     if (raw.byteLength > cap) return errorResponse("PAYLOAD_TOO_LARGE", 413);

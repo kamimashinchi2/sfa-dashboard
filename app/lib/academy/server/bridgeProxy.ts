@@ -33,7 +33,7 @@ export function resetRateLimitForTests(): void {
 }
 
 export async function proxyToBridge(input: {
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "PUT";
   flaskPath: string;
   body?: unknown;
   bearerToken?: string | null;

@@ -20,7 +20,26 @@ type Submission = {
   files: RemoteFile[];
   week?: number;
   stage?: number;
+  practicalModel?: string;
 };
+
+type PracticalList = {
+  submissions?: Submission[];
+  currentWeek?: number;
+  practicalModel?: string;
+};
+
+/** The upload lock follows the current week and model, not an older delivery. */
+export function currentPracticalSubmission(body: PracticalList): Submission | null {
+  const rows = (body.submissions ?? []).filter((row) => {
+    if (typeof body.currentWeek === "number" && row.week !== body.currentWeek) return false;
+    if (body.practicalModel && row.practicalModel && row.practicalModel !== body.practicalModel) return false;
+    return true;
+  });
+  const draft = rows.find((row) => row.state === "DRAFT");
+  if (draft) return draft;
+  return rows.find((row) => row.state === "QUEUED" || row.state === "DELIVERED") ?? null;
+}
 
 type LocalFile = {
   key: string;
@@ -97,10 +116,8 @@ export default function PracticalUpload({ locale }: { locale: "fa" | "en" }) {
   const refresh = useCallback(async () => {
     const res = await fetch("/api/mentor/practicals", { credentials: "same-origin", cache: "no-store" });
     if (!res.ok) return;
-    const body = (await res.json()) as { submissions?: Submission[] };
-    const rows = body.submissions ?? [];
-    const draft = rows.find((row) => row.state === "DRAFT");
-    const current = draft ?? rows[0];
+    const body = (await res.json()) as PracticalList;
+    const current = currentPracticalSubmission(body);
     if (!current) {
       setSubmissionId(null);
       setState(null);

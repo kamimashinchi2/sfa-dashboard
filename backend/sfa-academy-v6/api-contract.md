@@ -39,12 +39,12 @@ Flask separately spools/hashes before parsing; temp files closed in finally. All
 |GET|`/api/v1/admin/students`|ADMIN session + HMAC|`none`|`{students:[{student,display_name,email,stage,current_week,role}]}`|
 |GET|`/api/v1/assignment`|student|`none`|`{week,stage,status,assignment,practicalModel,planPolicy}`|
 |GET|`/api/v1/authorize/<int:stage>`|student|`none`|`{allowed:true,stage}`|
-|GET|`/api/v1/daily-log`|student|`week=current`|`{entries,countedDays,requiredDays,dueFriday,nextLockAtISO}`|
+|GET|`/api/v1/daily-log`|student|`week=current`|`{entries:[{countReason}],countedDays,requiredDays,dueFriday,nextLockAtISO}`|
 |GET|`/api/v1/data-notice`|HMAC only|`none`|`{version:1,text:string}`|
 |GET|`/api/v1/entitlements`|student|`none`|`{unlockedStage,currentWeek,status}`|
 |GET|`/api/v1/me`|student|`none`|`Me`|
 |GET|`/api/v1/notifications`|student|`none`|`{notifications:[{id,body:object,created,isRead}]}`|
-|GET|`/api/v1/practicals`|student|`none`|`{submissions:[{id,stage,week,state,created,files:[File]}]}`|
+|GET|`/api/v1/practicals`|student|`none`|`{currentWeek,practicalModel,submissions:[{id,stage,week,practicalModel,state,created,files:[File]}]}`|
 |GET|`/api/v1/quizzes`|student|`none`|`{attempts:[{attemptId,quizId,stage,week,created,assessmentStatus}]}`|
 |GET|`/api/v1/quizzes/<attempt>`|student|`none`|`{attemptId,assessment:PublicAssessment,decision:Decision or null}`|
 |GET|`/api/v1/report`|student|`none`|`Report`|
@@ -166,7 +166,15 @@ Flask separately spools/hashes before parsing; temp files closed in finally. All
   not "not approved". `noPlan` on A8 is still `PLAN_REQUIRED_FOR_WEEK`.
 - Student daily log: `GET/POST /api/v1/daily-log`, `PUT /api/v1/daily-log/<id>`,
   `POST /api/v1/daily-log/<id>/files`. Echo history: `GET /echo/v1/daily-log?student=&week=`.
+  Each student entry has `countReason` (null when the day counts; otherwise a short code such as
+  `NO_SPIRAL_TASK`, `WEEKEND`, `BEFORE_ISSUE`, `AFTER_DUE`, `AFTER_SUBMISSION`, or `NOT_LOCKED`).
+  A test-account create that sends `testLocalDate` for a date that already has an entry revises
+  that entry, including after midnight. The grading packet keeps one test-backdated row per date.
+  A normal student may still store up to three entries on one day, and a day still counts once.
   Entry files use the same Echo file route as practical files. LEGACY weeks are unchanged.
+- Student report, quiz feedback, and notifications omit `echoNotes`, `noPlanReason`, and
+  `correctAnswer`. The Echo report and admin decision views keep `echoNotes`.
+- `GET /api/v1/practicals` returns the current week and that week's practical model only.
 - Report = {student:{student,alias,stage,current_week},markdown:string,weaknesses:[{student,id,skill,first_week,
   evidence:JSON-string,status:"OPEN"|"IMPROVING"|"RESOLVED",last_drilled,clean_weeks,last_clean_week}],
   weeks:[{student,week,stage,state,attempt,assignment:JSON-string|null,quiz_verdict,practical_verdict}],
