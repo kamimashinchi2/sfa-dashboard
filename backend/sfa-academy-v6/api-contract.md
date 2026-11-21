@@ -37,8 +37,9 @@ Flask separately spools/hashes before parsing; temp files closed in finally. All
 |---|---|---|---|---|
 |GET|`/api/v1/admin/decisions`|ADMIN session + HMAC|`none`|`{decisions:[{id,student,state,body:Decision,delivered_at}]}`|
 |GET|`/api/v1/admin/students`|ADMIN session + HMAC|`none`|`{students:[{student,display_name,email,stage,current_week,role}]}`|
-|GET|`/api/v1/assignment`|student|`none`|`{week,stage,status,assignment:Assignment or null}`|
+|GET|`/api/v1/assignment`|student|`none`|`{week,stage,status,assignment,practicalModel,planPolicy}`|
 |GET|`/api/v1/authorize/<int:stage>`|student|`none`|`{allowed:true,stage}`|
+|GET|`/api/v1/daily-log`|student|`week=current`|`{entries,countedDays,requiredDays,dueFriday,nextLockAtISO}`|
 |GET|`/api/v1/data-notice`|HMAC only|`none`|`{version:1,text:string}`|
 |GET|`/api/v1/entitlements`|student|`none`|`{unlockedStage,currentWeek,status}`|
 |GET|`/api/v1/me`|student|`none`|`Me`|
@@ -48,12 +49,15 @@ Flask separately spools/hashes before parsing; temp files closed in finally. All
 |GET|`/api/v1/quizzes/<attempt>`|student|`none`|`{attemptId,assessment:PublicAssessment,decision:Decision or null}`|
 |GET|`/api/v1/report`|student|`none`|`Report`|
 |GET|`/api/v1/responses/<int:stage>`|student|`none`|`{responses:object or null}`|
+|GET|`/echo/v1/daily-log`|Echo Bearer|`student and week query`|`{studentId,week,practicalModel,entries}`|
 |GET|`/echo/v1/files/<fid>`|Echo Bearer|`none`|`original attachment; verify digest/size from queue`|
 |GET|`/echo/v1/health`|public|`none`|`{ok:true, version:6}`|
-|GET|`/echo/v1/queue`|Echo Bearer|`none`|`{requests:[QueueItem],policy:{quizApproved:80,quizPartial:60,practicalApproved:80,practicalPartial:65,cleanWeeks:2,approvalRequired}}`|
+|GET|`/echo/v1/queue`|Echo Bearer|`none`|`{requests:[QueueItem],policy:{quizApproved,quizPartial,practicalApproved,practicalPartial,cleanWeeks,approvalRequired,dailyLogMinDays,dailyLogTimezone,practicalWindow,practicalModel,planPolicy}}`|
 |GET|`/echo/v1/students/<sid>/report`|Echo Bearer|`none`|`Report`|
 |POST|`/api/v1/admin/decisions/<did>/approve`|ADMIN session + HMAC|`{}`|`{ok:true}`|
 |POST|`/api/v1/admin/decisions/<did>/override`|ADMIN session + HMAC|`{reason}`|`{ok:true}`|
+|POST|`/api/v1/daily-log`|student|`DailyLogInput`|`DailyEntry`|
+|POST|`/api/v1/daily-log/<eid>/files`|student|`multipart one png/jpg/webp`|`{fileId,name,size,mime}`|
 |POST|`/api/v1/legacy-import`|student|`{records:object; <=500000 UTF-8 JSON chars}`|`{imported:true,verified:false,unlocksChanged:false}`|
 |POST|`/api/v1/login`|HMAC only|`{email,password}`|`{sessionToken,expiresIn:604800,me:Me}`|
 |POST|`/api/v1/logout`|student|`{}`|`{ok:true}`|
@@ -68,6 +72,7 @@ Flask separately spools/hashes before parsing; temp files closed in finally. All
 |POST|`/api/v1/telegram/connect-link`|student|`{}`|`{url,expiresIn:900}`|
 |POST|`/echo/v1/claims/<path:rid>`|Echo Bearer|`{}`|`{requestId,leaseToken,expiresAt:unixSeconds}`|
 |POST|`/echo/v1/decisions`|Echo Bearer|`{requestId,leaseToken,decision:Decision,riskEvidence?:RiskEvidence}`|`{decisionId,state:"DELIVERED" or "PENDING_APPROVAL",idempotent:boolean}`|
+|PUT|`/api/v1/daily-log/<eid>`|student|`DailyLogInput`|`DailyEntry`|
 
 ## Shared exact types
 
@@ -100,7 +105,68 @@ Flask separately spools/hashes before parsing; temp files closed in finally. All
   result including per-item studentAnswer,correctAnswer,itemHash,topic,correct,clientMismatch}.
   Missing key/hash drift => UNVERIFIED; do NOT deliver a decision.
 - QueueItem practical = {requestId:"practical:<submissionId>",studentId,week,stage,claimExpires,
-  kind:"practical_submission",files:[File]}.
+  kind:"practical_submission",files:[File],practicalModel,planPolicy:"required"|"optional",
+  weekPlanRequired:boolean,nextDueFridayISO,dailyLog:DailyLog|null}.
+  `weekPlanRequired` is the stored `weeks.plan_required` flag. `planPolicy` is the same flag as a word.
+  Stages 1–7 (M1–A7) are optional; stage 8 (A8) is required. The only source of the default is
+  `sfa_api/plan_policy.py`, copied onto the week row when it is created.
+- DailyLog is built only on the server for DAILY_LOG_V1 weeks. It includes counted days, entries,
+  revision counts, file metadata, and `weekPlanRequired`. It never includes answer keys.
+- Practical decision envelope is exactly one of `riskEvidence` (five keys, hard_block),
+  `noPlan:true` plus `noPlanReason` (20–500 characters), or `reasonCode:"PLAN_MISSING_REMEDIAL"`.
+  More than one is `PLAN_AND_NO_PLAN_CONFLICT`.
+  Neither is `RISK_EVIDENCE_REQUIRED_PENDING`. `noPlan` on a required week is `PLAN_REQUIRED_FOR_WEEK`.
+  A missing or short reason is `NO_PLAN_REASON_REQUIRED`. `noPlan` forces `finalHardBlock:false`
+  (`FINAL_HARD_BLOCK_MISMATCH` otherwise), skips the risk event, and still uses the 40/40/20
+  thresholds and, on DAILY_LOG_V1, the routine gate. `noPlan` is rejected with
+  `NO_PLAN_REQUIRES_ZERO_TRADES` when `tradeDays` is above 0. `tradeDays` counts dates with
+  `dayCall:"TRADE"` only. `conditionalPlan` does not count, does not raise `tradeOnNoTradeDay`,
+  and does not block `noPlan`.
+- Each DAILY_LOG_V1 entry requires `dayCall:"TRADE"|"NO_TRADE"` and may include a short `dayCallReason`
+  plus `groundingRefs` (up to 8 strings, each 1–300 characters). A `NO_TRADE` entry needs at least one
+  `groundingRef` or the exact marker `Observed reaction unavailable` (`GROUNDING_REQUIRED` otherwise).
+  A `TRADE` entry needs a full `paperPlan` (`PAPER_PLAN_REQUIRED` / `PAPER_PLAN_INVALID`): equity,
+  riskPct, entry, stopLevel, stopType, pointValue, pointValueSource, lot, spreadCosts, target, netRR.
+  Those fields are presence-checked only. Daily risk size, a mental stop, and net R:R are not a
+  HARD_BLOCK. `paperPlan` on a `NO_TRADE` entry is `PAPER_PLAN_TRADE_ONLY`. `conditionalPlan`
+  (`condition`, `entry`, `stop`, `target`, `sizeRisk`) is optional and allowed only on `NO_TRADE`
+  (`CONDITIONAL_PLAN_NO_TRADE_ONLY` on a trade day). The queue `dailyLog` adds `tradeDays`,
+  `noTradeDays`, `tradesOnNoTradeDays`, and `tradeOnNoTradeDay` (dates that have both a TRADE entry
+  and a NO_TRADE entry). The server does not subtract points for that flag.
+- An unsafe TRADE-day `paperPlan` (mental or no hard stop, `riskPct` above 1, or `netRR` below 2)
+  is listed in `dailyLog.unsafeDailyTrades` as `{date, entryId, reasons}` with reasons drawn from
+  `MENTAL_STOP`, `RISK_OVER_1PCT`, and `NET_RR_UNDER_2`. `unsafeDailyTradeCount` is the length of
+  that list. The server does not set `finalHardBlock` from it and does not change the submitted
+  scores. `hard_block()` still reads only the Friday `riskEvidence` envelope.
+- `dailyLog.weekTradeRiskSummary` is present when the week has at least one TRADE `paperPlan`.
+  It is `{source:"WEEK_TRADES_AVERAGE", tradeCount, hardStopCount, mentalOrNoStopCount,
+  stopType:"STRUCTURAL_HARD", evidenceRefs:["daily:<entryId>", ...], currentEquity, riskAmount,
+  netReward, avgRiskPct, avgNetRR}`. For each trade, risk amount = equity × riskPct / 100 and
+  net reward = that amount × netRR. `currentEquity`, `riskAmount`, and `netReward` are the
+  arithmetic means of those amounts, then rendered as decimal strings with exactly two places
+  using `Decimal` quantize `0.01` and `ROUND_HALF_UP` (a tie rounds away from zero: `1.005` →
+  `"1.01"`). `avgRiskPct` = rounded riskAmount / rounded currentEquity × 100, and `avgNetRR` =
+  rounded netReward / rounded riskAmount, each to four decimal places. They are informational.
+  They are not the mean of the per-trade percents or ratios. `stopType` is always
+  `STRUCTURAL_HARD`, including when `mentalOrNoStopCount` is above 0. A grader who has trades and
+  no Friday plan copies `currentEquity`, `riskAmount`, `netReward`, `stopType`, and `evidenceRefs`
+  into the existing five-key `riskEvidence` envelope. `hard_block()` then applies to that envelope
+  only. `noPlan` stays `NO_PLAN_REQUIRES_ZERO_TRADES` when `tradeDays` is above 0. A8 still
+  requires its Final Paper Plan.
+- A8 with no Final Paper Plan uses envelope `reasonCode:"PLAN_MISSING_REMEDIAL"` and no `riskEvidence`
+  and no `noPlan`. Stored `verdict` stays `NOT_APPROVED` (there is no REMEDIAL verdict), `unlockNext`
+  is false, `finalHardBlock` is false, and `remedialAssignment` is the same stage for week+1.
+  `scores` and, on DAILY_LOG_V1, `routineGate` are stored and are not used to recompute that verdict.
+  The student report omits both. Delivery then follows the existing remedial path: the assessed week
+  stores `practical_verdict=NOT_APPROVED`, and the next week row is `REMEDIAL_ISSUED` at the same
+  stage, with a new due Friday. Any other verdict with this code is `PLAN_MISSING_REMEDIAL_ONLY`.
+  The code on a week that does not require a plan is `PLAN_MISSING_A8_ONLY`.
+  Student notifications, the student dashboard, and the owner Telegram line say
+  "plan missing: redo and re-upload" / "طرح نیست: دوباره انجام دهید و دوباره بارگذاری کنید",
+  not "not approved". `noPlan` on A8 is still `PLAN_REQUIRED_FOR_WEEK`.
+- Student daily log: `GET/POST /api/v1/daily-log`, `PUT /api/v1/daily-log/<id>`,
+  `POST /api/v1/daily-log/<id>/files`. Echo history: `GET /echo/v1/daily-log?student=&week=`.
+  Entry files use the same Echo file route as practical files. LEGACY weeks are unchanged.
 - Report = {student:{student,alias,stage,current_week},markdown:string,weaknesses:[{student,id,skill,first_week,
   evidence:JSON-string,status:"OPEN"|"IMPROVING"|"RESOLVED",last_drilled,clean_weeks,last_clean_week}],
   weeks:[{student,week,stage,state,attempt,assignment:JSON-string|null,quiz_verdict,practical_verdict}],

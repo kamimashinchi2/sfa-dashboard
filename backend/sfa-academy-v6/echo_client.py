@@ -11,12 +11,17 @@ sys.path.insert(0,str(PACKAGE_ROOT))
 from sfa_api.contracts import canonical
 
 def validate_envelope(p):
-    if not {'requestId','leaseToken','decision'}<=set(p)<= {'requestId','leaseToken','decision','riskEvidence'}: raise ValueError('Use {requestId,leaseToken,decision}')
+    if not {'requestId','leaseToken','decision'}<=set(p)<= {'requestId','leaseToken','decision','riskEvidence','noPlan'}: raise ValueError('Use {requestId,leaseToken,decision}')
+    if 'noPlan' in p and 'riskEvidence' in p: raise ValueError('PLAN_AND_NO_PLAN_CONFLICT')
     d=p['decision']; kind={'sfa-quiz-decision':'quiz','sfa-practical-decision':'practical'}.get(d.get('format'))
     if not kind: raise ValueError('Unsupported decision format')
     schema=json.loads((PACKAGE_ROOT/(kind+'-decision.schema.json')).read_text())
     Draft202012Validator(schema).validate(d)
-    if kind=='practical':
+    if kind=='practical' and p.get('noPlan') is True:
+        reason=p.get('noPlanReason')
+        if not isinstance(reason,str) or not 20<=len(reason)<=500: raise ValueError('NO_PLAN_REASON_REQUIRED')
+        if d.get('finalHardBlock') is not False: raise ValueError('FINAL_HARD_BLOCK_MISMATCH')
+    elif kind=='practical':
         from sfa_api.risk import hard_block
         if hard_block(p.get('riskEvidence')) is not d['finalHardBlock']: raise ValueError('Risk hard-block mismatch')
     expected=kind+':'+d['attemptId' if kind=='quiz' else 'submissionId']

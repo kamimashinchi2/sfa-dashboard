@@ -13,6 +13,7 @@ import QuizGate from "./QuizGate";
 import ResearchLab from "./ResearchLab";
 import EquityDrawdownLab from "./EquityDrawdownLab";
 import CrossAssetCapstone from "./CrossAssetCapstone";
+import PracticalPlanBlock from "./PracticalPlanBlock";
 import { useServerResponses } from "../../lib/academy/stageResponses";
 import { useProgress } from "./ProgressProvider";
 
@@ -65,9 +66,19 @@ function AdvancedBody({ content }: { content: AuthorizedContent }) {
           {locale === "fa" ? "تمرین عملی پیشرفته" : "Advanced practical"}
         </h2>
         <p className="text-sm text-fog">{t(mod.practicalTask, locale)}</p>
+        {mod.practicalPlan ? (
+          <PracticalPlanBlock plan={mod.practicalPlan} locale={locale} stage={mod.stages[0]} />
+        ) : null}
+        <div className="space-y-2 border border-dashed border-line p-3" data-testid="optional-warmup">
+          <p className="text-xs text-gold-soft">
+            {locale === "fa"
+              ? "گرم‌کردن اختیاری، بدون نمره. کار نمره‌دار گزارش روزانه و بارگذاری جمعه است."
+              : "Optional warm-up, not graded. The graded work is the daily log and the Friday upload."}
+          </p>
         {mod.id === "A6" ? <ResearchLab readOnly={readOnly} /> : null}
         {mod.id === "A7" ? <EquityDrawdownLab readOnly={readOnly} /> : null}
         {mod.id === "A8" ? <CrossAssetCapstone readOnly={readOnly} /> : null}
+        </div>
       </section>
 
       <QuizGate

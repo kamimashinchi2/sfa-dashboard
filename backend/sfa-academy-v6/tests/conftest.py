@@ -7,6 +7,7 @@ import pytest
 
 # Tests must not be able to reach the live academy, even if a real API key is in the environment.
 os.environ['SFA_FORBID_LIVE_HOST']='1'
+os.environ.pop('ECHO_ACADEMY_API_KEY', None)
 _ORIGINAL_GETADDRINFO=socket.getaddrinfo
 
 def _guarded_getaddrinfo(host, *args, **kwargs):
@@ -37,7 +38,9 @@ class StateHarness:
         self.path=path
         schema=Path(__file__).parents[1].joinpath('sfa_api/migration_001.sql').read_text().replace('ADD COLUMN IF NOT EXISTS','ADD COLUMN').replace('ADD COLUMN email TEXT UNIQUE','ADD COLUMN email TEXT')
         schema='\n'.join(l for l in schema.splitlines() if 'CREATE SEQUENCE' not in l)
-        with sqlite3.connect(path) as c: c.executescript(schema)
+        schema2=Path(__file__).parents[1].joinpath('sfa_api/migration_002.sql').read_text().replace('ADD COLUMN IF NOT EXISTS','ADD COLUMN')
+        with sqlite3.connect(path) as c:
+            c.executescript(schema); c.executescript(schema2)
     @contextlib.contextmanager
     def tx(self):
         with sqlite3.connect(self.path) as c:
@@ -47,7 +50,9 @@ class StateHarness:
     rate=DB.rate
 @pytest.fixture
 def cfg(tmp_path):
-    return Config('unit-transport','a'*64,__import__('hashlib').sha256(b'e'*48).hexdigest(),root=tmp_path,answer_key_path=str(tmp_path/'keys'))
+    c=Config('unit-transport','a'*64,__import__('hashlib').sha256(b'e'*48).hexdigest(),root=tmp_path,answer_key_path=str(tmp_path/'keys'))
+    c.practical_model='LEGACY'
+    return c
 @pytest.fixture
 def svc(cfg,tmp_path):
     s=Service.__new__(Service); s.config=cfg; s.db=StateHarness(tmp_path/'state-unit.sqlite'); return s

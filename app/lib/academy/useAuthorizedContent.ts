@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Lesson, Text } from "./contracts";
+import type { Lesson, PracticalPlan, Text } from "./contracts";
 import type { QuizItem } from "./curriculum";
 
 export type PublicQuizItem = Omit<QuizItem, "answer" | "rationale"> & {
@@ -16,6 +16,7 @@ export type AuthorizedContent = {
   title: Text;
   summary: Text;
   practicalTask: Text;
+  practicalPlan?: PracticalPlan | null;
   lessons: Lesson[];
   quiz: PublicQuizItem[];
   /** Per-attempt server shuffle. Sent back with the submission; not a permutation map. */

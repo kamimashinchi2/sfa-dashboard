@@ -7,6 +7,7 @@ import psycopg
 from .config import Config
 from .service import Service,NOTICE
 from .contracts import Invalid,require,canonical
+from .plan_policy import plan_policy, plan_policy_table
 from .security import verify,token_hash
 
 CONTRACT=[]
@@ -66,8 +67,10 @@ def create_app(config=None):
         r.headers['Cache-Control']='no-store'; r.headers['X-Content-Type-Options']='nosniff'; return r
     @app.errorhandler(Invalid)
     def invalid(e):
-        msg=str(e); code='UNAUTHORIZED' if 'session' in msg.lower() or msg=='LOGIN_FAILED' else 'STAGE_LOCKED' if msg=='STAGE_LOCKED' else 'VALIDATION_FAILED'
-        return jsonify(error=code,message=msg),401 if code=='UNAUTHORIZED' else 403 if code=='STAGE_LOCKED' else 400
+        msg=str(e); extra=getattr(e,'extra',None) or {}
+        code=extra.get('error') or ('UNAUTHORIZED' if 'session' in msg.lower() or msg=='LOGIN_FAILED' else 'STAGE_LOCKED' if msg=='STAGE_LOCKED' else 'RATE_LIMITED' if msg=='RATE_LIMITED' else 'VALIDATION_FAILED')
+        body={'error':code,'message':msg}; body.update({k:v for k,v in extra.items() if k!='error'})
+        return jsonify(body),401 if code=='UNAUTHORIZED' else 403 if code=='STAGE_LOCKED' else 429 if code=='RATE_LIMITED' else 400
     @app.errorhandler(HTTPException)
     def http_error(e): return jsonify(error=e.name.upper().replace(' ','_')),e.code
     @app.errorhandler(Exception)
@@ -111,11 +114,22 @@ def create_app(config=None):
         return {'attempts':out}
     @ep('GET','/api/v1/quizzes/<attempt>','none','{attemptId,assessment:PublicAssessment,decision:Decision|null}')
     def feedback(attempt): return svc.quiz_feedback(student(),attempt)
-    @ep('GET','/api/v1/assignment','none','{week,stage,status,assignment:Assignment|null}')
+    @ep('GET','/api/v1/assignment','none','{week,stage,status,assignment,practicalModel,planPolicy}')
     def assignment():
         s=student()
         with svc.db.tx() as c: w=svc._week(c,s['student'])
-        return {'week':w['week'],'stage':w['stage'],'status':w['state'],'assignment':json.loads(w['assignment']) if w['assignment'] else None}
+        return {'week':w['week'],'stage':w['stage'],'status':w['state'],'assignment':json.loads(w['assignment']) if w['assignment'] else None,'practicalModel':w.get('practical_model') or 'LEGACY','planPolicy':plan_policy(w['stage'])}
+    @ep('GET','/api/v1/daily-log','week=current','{entries,countedDays,requiredDays,dueFriday,nextLockAtISO}')
+    def daily_log(): return svc.daily_log_view(student(), request.args.get('week','current'))
+    @ep('POST','/api/v1/daily-log','DailyLogInput','DailyEntry')
+    def daily_log_create(): return svc.create_daily_entry(student(), payload()), 201
+    @ep('PUT','/api/v1/daily-log/<eid>','DailyLogInput','DailyEntry')
+    def daily_log_update(eid): return svc.update_daily_entry(student(), eid, payload())
+    @ep('POST','/api/v1/daily-log/<eid>/files','multipart one png/jpg/webp','{fileId,name,size,mime}')
+    def daily_log_file(eid):
+        s=student(); require(len(request.files.getlist('file'))==1 and set(request.files)=={'file'},'ONE_FILE_REQUIRED'); return svc.add_daily_file(s, eid, request.files['file']), 201
+    @ep('GET','/echo/v1/daily-log','student and week query','{studentId,week,practicalModel,entries}',auth='Echo Bearer')
+    def echo_daily(): return svc.echo_daily_log(request.args.get('student'), request.args.get('week'))
     @ep('GET','/api/v1/practicals','none','{submissions:[{id,stage,week,state,created,files:[File]}]}')
     def practical_history():
         s=student();return {'submissions':[{**r,'files':svc.file_list(r['id'])} for r in svc.db.rows('SELECT id,stage,week,state,created FROM submissions WHERE student=? ORDER BY created DESC LIMIT 100',(s['student'],))]}
@@ -136,7 +150,7 @@ def create_app(config=None):
         with svc.db.tx() as c: c.execute('UPDATE notifications SET is_read=1 WHERE id=? AND student=?',(nid,s['student']))
         return {'ok':True}
     @ep('GET','/api/v1/report','none','Report')
-    def report(): return svc.report(student()['student'])
+    def report(): return svc.report(student()['student'], audience='student')
     @ep('POST','/api/v1/telegram/connect-link','{}','{url,expiresIn:900}')
     def telegram(): return {'url':svc.connect(student()),'expiresIn':900}
     @ep('GET','/api/v1/admin/students','none','{students:[{student,display_name,email,stage,current_week,role}]}',auth='ADMIN session + HMAC')
@@ -153,19 +167,29 @@ def create_app(config=None):
         with svc.db.tx() as c:
             row=c.execute("SELECT * FROM mentor_decisions WHERE id=? AND state='PENDING_APPROVAL'",(did,)).fetchone(); require(row is not None,'NOT_PENDING'); svc.deliver(c,row,json.loads(row['body']))
         return {'ok':True}
-    @ep('GET','/echo/v1/queue','none','{requests:[QueueItem],policy:{quizApproved:80,quizPartial:60,practicalApproved:80,practicalPartial:65,cleanWeeks:2,approvalRequired}}',auth='Echo Bearer')
-    def queue(): return {'requests':svc.queue(),'policy':{'quizApproved':cfg.quiz_approved,'quizPartial':cfg.quiz_partial,'practicalApproved':cfg.practical_approved,'practicalPartial':cfg.practical_partial,'cleanWeeks':cfg.clean_weeks,'approvalRequired':cfg.approval_required}}
+    @ep('GET','/echo/v1/queue','none','{requests:[QueueItem],policy:{quizApproved,quizPartial,practicalApproved,practicalPartial,cleanWeeks,approvalRequired,dailyLogMinDays,dailyLogTimezone,practicalWindow,practicalModel,planPolicy}}',auth='Echo Bearer')
+    def queue(): return {'requests':svc.queue(),'policy':{'quizApproved':cfg.quiz_approved,'quizPartial':cfg.quiz_partial,'practicalApproved':cfg.practical_approved,'practicalPartial':cfg.practical_partial,'cleanWeeks':cfg.clean_weeks,'approvalRequired':cfg.approval_required,'dailyLogMinDays':cfg.daily_log_min_days,'dailyLogTimezone':cfg.daily_log_timezone,'practicalWindow':cfg.practical_window,'practicalModel':cfg.practical_model,'planPolicy':plan_policy_table()}}
     @ep('GET','/echo/v1/students/<sid>/report','none','Report',auth='Echo Bearer')
     def echo_report(sid): return svc.report(sid)
     @ep('GET','/echo/v1/files/<fid>','none','original attachment; verify digest/size from queue',auth='Echo Bearer')
     def file(fid):
-        rows=svc.db.rows('SELECT * FROM files WHERE id=?',(fid,)); require(bool(rows),'FILE_NOT_FOUND'); f=rows[0]; p=Path(f['path']).resolve(); require(p.is_relative_to((cfg.root/'uploads').resolve()),'FILE_PATH_REJECTED')
+        rows=svc.db.rows('SELECT * FROM files WHERE id=?',(fid,)) or svc.db.rows('SELECT * FROM daily_entry_files WHERE id=?',(fid,)); require(bool(rows),'FILE_NOT_FOUND'); f=rows[0]; p=Path(f['path']).resolve(); require(p.is_relative_to((cfg.root/'uploads').resolve()),'FILE_PATH_REJECTED')
         return send_file(p,as_attachment=True,download_name=f['name'],mimetype='application/octet-stream')
     @ep('POST','/echo/v1/claims/<path:rid>','{}','{requestId,leaseToken,expiresAt:unixSeconds}',auth='Echo Bearer')
     def claim(rid): return svc.claim(rid)
     @ep('POST','/echo/v1/decisions','{requestId,leaseToken,decision:Decision,riskEvidence?:RiskEvidence}','{decisionId,state:"DELIVERED"|"PENDING_APPROVAL",idempotent:boolean}',auth='Echo Bearer')
     def decision():
-        p=payload(); require({'requestId','leaseToken','decision'}<=set(p)<= {'requestId','leaseToken','decision','riskEvidence'},'DECISION_ENVELOPE_REQUIRED'); return svc.decision(p['decision'],p['requestId'],p['leaseToken'],p.get('riskEvidence'))
+        p=payload(); allowed={'requestId','leaseToken','decision','riskEvidence','noPlan','noPlanReason','reasonCode'}
+        require({'requestId','leaseToken','decision'}<=set(p)<=allowed,'DECISION_ENVELOPE_REQUIRED')
+        has_risk='riskEvidence' in p; has_no='noPlan' in p; has_missing='reasonCode' in p
+        if has_missing and p.get('reasonCode')!='PLAN_MISSING_REMEDIAL': raise Invalid('PLAN_MISSING_REMEDIAL_ONLY', error='PLAN_MISSING_REMEDIAL_ONLY')
+        if has_missing and (has_risk or has_no): raise Invalid('PLAN_AND_NO_PLAN_CONFLICT', error='PLAN_AND_NO_PLAN_CONFLICT')
+        if has_risk and has_no: raise Invalid('PLAN_AND_NO_PLAN_CONFLICT', error='PLAN_AND_NO_PLAN_CONFLICT')
+        if has_missing: return svc.decision(p['decision'],p['requestId'],p['leaseToken'],None,False,None,True)
+        if has_no:
+            if p.get('noPlan') is not True: raise Invalid('NO_PLAN_REASON_REQUIRED', error='NO_PLAN_REASON_REQUIRED')
+            return svc.decision(p['decision'],p['requestId'],p['leaseToken'],None,True,p.get('noPlanReason'),False)
+        return svc.decision(p['decision'],p['requestId'],p['leaseToken'],p.get('riskEvidence') if has_risk else None,False,None,False)
     return app
 
 if __name__=='__main__': create_app().run('127.0.0.1',8081)

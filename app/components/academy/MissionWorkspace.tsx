@@ -17,6 +17,7 @@ import SetupValidator from "./SetupValidator";
 import MacroTransmissionBuilder from "./MacroTransmissionBuilder";
 import RiskGridCalculator from "./RiskGridCalculator";
 import JournalBuilder from "./JournalBuilder";
+import PracticalPlanBlock from "./PracticalPlanBlock";
 import { useServerResponses } from "../../lib/academy/stageResponses";
 import { useProgress } from "./ProgressProvider";
 
@@ -43,11 +44,8 @@ function MissionBody({
   const [quizScore, setQuizScore] = useState<number | null>(
     () => saved?.quizScore ?? null,
   );
-  const [taskComplete, setTaskComplete] = useState(
+  const [taskComplete] = useState(
     () => saved?.taskComplete ?? false,
-  );
-  const [practicalValidated, setPracticalValidated] = useState(
-    () => Boolean(saved?.practicalEvidence),
   );
   const freeTextSubmitted = Boolean(saved);
   const [riskStatus, setRiskStatus] = useState<RiskStatus | null>(
@@ -69,7 +67,7 @@ function MissionBody({
     if (readOnly) return;
     const taskOk =
       overrides?.taskComplete ??
-      (taskComplete && (mission.id !== "M2" || practicalValidated));
+      taskComplete;
     const gate = evaluateReadiness({
       quizScore: score,
       taskComplete: taskOk,
@@ -117,29 +115,28 @@ function MissionBody({
           {locale === "fa" ? "تمرین عملی" : "Practical task"}
         </h2>
         <p className="text-sm text-fog">{t(mission.practicalTask, locale)}</p>
+        {mission.practicalPlan ? (
+          <PracticalPlanBlock plan={mission.practicalPlan} locale={locale} stage={mission.stages[0]} />
+        ) : null}
+        <div className="space-y-2 border border-dashed border-line p-3" data-testid="optional-warmup">
+          <p className="text-xs text-gold-soft">
+            {locale === "fa"
+              ? "گرم‌کردن اختیاری، بدون نمره. کار نمره‌دار گزارش روزانه و بارگذاری جمعه است."
+              : "Optional warm-up, not graded. The graded work is the daily log and the Friday upload."}
+          </p>
         {mission.id === "M2" || mission.id === "M3" ? (
           <SetupValidator
             readOnly={readOnly}
-            onPracticalResult={(pass, evidence) => {
-              setPracticalValidated(pass);
-              if (pass) setTaskComplete(true);
-              if (quizScore !== null) {
-                persistAttempt(quizScore, weakTopics, {
-                  taskComplete: pass,
-                  practicalEvidence: evidence,
-                });
-              }
+            onPracticalResult={() => {
+              /* Optional warm-up. It does not complete the week or unlock anything. */
             }}
           />
         ) : null}
         {mission.id === "M4" ? (
           <MacroTransmissionBuilder
             readOnly={readOnly}
-            onAssessedScore={(score, credit) => {
-              if (credit && score !== null && score >= 50) {
-                setTaskComplete(true);
-                setPracticalValidated(true);
-              }
+            onAssessedScore={() => {
+              /* Optional warm-up. Macro practice is not the graded practical. */
             }}
           />
         ) : null}
@@ -154,6 +151,7 @@ function MissionBody({
             Open Risk Grid
           </button>
         ) : null}
+        </div>
       </section>
 
       <QuizGate

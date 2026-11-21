@@ -38,6 +38,14 @@ const FA: Record<string, string> = {
   DRAFT_REQUIRED: "اول یک فایل بارگذاری کنید، بعد ثبت نهایی.",
   ASSIGNMENT_REQUIRED: "تمرین عملی بعد از تأیید آزمون باز می‌شود.",
   QUIZ_UNAVAILABLE: "آزمون الان در دسترس نیست. کمی بعد دوباره تلاش کنید.",
+  PAPER_PLAN_REQUIRED: "برای روز معامله، پلن کاغذی را کامل کنید.",
+  PAPER_PLAN_TRADE_ONLY: "پلن کاغذی فقط برای روز معامله است. روز بدون معامله پلن شرطی دارد.",
+  PAPER_PLAN_INVALID: "پلن کاغذی همهٔ خانه‌ها را لازم دارد.",
+  CONDITIONAL_PLAN_NO_TRADE_ONLY: "پلن شرطی فقط برای روز بدون معامله است.",
+  CONDITIONAL_PLAN_INVALID: "پلن شرطی همهٔ خانه‌ها را لازم دارد، یا آن را خالی بگذارید.",
+  GROUNDING_REQUIRED: "روز بدون معامله یک خوانش دارای timestamp می‌خواهد، یا دقیقاً Observed reaction unavailable.",
+  GROUNDING_INVALID: "خوانش‌ها باید کوتاه باشند، حداکثر ۸ خط.",
+  DAY_CALL_REQUIRED: "انتخاب کنید: امروز معامله، یا امروز بدون معامله.",
 };
 
 const EN: Record<string, string> = {
@@ -79,6 +87,14 @@ const EN: Record<string, string> = {
   DRAFT_REQUIRED: "Upload a file before the final submit.",
   ASSIGNMENT_REQUIRED: "The practical opens after the quiz is approved.",
   QUIZ_UNAVAILABLE: "The quiz is unavailable right now. Try again shortly.",
+  PAPER_PLAN_REQUIRED: "A trade day needs the full paper plan.",
+  PAPER_PLAN_TRADE_ONLY: "The paper plan is for a trade day. A no-trade day uses the conditional plan.",
+  PAPER_PLAN_INVALID: "The paper plan needs every field.",
+  CONDITIONAL_PLAN_NO_TRADE_ONLY: "The conditional plan is only for a no-trade day.",
+  CONDITIONAL_PLAN_INVALID: "Fill every conditional-plan field, or leave the section empty.",
+  GROUNDING_REQUIRED: "A no-trade day needs a timestamped reading, or exactly Observed reaction unavailable.",
+  GROUNDING_INVALID: "Readings must be short, at most 8 lines.",
+  DAY_CALL_REQUIRED: "Choose Trade today or No trade today.",
 };
 
 export function bilingual(code: string): { fa: string; en: string } {

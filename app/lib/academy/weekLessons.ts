@@ -139,16 +139,16 @@ export const LESSON_PATCH: Record<string, LessonPatch> = {
       "GDATA یک تصویر مشترک و یک ارزیابی مستقل می‌خواهد تا دو ماژول با دوبار شمردن یک ورودی اجماع نسازند.",
     ),
     reality: tx(
-      "Macro bias describes pressure and environment. The coordinator says it is not an entry, a stop, or a target. Targets in the framework, when used, come from grid levels after direction is already argued from fundamentals.",
-      "Macro bias فشار و محیط را توصیف می‌کند. هماهنگ‌کننده می‌گوید این ورود، stop، یا هدف نیست. هدف‌ها در چارچوب، وقتی استفاده شوند، از سطوح شبکه می‌آیند بعد از آنکه جهت از بنیادها استدلال شده باشد.",
+      "Macro bias describes pressure and environment. The coordinator says it is not an entry, a stop, or a target. In the gold grid notes, direction is argued from fundamentals and targets are read from grid levels. That grid is price geometry for gold only, not a signal.",
+      "Macro bias فشار و محیط را توصیف می‌کند. هماهنگ‌کننده می‌گوید این ورود، stop، یا هدف نیست. در یادداشت‌های شبکه طلا، جهت از بنیادها استدلال می‌شود و هدف‌ها از سطوح شبکه خوانده می‌شوند. آن شبکه فقط هندسه قیمت برای طلاست، نه سیگنال.",
     ),
     question: tx(
       "Why is 'gold and the dollar moved together today' not yet confirmation?",
       "چرا «طلا و دلار امروز با هم حرکت کردند» هنوز تأیید نیست؟",
     ),
     workedExample: tx(
-      "Illustrative snapshot, not a signal. Real yields up, DXY up, gold down on the first hour, then gold retraces while yields stay up. You label the first hour as the immediate reaction and the later retrace as unresolved. You do not average them into one trade. Equity and the 1% budget stay unused.",
-      "تصویر آموزشی است، نه سیگنال. Real yields بالا، DXY بالا، طلا در ساعت اول پایین، سپس طلا برمی‌گردد در حالی که بازده بالا می‌ماند. ساعت اول را واکنش فوری می‌نامید و بازگشت بعدی را حل‌نشده. آن‌ها را به یک معامله میانگین نمی‌کنید. Equity و بودجه ۱٪ بدون استفاده می‌مانند.",
+      "Illustrative snapshot, not a signal. Real yields up, DXY up, gold down on the first hour, then gold retraces while yields stay up. You label the first hour as the immediate reaction and the later retrace as unresolved. You do not average them into one trade. If you then write 'no trade this week', that is a valid conclusion only when it matches what was actually observed: you name the timestamped readings behind it (for example, 'real yields and DXY rose at 14:35 and gold retraced by 15:20, so the chain is unresolved'). A no-trade conclusion that does not match the data you recorded, or that has no timestamped reading behind it, is not grounded. If you have no timestamped data for a window, you write 'Observed reaction unavailable' and do not infer an intraday path from a daily close. Equity and the 1% budget stay unused.",
+      "تصویر آموزشی است، نه سیگنال. Real yields بالا، DXY بالا، طلا در ساعت اول پایین، سپس طلا برمی‌گردد در حالی که بازده بالا می‌ماند. ساعت اول را واکنش فوری می‌نامید و بازگشت بعدی را حل‌نشده. آن‌ها را به یک معامله میانگین نمی‌کنید. اگر بعد بنویسید «این هفته معامله نمی‌کنم»، این نتیجه فقط وقتی معتبر است که با آنچه واقعاً مشاهده شد جور باشد: خوانش‌های دارای timestamp پشت آن را نام می‌برید (مثلاً «real yields و DXY ساعت ۱۴:۳۵ بالا رفتند و طلا تا ۱۵:۲۰ برگشت، پس زنجیره حل‌نشده است»). نتیجه‌ی «بدون معامله» که با داده‌ی ثبت‌شده‌ی شما نمی‌خواند، یا خوانش دارای timestamp پشتش نیست، مستند نیست. اگر برای یک پنجره داده‌ی دارای timestamp ندارید، می‌نویسید «Observed reaction unavailable» و مسیر درون‌روزی را از بسته‌شدن روزانه حدس نمی‌زنید. Equity و بودجه ۱٪ بدون استفاده می‌مانند.",
     ),
   },
   "A6-L1": {
@@ -170,8 +170,8 @@ export const LESSON_PATCH: Record<string, LessonPatch> = {
       "پیش از باز کردن پنجره نتیجه چه چیزی باید نوشته شده باشد؟",
     ),
     workedExample: tx(
-      "Illustrative research note, not a result. Hypothesis: after a CPI surprise, the first 15 minutes and the next 4 hours are recorded separately for EURUSD. Falsifier: if the later window does not differ from a no-surprise sample after costs, the idea fails. You do not drop the losing days.",
-      "یادداشت پژوهشی آموزشی است، نه نتیجه. فرضیه: بعد از surprise در CPI، ۱۵ دقیقه اول و ۴ ساعت بعد برای EURUSD جدا ثبت می‌شوند. ابطال: اگر پنجره بعدی بعد از هزینه با نمونه بدون surprise فرق نکند، ایده شکست می‌خورد. روزهای بازنده را حذف نمی‌کنید.",
+      "Illustrative research note, not a result. Hypothesis: after a CPI surprise, the 0–5, 5–15 and 15–60 minute windows and the later session are recorded separately for EURUSD. Falsifier: if the later windows do not differ from a no-surprise sample after costs, the idea fails. You do not drop the losing days.",
+      "یادداشت پژوهشی آموزشی است، نه نتیجه. فرضیه: بعد از surprise در CPI، پنجره‌های ۰ تا ۵، ۵ تا ۱۵ و ۱۵ تا ۶۰ دقیقه و جلسه‌ی بعدی برای EURUSD جدا ثبت می‌شوند. ابطال: اگر پنجره‌های بعدی بعد از هزینه با نمونه بدون surprise فرق نکنند، ایده شکست می‌خورد. روزهای بازنده را حذف نمی‌کنید.",
     ),
   },
   "A6-L2": {
@@ -308,8 +308,8 @@ export const LESSON_PATCH: Record<string, LessonPatch> = {
       "دفتر پایانی کدام دو برش زمانی را باید جدا نگه دارد؟",
     ),
     workedExample: tx(
-      "Illustrative release, not history. In the first 15 minutes EURUSD dips, USDJPY rises, and gold dips. Over the next 4 hours gold retraces and the dollar move fades. The notebook's conclusion is 'immediate and later disagree,' not a trade. Risk arithmetic stays the 10,000 / 100 / hard-stop sketch if a separate structure plan is ever studied.",
-      "انتشار آموزشی است، نه تاریخ. در ۱۵ دقیقه اول EURUSD پایین می‌آید، USDJPY بالا می‌رود، و طلا پایین می‌آید. در ۴ ساعت بعد طلا برمی‌گردد و حرکت دلار کم‌رنگ می‌شود. نتیجه دفتر این است که «فوری و بعدی ناسازگارند»، نه یک معامله. حساب ریسک همان طرح 10,000 / 100 / stop سخت می‌ماند اگر روزی طرح ساختار جدا مطالعه شود.",
+      "Illustrative release, not history. In the 0–5 minute window EURUSD dips, USDJPY rises, and gold dips. By the 15–60 minute window gold retraces and the dollar move fades, and the later session is written as its own row. The notebook's conclusion is 'immediate and later disagree,' not a trade. Risk arithmetic stays the 10,000 / 100 / hard-stop sketch, written as a separate conditional Final Paper Plan.",
+      "انتشار آموزشی است، نه تاریخ. در پنجره‌ی ۰ تا ۵ دقیقه EURUSD پایین می‌آید، USDJPY بالا می‌رود، و طلا پایین می‌آید. تا پنجره‌ی ۱۵ تا ۶۰ دقیقه طلا برمی‌گردد و حرکت دلار کم‌رنگ می‌شود، و جلسه‌ی بعدی ردیف جداگانه دارد. نتیجه دفتر این است که «فوری و بعدی ناسازگارند»، نه یک معامله. حساب ریسک همان طرح 10,000 / 100 / stop سخت می‌ماند، به‌صورت پلن کاغذی نهایی شرطی و جدا.",
     ),
   },
   "A8-L2": {
@@ -331,8 +331,8 @@ export const LESSON_PATCH: Record<string, LessonPatch> = {
       "پیش از حرف زدن درباره قیمت، کدام چهار فیلد انتشار را مقایسه می‌کنید؟",
     ),
     workedExample: tx(
-      "Illustrative CPI: actual equals forecast, previous is revised up, US2Y barely moves, gold's first spike fades. You write 'little new information versus expectations; revision noted.' You do not add a buy. The 1:2 and 1% rules are idle because there is no structural plan.",
-      "CPI آموزشی: واقعی برابر forecast است، قبلی به بالا revise شده، US2Y کم حرکت می‌کند، جهش اول طلا محو می‌شود. می‌نویسید «اطلاعات تازه نسبت به انتظار کم است؛ revision ثبت شد.» خرید اضافه نمی‌کنید. قواعد 1:2 و ۱٪ بیکارند چون طرح ساختاری نیست.",
+      "Illustrative CPI: actual equals forecast, previous is revised up, US2Y barely moves, gold's first spike fades. You write 'little new information versus expectations; revision noted.' You do not add a buy. The Final Paper Plan is still written from structure, as a conditional plan with a hard stop, 1% risk, and net 1:2.",
+      "CPI آموزشی: واقعی برابر forecast است، قبلی به بالا revise شده، US2Y کم حرکت می‌کند، جهش اول طلا محو می‌شود. می‌نویسید «اطلاعات تازه نسبت به انتظار کم است؛ revision ثبت شد.» خرید اضافه نمی‌کنید. پلن کاغذی نهایی همچنان از ساختار نوشته می‌شود، به‌صورت پلن شرطی با stop سخت، ریسک ۱٪ و 1:2 خالص.",
     ),
   },
   "A8-L3": {

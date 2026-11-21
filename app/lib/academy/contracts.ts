@@ -6,6 +6,37 @@ export type MissionId = "M1" | "M2" | "M3" | "M4" | "M5";
 export type AdvancedId = "A6" | "A7" | "A8";
 export type StageId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type Text = { fa: string; en: string };
+
+export type PracticalPlan = {
+  /** Daily core menu. The assignment Mentor issues is authoritative per student. */
+  core: { id: string; text: Text }[];
+  spiral: Text | null;
+  minimum: Text;
+  friday: Text;
+  reflection: Text;
+  note?: Text;
+};
+
+export type NoPlanEnvelope = { noPlan: true; noPlanReason: string };
+
+export type RoutineGate = {
+  requiredDays: 3;
+  serverCountedDays: number;
+  genuineDays: number;
+  genuineEntryIds: string[];
+  rejectedEntries: { entryId: string; reason: string }[];
+  passed: boolean;
+};
+
+export type DailyTask = {
+  taskId: string;
+  kind: "CORE" | "SPIRAL" | "WEAKNESS";
+  stage?: number;
+  skill?: string;
+  weaknessId?: string;
+  task: Text;
+  minDays: number;
+};
 export type Fact = "YES" | "NO" | "UNKNOWN";
 export type Locale = "fa" | "en";
 export type Mode = "SYNTHETIC" | "VERIFIED_HISTORICAL";

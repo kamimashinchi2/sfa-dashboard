@@ -6,6 +6,11 @@ from pathlib import Path
 import psycopg
 from psycopg.rows import dict_row
 
+def _script(conn, sql):
+    for stmt in sql.split(';'):
+        if stmt.strip():
+            conn.execute(stmt)
+
 class Connection:
     def __init__(self,c): self.c=c
     def execute(self,sql,args=()):
@@ -21,8 +26,11 @@ class DB:
         with self.tx() as c:
             c.execute('CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY)')
             if not c.execute('SELECT 1 FROM schema_migrations WHERE version=1').fetchone():
-                c.c.execute(Path(__file__).with_name('migration_001.sql').read_text())
+                _script(c.c, Path(__file__).with_name('migration_001.sql').read_text())
                 c.execute('INSERT INTO schema_migrations VALUES(1)')
+            if not c.execute('SELECT 1 FROM schema_migrations WHERE version=2').fetchone():
+                _script(c.c, Path(__file__).with_name('migration_002.sql').read_text())
+                c.execute('INSERT INTO schema_migrations VALUES(2)')
     @contextmanager
     def tx(self):
         with psycopg.connect(self.url,row_factory=dict_row) as c:

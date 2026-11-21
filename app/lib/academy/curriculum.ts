@@ -1,4 +1,5 @@
-import type { Lesson, MissionId, StageId, Text } from "./contracts";
+import type { Lesson, MissionId, PracticalPlan, StageId, Text } from "./contracts";
+import { PLANS } from "./practicalPlans";
 import { LESSON_PATCH } from "./weekLessons";
 import { M1_QUIZ, M2_QUIZ, M3_QUIZ, M4_QUIZ, M5_QUIZ } from "./weekQuizzes";
 
@@ -30,6 +31,7 @@ export type MissionDef = {
   lessons: Lesson[];
   quiz: QuizItem[];
   practicalTask: Text;
+  practicalPlan?: PracticalPlan;
 };
 
 export const stageTitles: Record<StageId, Text> = {
@@ -156,10 +158,8 @@ export const missions: MissionDef[] = [
       }),
     ],
     quiz: M1_QUIZ,
-    practicalTask: {
-      fa: "کارت قرارداد synthetic طلا را کامل کنید و بودجه ۱٪ برای equity=10000 را بنویسید.",
-      en: "Complete the synthetic gold contract card and write the 1% budget for equity=10000.",
-    },
+    practicalTask: PLANS.M1.practicalTask,
+    practicalPlan: PLANS.M1.practicalPlan,
   },
   {
     id: "M2",
@@ -201,10 +201,8 @@ export const missions: MissionDef[] = [
       }),
     ],
     quiz: M2_QUIZ,
-    practicalTask: {
-      fa: "روی فیکسچر synthetic، یک PDH و یک سوئیپ را علامت بزنید و نوع سفارش پیشنهادی را بنویسید (بدون اجرای واقعی).",
-      en: "On the synthetic fixture, mark one PDH and one sweep and name the intended order type (no live execution).",
-    },
+    practicalTask: PLANS.M2.practicalTask,
+    practicalPlan: PLANS.M2.practicalPlan,
   },
   {
     id: "M3",
@@ -246,10 +244,8 @@ export const missions: MissionDef[] = [
       }),
     ],
     quiz: M3_QUIZ,
-    practicalTask: {
-      fa: "در Risk Grid، مثال ناامن ارائه‌شده را رد/اصلاح کنید تا HARD_BLOCK برطرف شود.",
-      en: "In the Risk Grid, reject/correct the provided unsafe example until HARD_BLOCK clears.",
-    },
+    practicalTask: PLANS.M3.practicalTask,
+    practicalPlan: PLANS.M3.practicalPlan,
   },
   {
     id: "M4",
@@ -291,55 +287,30 @@ export const missions: MissionDef[] = [
       }),
     ],
     quiz: M4_QUIZ,
-    practicalTask: {
-      fa: "گراف شرطی synthetic CPI را با یکی از کلیدهای پذیرفته‌شده هم‌تراز کنید — بدون entry/SL/TP.",
-      en: "Align the synthetic CPI conditional graph to an accepted key — no entry/SL/TP.",
-    },
+    practicalTask: PLANS.M4.practicalTask,
+    practicalPlan: PLANS.M4.practicalPlan,
   },
   {
     id: "M5",
     stages: [5],
-    title: {
-      fa: "M5 — پژوهش و ژورنال (capstone-lite)",
-      en: "M5 — Research & Journal (capstone-lite)",
-    },
-    summary: {
-      fa: "فرضیه، ابطال، تقسیم train/test قبل از افشای نتیجه؛ هزینه، look-ahead، overfitting.",
-      en: "Hypothesis, falsification, train/test split BEFORE outcome reveal; costs, look-ahead, overfitting.",
-    },
+    title: PLANS.M5.title!,
+    summary: PLANS.M5.summary!,
     href: "/academy/missions/M5",
     lessons: [
       lesson({
         id: "M5-L1",
         missionId: "M5",
         stages: [5],
-        title: {
-          fa: "پیش‌ثبت فرضیه",
-          en: "Preregister the hypothesis",
-        },
-        core: {
-          fa: "قبل از دیدن نتیجه، فرضیه، ابطال و تقسیم داده را قفل کنید.",
-          en: "Lock hypothesis, falsification and data split before seeing outcomes.",
-        },
-        trap: {
-          fa: "تله: داستان‌سازی پس از دیدن نتیجه (HARKing).",
-          en: "Trap: storytelling after the outcome (HARKing).",
-        },
-        reality: {
-          fa: "پژوهش نهادی پیش‌ثبت را از داستان پسینی جدا می‌کند.",
-          en: "Institutional research separates preregistration from post-hoc stories.",
-        },
-        question: {
-          fa: "چرا افشای نتیجه قبل از train/test پژوهش را خراب می‌کند؟",
-          en: "Why does revealing outcomes before train/test corrupt the research?",
-        },
+        title: LESSON_PATCH["M5-L1"].title,
+        core: LESSON_PATCH["M5-L1"].core,
+        trap: LESSON_PATCH["M5-L1"].trap,
+        reality: LESSON_PATCH["M5-L1"].reality,
+        question: LESSON_PATCH["M5-L1"].question,
       }),
     ],
     quiz: M5_QUIZ,
-    practicalTask: {
-      fa: "پیش‌نویس ژورنال را با فرضیه/ابطال/اسپلیت پر و به‌صورت محلی export کنید.",
-      en: "Fill the journal draft with hypothesis/falsification/split and export locally.",
-    },
+    practicalTask: PLANS.M5.practicalTask,
+    practicalPlan: PLANS.M5.practicalPlan,
   },
 ];
 

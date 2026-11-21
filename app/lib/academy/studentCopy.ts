@@ -13,6 +13,7 @@ const STATUS: Record<string, { fa: string; en: string }> = {
   QUIZ_ASSESSED: { fa: "آزمون بررسی شد", en: "Quiz reviewed" },
   ASSIGNMENT_ISSUED: { fa: "تکلیف شخصی صادر شد", en: "Personal assignment is ready" },
   REMEDIAL_ISSUED: { fa: "هفته جبرانی همین مرحله", en: "Remedial week, same stage" },
+  PRACTICAL_OVERDUE: { fa: "جمعه تمرین گذشت؛ پنجره به جمعه بعد رفت", en: "Friday passed; the window moved to the next Friday" },
   PRACTICAL_SUBMITTED: { fa: "تمرین ارسال شد؛ در انتظار Echo", en: "Practical submitted; waiting for Echo" },
   PRACTICAL_ASSESSED: { fa: "تمرین بررسی شد", en: "Practical reviewed" },
   NEXT_UNLOCKED: { fa: "درس بعدی باز شد", en: "Next lesson unlocked" },
@@ -24,6 +25,10 @@ const NOTICE: Record<string, { fa: string; en: string }> = {
   QUIZ_RESULT_READY: { fa: "نتیجه آزمون آماده است", en: "Quiz result is ready" },
   ASSIGNMENT_READY: { fa: "تکلیف شخصی آماده است", en: "Personal assignment is ready" },
   PRACTICAL_GRADED: { fa: "تمرین عملی نمره گرفت", en: "Practical was graded" },
+  PLAN_MISSING_REUPLOAD: {
+    fa: "طرح نیست: دوباره انجام دهید و دوباره بارگذاری کنید",
+    en: "plan missing: redo and re-upload",
+  },
   LESSON_UNLOCKED: { fa: "درس بعدی باز شد", en: "Next lesson unlocked" },
   DECISION_RETRACTED: { fa: "یک نمره در ۲۴ ساعت اصلاح شد", en: "A grade was corrected within 24 hours" },
   DECISION_PENDING_APPROVAL: { fa: "نمره منتظر تأیید مدیر است", en: "Grade is waiting for an admin" },
@@ -47,6 +52,35 @@ export function statusLabel(status: string, locale: Locale): string {
 export function noticeLabel(kind: string | undefined, locale: Locale): string {
   if (!kind) return locale === "fa" ? "اعلان" : "Notice";
   return (NOTICE[kind] ?? { fa: "اعلان داشبورد", en: "Dashboard notice" })[locale];
+}
+
+export function decisionPresentation(
+  decision: {
+    reasonCode?: string | null;
+    body?: {
+      verdict?: string;
+      format?: string;
+      feedback?: { fa?: string; en?: string };
+      scores?: unknown;
+      routineGate?: unknown;
+    };
+  },
+  locale: Locale,
+): { headline: string; feedback: string; showRejectionNote: boolean } {
+  const feedback = decision.body?.feedback?.[locale] ?? "";
+  if (decision.reasonCode === "PLAN_MISSING_REMEDIAL") {
+    return {
+      headline: NOTICE.PLAN_MISSING_REUPLOAD[locale],
+      feedback,
+      showRejectionNote: false,
+    };
+  }
+  const kind = decision.body?.format === "sfa-quiz-decision" ? "quiz" : "practical";
+  return {
+    headline: `Echo · ${decision.body?.verdict ?? ""} · ${kind}`,
+    feedback,
+    showRejectionNote: decision.body?.verdict === "NOT_APPROVED",
+  };
 }
 
 export function nextStep(input: {
