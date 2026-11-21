@@ -18,9 +18,25 @@ def pg_account(pg_service):
     s=pg_service;token=s.invite().rsplit('/',1)[1];t=s.signup({'inviteToken':token,'email':'student@example.test','displayName':'Learner','password':'correct horse battery staple','acceptDataNotice':True});return s.auth(t),t
 
 def test_real_pg_versioned_migration(pg_service):
-    assert sorted(r['version'] for r in pg_service.db.rows('SELECT version FROM schema_migrations'))==[1,2]
-    assert sorted(r['version'] for r in DB(pg_service.config.database_url).rows('SELECT version FROM schema_migrations'))==[1,2]
+    assert sorted(r['version'] for r in pg_service.db.rows('SELECT version FROM schema_migrations'))==[1,2,3]
+    assert sorted(r['version'] for r in DB(pg_service.config.database_url).rows('SELECT version FROM schema_migrations'))==[1,2,3]
+    assert pg_service.db.rows("SELECT is_test_account FROM students") == []
 def test_real_pg_account(pg_service,pg_account):assert pg_service.me(pg_account[0])['unlockedStage']==1
+def test_real_pg_test_account_is_opt_in(pg_service, pg_account):
+    s = pg_service
+    student = pg_account[0]
+    assert not s.db.rows('SELECT is_test_account FROM students WHERE student=?', (student['student'],))[0]['is_test_account']
+    switched = s.enable_test_account(student['student'], 1, 'bot E2E test')
+    assert switched['isTestAccount'] is True and switched['practicalModel'] == 'DAILY_LOG_V1' and switched['dueFriday']
+    week = s.db.rows('SELECT practical_model, issued_at, plan_required, state FROM weeks WHERE student=? AND week=1', (student['student'],))[0]
+    assert week['practical_model'] == 'DAILY_LOG_V1' and week['issued_at'] and week['state'] == 'LESSON_OPEN' and not week['plan_required']
+    assert 'TEST_ACCOUNT_ENABLED' in [e['kind'] for e in s.db.rows('SELECT kind FROM events WHERE student=?', (student['student'],))]
+    token = s.invite().rsplit('/', 1)[1]
+    other = s.auth(s.signup({'inviteToken': token, 'email': 'other@example.test', 'displayName': 'Other', 'password': 'correct horse battery staple', 'acceptDataNotice': True}))
+    assert not s.db.rows('SELECT is_test_account FROM students WHERE student=?', (other['student'],))[0]['is_test_account']
+    assert s.disable_test_account(student['student'])['isTestAccount'] is False
+    assert not s.db.rows('SELECT is_test_account FROM students WHERE student=?', (student['student'],))[0]['is_test_account']
+    assert 'TEST_ACCOUNT_DISABLED' in [e['kind'] for e in s.db.rows('SELECT kind FROM events WHERE student=?', (student['student'],))]
 @pytest.mark.parametrize('score,blocked,stage',[(90,False,2),(65,False,2),(100,True,1),(64,False,1)])
 def test_real_pg_grading(pg_service,pg_account,tmp_path,score,blocked,stage):
     s=pg_service;bank=tmp_path/'key.json';bank.write_text(json.dumps(key()));s.config.answer_key_path=str(bank);student=pg_account[0]

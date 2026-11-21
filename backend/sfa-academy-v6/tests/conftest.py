@@ -39,8 +39,9 @@ class StateHarness:
         schema=Path(__file__).parents[1].joinpath('sfa_api/migration_001.sql').read_text().replace('ADD COLUMN IF NOT EXISTS','ADD COLUMN').replace('ADD COLUMN email TEXT UNIQUE','ADD COLUMN email TEXT')
         schema='\n'.join(l for l in schema.splitlines() if 'CREATE SEQUENCE' not in l)
         schema2=Path(__file__).parents[1].joinpath('sfa_api/migration_002.sql').read_text().replace('ADD COLUMN IF NOT EXISTS','ADD COLUMN')
+        schema3=Path(__file__).parents[1].joinpath('sfa_api/migration_003.sql').read_text().replace('ADD COLUMN IF NOT EXISTS','ADD COLUMN')
         with sqlite3.connect(path) as c:
-            c.executescript(schema); c.executescript(schema2)
+            c.executescript(schema); c.executescript(schema2); c.executescript(schema3)
     @contextlib.contextmanager
     def tx(self):
         with sqlite3.connect(self.path) as c:
