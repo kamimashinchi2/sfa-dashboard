@@ -425,6 +425,81 @@ def test_daily_plan_rules_are_presence_only(svc, account):
     assert stored['fields']['paperPlan']['riskPct']=='5' and stored['fields']['paperPlan']['netRR']=='0.4'
     assert stored['fields']['conditionalPlan'] is None
 
+def test_money_rounds_half_up_away_from_zero():
+    from decimal import Decimal
+    from sfa_api.daily import round_half_up_money, week_trade_risk_summary
+    assert round_half_up_money(Decimal('1.005'))=='1.01'
+    assert round_half_up_money(Decimal('1.004'))=='1.00'
+    left=_trade(equity='1.005', riskPct='1', netRR='2', stopType='hard')
+    right=_trade(equity='1.005', riskPct='1', netRR='2', stopType='hard')
+    summary=week_trade_risk_summary([
+        {'id':'de_a','local_date':'2026-11-24','body':json.dumps({'dayCall':'TRADE','fields':{'paperPlan':left['paperPlan']}})},
+        {'id':'de_b','local_date':'2026-11-25','body':json.dumps({'dayCall':'TRADE','fields':{'paperPlan':right['paperPlan']}})},
+    ])
+    assert summary['currentEquity']=='1.01'
+    assert summary['riskAmount']=='0.01'
+    assert summary['netReward']=='0.02'
+    assert summary['stopType']=='STRUCTURAL_HARD'
+
+def test_unsafe_daily_trade_does_not_block_a_clean_friday_plan(svc, account):
+    from sfa_api.risk import hard_block
+    s,_=account
+    _arm(svc, s, at(2026,11,24,9), stage=1)
+    svc.create_daily_entry(s, _trade(stopType='mental', riskPct='5', netRR='0.4'))
+    svc.clock=lambda: at(2026,11,25,9)
+    svc.create_daily_entry(s, _trade())
+    svc.clock=lambda: at(2026,11,26,9)
+    svc.create_daily_entry(s, _trade())
+    sid=_submit_friday(svc, s)
+    packet=next(i for i in svc.queue() if i['requestId']=='practical:'+sid)['dailyLog']
+    assert packet['unsafeDailyTradeCount']==1
+    assert packet['unsafeDailyTrades'][0]['date']=='2026-11-24'
+    assert packet['unsafeDailyTrades'][0]['reasons']==['MENTAL_STOP','RISK_OVER_1PCT','NET_RR_UNDER_2']
+    gate=_counted_gate(packet, True)
+    d=_v3(svc, sid, 90, gate, blocked=False)
+    evidence=risk_evidence(d)
+    assert hard_block(evidence) is False and d['scores']['risk']==40
+    result=svc.decision(d, 'practical:'+sid, svc.claim('practical:'+sid)['leaseToken'], evidence)
+    assert result['state']=='DELIVERED'
+    stored=json.loads(svc.db.rows('SELECT body FROM mentor_decisions WHERE id=?', (d['decisionId'],))[0]['body'])
+    assert stored['finalHardBlock'] is False and stored['verdict']=='APPROVED' and stored['scores']==d['scores']
+    assert svc.entitlements(s['student'])['unlockedStage']==2
+
+def test_week_average_uses_changing_equity_and_accepts_structural_hard(svc, account):
+    s,_=account
+    _arm(svc, s, at(2026,11,24,9), stage=1)
+    svc.create_daily_entry(s, _trade(equity='10000', riskPct='1', netRR='2', stopType='mental'))
+    svc.clock=lambda: at(2026,11,25,9)
+    svc.create_daily_entry(s, _trade(equity='20000', riskPct='1', netRR='4', stopType='hard'))
+    svc.clock=lambda: at(2026,11,26,9)
+    svc.create_daily_entry(s, _trade(equity='15000', riskPct='1', netRR='2', stopType='structural'))
+    sid=_submit_friday(svc, s)
+    packet=next(i for i in svc.queue() if i['requestId']=='practical:'+sid)['dailyLog']
+    summary=packet['weekTradeRiskSummary']
+    assert summary['source']=='WEEK_TRADES_AVERAGE'
+    assert summary['tradeCount']==3 and summary['hardStopCount']==2 and summary['mentalOrNoStopCount']==1
+    assert summary['stopType']=='STRUCTURAL_HARD'
+    assert summary['currentEquity']=='15000.00' and summary['riskAmount']=='150.00' and summary['netReward']=='433.33'
+    assert summary['avgRiskPct']=='1.0000'
+    # Mean of the per-trade ratios is 2.6667. The ratio of the rounded means is not that.
+    assert summary['avgNetRR']=='2.8889'
+    assert len(summary['evidenceRefs'])==3 and all(ref.startswith('daily:') for ref in summary['evidenceRefs'])
+    assert packet['unsafeDailyTradeCount']==1
+    assert packet['unsafeDailyTrades'][0]['reasons']==['MENTAL_STOP']
+    gate=_counted_gate(packet, True)
+    d=_v3(svc, sid, 90, gate, blocked=False)
+    rid='practical:'+sid
+    lease=svc.claim(rid)['leaseToken']
+    with pytest.raises(Invalid, match='NO_PLAN_REQUIRES_ZERO_TRADES'):
+        svc.decision(d, rid, lease, None, True, 'The week has trades, so a no-plan envelope is rejected.')
+    evidence={'currentEquity':summary['currentEquity'],'riskAmount':summary['riskAmount'],'netReward':summary['netReward'],'stopType':summary['stopType'],'evidenceRefs':summary['evidenceRefs']}
+    result=svc.decision(d, rid, lease, evidence)
+    assert result['state']=='DELIVERED'
+    stored=json.loads(svc.db.rows('SELECT body FROM mentor_decisions WHERE id=?', (d['decisionId'],))[0]['body'])
+    assert stored['finalHardBlock'] is False and stored['verdict']=='APPROVED'
+    kinds=[e['kind'] for e in svc.db.rows('SELECT kind FROM events WHERE student=?', (s['student'],))]
+    assert 'FINAL_PLAN_RISK_EVIDENCE' in kinds and 'NO_PLAN' not in kinds
+
 def test_legacy_week_is_unchanged(svc, account):
     s,_=account
     view=svc.daily_log_view(s)

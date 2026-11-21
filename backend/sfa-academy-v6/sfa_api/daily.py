@@ -5,6 +5,7 @@ LEGACY weeks never enter this module's gates.
 """
 import hashlib, json, re, uuid
 from datetime import datetime, timedelta, date
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation, localcontext
 from zoneinfo import ZoneInfo
 from .contracts import Invalid, canonical, ident, require, text
 
@@ -18,6 +19,9 @@ PAPER_KEYS = ('equity', 'riskPct', 'entry', 'stopLevel', 'stopType', 'pointValue
 CONDITIONAL_KEYS = ('condition', 'entry', 'stop', 'target', 'sizeRisk')
 OBSERVED_UNAVAILABLE = 'Observed reaction unavailable'
 GROUNDING_MAX = 8
+# A hard structural stop on a daily paper plan. Anything else is mental or no stop.
+HARD_STOPS = {'hard', 'structural', 'structuralhard', 'hardstructural', 'hardstop', 'structuralhardstop'}
+UNSAFE_REASON_ORDER = ('MENTAL_STOP', 'RISK_OVER_1PCT', 'NET_RR_UNDER_2')
 TASK_RE = re.compile(r'[A-Za-z0-9_.:-]{1,40}\Z')
 WEEKDAY = ('MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN')
 OPEN_STATES = ('ASSIGNMENT_ISSUED', 'REMEDIAL_ISSUED', 'PRACTICAL_OVERDUE')
@@ -601,6 +605,7 @@ class DailyMixin:
             packet_entries.append(echo_entry(e, files, submitted_dt))
         days = sorted({parse_date(e['local_date']).isoformat() for e in chosen})
         calls = trade_call_summary(entries)
+        unsafe = unsafe_daily_trades(entries)
         return {
             'timezone': 'Europe/Amsterdam',
             'assignmentIssuedAtISO': iso(issued_dt) if issued_dt else None,
@@ -614,6 +619,9 @@ class DailyMixin:
             'noTradeDays': calls['noTradeDays'],
             'tradesOnNoTradeDays': calls['tradesOnNoTradeDays'],
             'tradeOnNoTradeDay': calls['tradeOnNoTradeDay'],
+            'unsafeDailyTrades': unsafe,
+            'unsafeDailyTradeCount': len(unsafe),
+            'weekTradeRiskSummary': week_trade_risk_summary(entries),
             'entries': packet_entries,
             '_countedIds': sorted(chosen_ids),
         }
@@ -658,3 +666,146 @@ def trade_call_summary(rows):
 
 def week_has_recorded_trade(rows):
     return trade_call_summary(rows)['tradeDays'] > 0
+
+
+def _stop_token(value):
+    return re.sub(r'[^a-z]', '', str(value).lower())
+
+
+def _is_hard_stop(value):
+    return _stop_token(value) in HARD_STOPS
+
+
+def _parse_num(value):
+    if not isinstance(value, str):
+        return None
+    raw = value.strip().replace(',', '')
+    if raw.endswith('%'):
+        raw = raw[:-1].strip()
+    if not raw:
+        return None
+    try:
+        number = Decimal(raw)
+    except InvalidOperation:
+        return None
+    if not number.is_finite():
+        return None
+    return number
+
+
+def round_half_up_money(amount):
+    """Arithmetic result as a 2-decimal string. Ties round away from zero (ROUND_HALF_UP)."""
+    with localcontext() as ctx:
+        ctx.prec = 120
+        quantized = amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    return format(quantized, 'f')
+
+
+def _info_ratio(amount):
+    with localcontext() as ctx:
+        ctx.prec = 120
+        quantized = amount.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+    return format(quantized, 'f')
+
+
+def _trade_plans(rows):
+    plans = []
+    for row in rows:
+        body = _entry_body(row)
+        if body.get('dayCall') != 'TRADE':
+            continue
+        paper = (body.get('fields') or {}).get('paperPlan')
+        if not isinstance(paper, dict):
+            continue
+        plans.append({'date': parse_date(row['local_date']).isoformat(), 'entryId': row['id'], 'paper': paper})
+    plans.sort(key=lambda item: (item['date'], item['entryId']))
+    return plans
+
+
+def _unsafe_reasons(paper):
+    reasons = []
+    if not _is_hard_stop(paper.get('stopType')):
+        reasons.append('MENTAL_STOP')
+    risk_pct = _parse_num(paper.get('riskPct'))
+    if risk_pct is not None and risk_pct > 1:
+        reasons.append('RISK_OVER_1PCT')
+    net_rr = _parse_num(paper.get('netRR'))
+    if net_rr is not None and net_rr < 2:
+        reasons.append('NET_RR_UNDER_2')
+    return [code for code in UNSAFE_REASON_ORDER if code in reasons]
+
+
+def unsafe_daily_trades(rows):
+    """TRADE-day paper plans that break a daily risk rule. Not a HARD_BLOCK and not a score change."""
+    flagged = []
+    for item in _trade_plans(rows):
+        reasons = _unsafe_reasons(item['paper'])
+        if reasons:
+            flagged.append({'date': item['date'], 'entryId': item['entryId'], 'reasons': reasons})
+    return flagged
+
+
+def _money_parts(paper):
+    equity = _parse_num(paper.get('equity'))
+    risk_pct = _parse_num(paper.get('riskPct'))
+    net_rr = _parse_num(paper.get('netRR'))
+    if equity is None or risk_pct is None or net_rr is None or equity <= 0 or risk_pct < 0 or net_rr < 0:
+        return None
+    risk_amount = equity * risk_pct / Decimal(100)
+    return equity, risk_amount, risk_amount * net_rr
+
+
+def week_trade_risk_summary(rows):
+    """Means a grader can copy into riskEvidence when the week has trades and no Friday plan.
+
+    currentEquity, riskAmount and netReward are the arithmetic means of those per-trade
+    amounts, then rounded half-up to 2 decimals. riskAmount is equity * riskPct / 100.
+    netReward is that risk amount times netRR. avgRiskPct and avgNetRR are then
+    riskAmount / currentEquity * 100 and netReward / riskAmount, using the rounded
+    means. They are not the mean of the per-trade percents or ratios.
+    stopType is STRUCTURAL_HARD for every such week. A mental or missing hard stop
+    is counted and listed in unsafeDailyTrades; it does not change stopType.
+    """
+    plans = _trade_plans(rows)
+    if not plans:
+        return None
+    hard = mental = 0
+    parts = []
+    for item in plans:
+        if _is_hard_stop(item['paper'].get('stopType')):
+            hard += 1
+        else:
+            mental += 1
+        parts.append(_money_parts(item['paper']))
+    summary = {
+        'source': 'WEEK_TRADES_AVERAGE',
+        'tradeCount': len(plans),
+        'hardStopCount': hard,
+        'mentalOrNoStopCount': mental,
+        'stopType': 'STRUCTURAL_HARD',
+        'evidenceRefs': ['daily:' + item['entryId'] for item in plans],
+        'currentEquity': None,
+        'riskAmount': None,
+        'netReward': None,
+        'avgRiskPct': None,
+        'avgNetRR': None,
+    }
+    if any(part is None for part in parts):
+        return summary
+    count = Decimal(len(parts))
+    with localcontext() as ctx:
+        ctx.prec = 120
+        equity = sum((part[0] for part in parts), Decimal(0)) / count
+        risk = sum((part[1] for part in parts), Decimal(0)) / count
+        reward = sum((part[2] for part in parts), Decimal(0)) / count
+    summary['currentEquity'] = round_half_up_money(equity)
+    summary['riskAmount'] = round_half_up_money(risk)
+    summary['netReward'] = round_half_up_money(reward)
+    equity_q = Decimal(summary['currentEquity'])
+    risk_q = Decimal(summary['riskAmount'])
+    reward_q = Decimal(summary['netReward'])
+    if equity_q > 0:
+        summary['avgRiskPct'] = _info_ratio(risk_q * Decimal(100) / equity_q)
+    if risk_q > 0:
+        summary['avgNetRR'] = _info_ratio(reward_q / risk_q)
+    return summary

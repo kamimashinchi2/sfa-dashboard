@@ -107,6 +107,26 @@ text+='''
   (`CONDITIONAL_PLAN_NO_TRADE_ONLY` on a trade day). The queue `dailyLog` adds `tradeDays`,
   `noTradeDays`, `tradesOnNoTradeDays`, and `tradeOnNoTradeDay` (dates that have both a TRADE entry
   and a NO_TRADE entry). The server does not subtract points for that flag.
+- An unsafe TRADE-day `paperPlan` (mental or no hard stop, `riskPct` above 1, or `netRR` below 2)
+  is listed in `dailyLog.unsafeDailyTrades` as `{date, entryId, reasons}` with reasons drawn from
+  `MENTAL_STOP`, `RISK_OVER_1PCT`, and `NET_RR_UNDER_2`. `unsafeDailyTradeCount` is the length of
+  that list. The server does not set `finalHardBlock` from it and does not change the submitted
+  scores. `hard_block()` still reads only the Friday `riskEvidence` envelope.
+- `dailyLog.weekTradeRiskSummary` is present when the week has at least one TRADE `paperPlan`.
+  It is `{source:"WEEK_TRADES_AVERAGE", tradeCount, hardStopCount, mentalOrNoStopCount,
+  stopType:"STRUCTURAL_HARD", evidenceRefs:["daily:<entryId>", ...], currentEquity, riskAmount,
+  netReward, avgRiskPct, avgNetRR}`. For each trade, risk amount = equity × riskPct / 100 and
+  net reward = that amount × netRR. `currentEquity`, `riskAmount`, and `netReward` are the
+  arithmetic means of those amounts, then rendered as decimal strings with exactly two places
+  using `Decimal` quantize `0.01` and `ROUND_HALF_UP` (a tie rounds away from zero: `1.005` →
+  `"1.01"`). `avgRiskPct` = rounded riskAmount / rounded currentEquity × 100, and `avgNetRR` =
+  rounded netReward / rounded riskAmount, each to four decimal places. They are informational.
+  They are not the mean of the per-trade percents or ratios. `stopType` is always
+  `STRUCTURAL_HARD`, including when `mentalOrNoStopCount` is above 0. A grader who has trades and
+  no Friday plan copies `currentEquity`, `riskAmount`, `netReward`, `stopType`, and `evidenceRefs`
+  into the existing five-key `riskEvidence` envelope. `hard_block()` then applies to that envelope
+  only. `noPlan` stays `NO_PLAN_REQUIRES_ZERO_TRADES` when `tradeDays` is above 0. A8 still
+  requires its Final Paper Plan.
 - A8 with no Final Paper Plan uses envelope `reasonCode:"PLAN_MISSING_REMEDIAL"` and no `riskEvidence`
   and no `noPlan`. Stored `verdict` stays `NOT_APPROVED` (there is no REMEDIAL verdict), `unlockNext`
   is false, `finalHardBlock` is false, and `remedialAssignment` is the same stage for week+1.
