@@ -126,7 +126,7 @@ sudo sfa test-account S10001 --week 2 --reason "bot E2E test"
 
 The reason is required and is stored in the audit log. The command marks only S10001. Week 2 must already exist for that student. It switches that week to the daily-log model, sets the issue time, the due Friday, and whether a plan is required, and leaves the week ready for Echo to accept a daily-log assignment. It does not print the Echo key, the answer key, or any other secret.
 
-The bot can then, in one sitting, submit the quiz if it is still open, receive the daily-log assignment, log a trade day and no-trade days on weekdays inside that window, and upload the Friday file the same day. Echo's packet marks those chosen days `testBackdated` so the grade is not mistaken for a normal weekday. A student who is not marked cannot send a test date.
+The bot can then, in one sitting, submit the quiz if it is still open, receive the daily-log assignment, log a trade day and no-trade days on weekdays inside that window, and upload the Friday file the same day. On kami's daily card, a menu labelled "Test date (test account only)" lists the weekdays after the issue date through the due Friday. The saved log uses the date she picks. Echo's packet marks those chosen days `testBackdated` so the grade is not mistaken for a normal weekday. Other students do not see the menu, and their daily-log response does not include a test mode or those dates. A student who is not marked cannot send a test date.
 
 When the test is finished, turn the flag off. The week stays on the daily-log model, and the weekday, midnight, and Friday rules apply again:
 

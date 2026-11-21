@@ -524,6 +524,41 @@ def _weekdays_in_window(issued, start, due, count=3):
         cursor += timedelta(days=1)
     return days
 
+def test_non_test_daily_log_has_no_test_mode_or_allowed_dates(svc, account):
+    s, _ = account
+    legacy = svc.daily_log_view(s)
+    assert legacy['active'] is False
+    assert 'testMode' not in legacy and 'allowedDates' not in legacy
+    _arm(svc, s, at(2026, 11, 24, 9))
+    view = svc.daily_log_view(s)
+    assert view['active'] is True
+    assert 'testMode' not in view and 'allowedDates' not in view
+    blob = json.dumps(view)
+    assert 'testMode' not in blob and 'allowedDates' not in blob
+    svc.clock = lambda: at(2026, 11, 21, 12)
+    svc.enable_test_account(s['student'], 1, 'bot E2E test')
+    flagged = svc.daily_log_view(s)
+    assert flagged['testMode'] is True
+    from datetime import date as Date
+    row = svc.db.rows('SELECT issued_at, due_friday FROM weeks WHERE student=? AND week=1', (s['student'],))[0]
+    issued = datetime.fromtimestamp(int(row['issued_at']), TZ).date()
+    due = Date.fromisoformat(row['due_friday'])
+    expect = []
+    cursor = issued + timedelta(days=1)
+    while cursor <= due:
+        if cursor.weekday() < 5:
+            expect.append(cursor.isoformat())
+        cursor += timedelta(days=1)
+    assert flagged['allowedDates'] == expect
+    assert expect and all(issued < Date.fromisoformat(day) <= due and Date.fromisoformat(day).weekday() < 5 for day in expect)
+    token = svc.invite().rsplit('/', 1)[1]
+    other = svc.auth(svc.signup({'inviteToken': token, 'email': 'plain@example.test', 'displayName': 'Plain Learner', 'password': 'correct horse battery staple', 'acceptDataNotice': True}))
+    _arm(svc, other, at(2026, 11, 24, 9))
+    plain = svc.daily_log_view(other)
+    assert plain['active'] is True
+    assert 'testMode' not in plain and 'allowedDates' not in plain
+    assert 'testMode' not in json.dumps(plain) and 'allowedDates' not in json.dumps(plain)
+
 def test_non_test_student_keeps_weekend_friday_window_and_rejects_test_date(svc, account):
     s, _ = account
     _arm(svc, s, at(2026, 11, 24, 9))

@@ -142,6 +142,21 @@ def structural_ok(body, assignment, stage):
     return True
 
 
+def allowed_test_dates(issued_date, due):
+    """Weekdays strictly after the issue date, through the due Friday."""
+    if issued_date is None or due is None or due <= issued_date:
+        return []
+    dates = []
+    cursor = issued_date + timedelta(days=1)
+    for _ in range(62):
+        if cursor > due:
+            break
+        if cursor.weekday() < 5:
+            dates.append(cursor.isoformat())
+        cursor += timedelta(days=1)
+    return dates
+
+
 def _student_is_test(c, student_id):
     row = c.execute('SELECT is_test_account FROM students WHERE student=?', (student_id,)).fetchone()
     return bool(row and row['is_test_account'])
@@ -492,7 +507,11 @@ class DailyMixin:
                 due_d = parse_date(due)
                 opens, closes = iso(friday_open(due_d)), iso(friday_close(due_d))
                 open_now = window_open(self, c, target, now_dt)
-        return {
+            test_dates = None
+            if not inactive and _student_is_test(c, target['student']):
+                issued, due_day, _start = _bounds(target)
+                test_dates = allowed_test_dates(issued, due_day)
+        body = {
             'entries': views,
             'countedDays': counted if not inactive else 0,
             'requiredDays': self.config.daily_log_min_days,
@@ -507,6 +526,10 @@ class DailyMixin:
             'warning': warning,
             'previousWeeks': previous,
         }
+        if test_dates is not None:
+            body['testMode'] = True
+            body['allowedDates'] = test_dates
+        return body
 
     def _is_test_student(self, student_id):
         rows = self.db.rows('SELECT is_test_account FROM students WHERE student=?', (student_id,))
