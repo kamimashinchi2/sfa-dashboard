@@ -150,7 +150,7 @@ def create_app(config=None):
         with svc.db.tx() as c: c.execute('UPDATE notifications SET is_read=1 WHERE id=? AND student=?',(nid,s['student']))
         return {'ok':True}
     @ep('GET','/api/v1/report','none','Report')
-    def report(): return svc.report(student()['student'])
+    def report(): return svc.report(student()['student'], audience='student')
     @ep('POST','/api/v1/telegram/connect-link','{}','{url,expiresIn:900}')
     def telegram(): return {'url':svc.connect(student()),'expiresIn':900}
     @ep('GET','/api/v1/admin/students','none','{students:[{student,display_name,email,stage,current_week,role}]}',auth='ADMIN session + HMAC')

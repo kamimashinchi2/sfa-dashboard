@@ -5,7 +5,7 @@ import PracticalUpload from "./PracticalUpload";
 import DailyLogCard from "./DailyLogCard";
 import { SafeMarkdown } from "../../lib/academy/safeMarkdown";
 import { maybeLegacyImport } from "../../lib/academy/legacyImport";
-import { formatDualTime, nextStep, noticeLabel, statusLabel } from "../../lib/academy/studentCopy";
+import { decisionPresentation, formatDualTime, nextStep, noticeLabel, statusLabel } from "../../lib/academy/studentCopy";
 
 type Text = { fa: string; en: string };
 
@@ -196,7 +196,8 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
   };
 
   const unread = notes.filter((note) => !note.isRead).length;
-  const latest = [...decisions].reverse().find((row) => row.body?.verdict);
+  const latest = [...decisions].reverse().find((row) => row.reasonCode === "PLAN_MISSING_REMEDIAL" || row.body?.feedback || row.body?.verdict);
+  const shown = latest?.body ? decisionPresentation(latest, locale) : null;
   const awaitingSenior = me?.status === "AWAITING_SENIOR_MENTOR" || weekStatus === "AWAITING_SENIOR_MENTOR";
   const step = nextStep({
     signedIn: loadState === "ready" && me != null,
@@ -382,17 +383,11 @@ export default function StudentDashboard({ locale }: { locale: "fa" | "en" }) {
             </p>
           </div>
         )}
-        {latest?.body ? (
+        {shown ? (
           <div className="border border-gold/40 p-3 text-sm" data-testid="echo-verdict">
-            <p className="text-gold-soft">
-              {latest.reasonCode === "PLAN_MISSING_REMEDIAL"
-                ? locale === "fa"
-                  ? "طرح نیست: دوباره انجام دهید و دوباره بارگذاری کنید"
-                  : "plan missing: redo and re-upload"
-                : `Echo · ${latest.body.verdict} · ${latest.body.format === "sfa-quiz-decision" ? "quiz" : "practical"}`}
-            </p>
-            <p className="mt-2 text-fog">{text(latest.body.feedback, locale)}</p>
-            {latest.reasonCode === "PLAN_MISSING_REMEDIAL" ? null : latest.body.verdict === "NOT_APPROVED" ? (
+            <p className="text-gold-soft">{shown.headline}</p>
+            <p className="mt-2 text-fog">{shown.feedback}</p>
+            {shown.showRejectionNote ? (
               <p className="mt-2 text-xs text-fog">
                 {locale === "fa"
                   ? "این نتیجه درس بعدی را باز نمی‌کند. برای آزمون: مطالعه و تکرار. برای تمرین: هفته جبرانی در همین مرحله."

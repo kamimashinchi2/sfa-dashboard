@@ -172,6 +172,8 @@ def validate_decision(o,target,cfg,required_weaknesses=(),model='LEGACY',remedia
             gate_failed=not o['routineGate']['passed']
         if no_plan or plan_missing: require(o['finalHardBlock'] is False,'FINAL_HARD_BLOCK_MISMATCH')
         if plan_missing:
+            # Scores and routineGate stay on the decision. The verdict is not
+            # verdict(scores) and a passed or failed gate does not change it.
             require(o['verdict']=='NOT_APPROVED','PLAN_MISSING_REMEDIAL_ONLY')
             require(o['unlockNext'] is False,'PLAN_MISSING_REMEDIAL_ONLY')
             expected='NOT_APPROVED'

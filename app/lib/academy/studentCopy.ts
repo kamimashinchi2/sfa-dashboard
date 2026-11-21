@@ -54,6 +54,35 @@ export function noticeLabel(kind: string | undefined, locale: Locale): string {
   return (NOTICE[kind] ?? { fa: "اعلان داشبورد", en: "Dashboard notice" })[locale];
 }
 
+export function decisionPresentation(
+  decision: {
+    reasonCode?: string | null;
+    body?: {
+      verdict?: string;
+      format?: string;
+      feedback?: { fa?: string; en?: string };
+      scores?: unknown;
+      routineGate?: unknown;
+    };
+  },
+  locale: Locale,
+): { headline: string; feedback: string; showRejectionNote: boolean } {
+  const feedback = decision.body?.feedback?.[locale] ?? "";
+  if (decision.reasonCode === "PLAN_MISSING_REMEDIAL") {
+    return {
+      headline: NOTICE.PLAN_MISSING_REUPLOAD[locale],
+      feedback,
+      showRejectionNote: false,
+    };
+  }
+  const kind = decision.body?.format === "sfa-quiz-decision" ? "quiz" : "practical";
+  return {
+    headline: `Echo · ${decision.body?.verdict ?? ""} · ${kind}`,
+    feedback,
+    showRejectionNote: decision.body?.verdict === "NOT_APPROVED",
+  };
+}
+
 export function nextStep(input: {
   signedIn: boolean;
   status: string | null;

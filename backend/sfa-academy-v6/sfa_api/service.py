@@ -17,6 +17,20 @@ NOTICE='Your learning work and grades are stored on the academy server; Echo and
 PLAN_MISSING_EN='plan missing: redo and re-upload'
 PLAN_MISSING_FA='طرح نیست: دوباره انجام دهید و دوباره بارگذاری کنید'
 
+def _student_event_body(event, missing_ids, missing_weeks):
+    """Students see the plan-missing line and feedback, not scores or the gate."""
+    eid = event['id'] or ''
+    if event['kind'] == 'ROUTINE_GATE' and eid.startswith('routine-gate:') and eid[len('routine-gate:'):] in missing_ids:
+        return None
+    if event['kind'] == 'ECHO_DECISION' and eid.startswith('decision:') and eid[len('decision:'):] in missing_ids:
+        body = json.loads(event['body'])
+        return canonical({'reasonCode': 'PLAN_MISSING_REMEDIAL', 'en': PLAN_MISSING_EN, 'fa': PLAN_MISSING_FA, 'feedback': body.get('feedback')})
+    if event['kind'] == 'PRACTICAL_ASSESSED':
+        body = json.loads(event['body'])
+        if body.get('week') in missing_weeks and body.get('verdict') == 'NOT_APPROVED':
+            return canonical({'week': body.get('week'), 'stage': body.get('stage'), 'reasonCode': 'PLAN_MISSING_REMEDIAL', 'en': PLAN_MISSING_EN, 'fa': PLAN_MISSING_FA})
+    return event['body']
+
 def email_value(v):
     import re
     require(isinstance(v,str) and len(v)<=254 and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',v),'EMAIL_INVALID')
@@ -297,17 +311,36 @@ class Service(DailyMixin, CoreService):
             c.execute("UPDATE mentor_decisions SET state='RETRACTED',override_reason=? WHERE id=?",(reason,did))
             self._event(c,'override:'+did,sid,'DECISION_RETRACTED',{'decisionId':did,'reason':reason,'replacementRequestId':('quiz:' if row['kind']=='quiz' else 'practical:')+new})
             self._notify(c,sid,'DECISION_RETRACTED',{'decisionId':did,'reason':reason})
-    def report(self,sid):
+    def report(self,sid,audience='full'):
         rows=self.db.rows('SELECT student,alias,stage,current_week FROM students WHERE student=?',(sid,)); require(bool(rows),'STUDENT_NOT_FOUND')
-        weaknesses=self.weaknesses(sid); events=self.db.rows('SELECT kind,body,created FROM events WHERE student=? ORDER BY created,id',(sid,))
+        weaknesses=self.weaknesses(sid); events=self.db.rows('SELECT id,kind,body,created FROM events WHERE student=? ORDER BY created,id',(sid,))
         weeks=self.db.rows('SELECT * FROM weeks WHERE student=? ORDER BY week',(sid,)); decisions=self.db.rows('SELECT id,state,body,override_reason FROM mentor_decisions WHERE student=? ORDER BY delivered_at NULLS LAST,id',(sid,))
-        md='# Cumulative Progress Report — '+sid+'\n\nEducational only; no signals or financial advice. / صرفاً آموزشی\n'
-        for e in events:
-            stamp=datetime.fromtimestamp(e['created'],ZoneInfo('Europe/Amsterdam')).isoformat()
-            md+='\n## '+stamp+' Europe/Amsterdam — '+e['kind']+'\n```json\n'+e['body']+'\n```\n'
-        md+='\n## Weaknesses\n```json\n'+canonical(weaknesses)+'\n```\n'
-        codes={}
+        codes, missing = {}, set()
         for e in events:
             if e['kind']=='PLAN_MISSING_REMEDIAL':
                 parsed=json.loads(e['body']); codes[parsed.get('decisionId')]=parsed.get('reasonCode')
-        return {'student':rows[0],'markdown':md,'weaknesses':weaknesses,'weeks':weeks,'decisions':[{**d,'reasonCode':codes.get(d['id']),'body':json.loads(d['body'])} for d in decisions]}
+                if parsed.get('decisionId'): missing.add(parsed['decisionId'])
+        shown=[]
+        missing_weeks=set()
+        for d in decisions:
+            body=json.loads(d['body']); reason=codes.get(d['id'])
+            if audience=='student' and reason=='PLAN_MISSING_REMEDIAL':
+                missing_weeks.add(body.get('week'))
+                body={'feedback':body.get('feedback')}
+            shown.append({**d,'reasonCode':reason,'body':body})
+        if audience=='student' and missing_weeks:
+            hidden=[]
+            for w in weeks:
+                w=dict(w)
+                if w.get('week') in missing_weeks and w.get('practical_verdict')=='NOT_APPROVED':
+                    w['practical_verdict']=None
+                hidden.append(w)
+            weeks=hidden
+        md='# Cumulative Progress Report — '+sid+'\n\nEducational only; no signals or financial advice. / صرفاً آموزشی\n'
+        for e in events:
+            body=_student_event_body(e, missing, missing_weeks) if audience=='student' else e['body']
+            if body is None: continue
+            stamp=datetime.fromtimestamp(e['created'],ZoneInfo('Europe/Amsterdam')).isoformat()
+            md+='\n## '+stamp+' Europe/Amsterdam — '+e['kind']+'\n```json\n'+body+'\n```\n'
+        md+='\n## Weaknesses\n```json\n'+canonical(weaknesses)+'\n```\n'
+        return {'student':rows[0],'markdown':md,'weaknesses':weaknesses,'weeks':weeks,'decisions':shown}

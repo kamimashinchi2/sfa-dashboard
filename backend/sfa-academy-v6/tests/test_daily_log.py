@@ -97,8 +97,23 @@ def _assign(stage=1):
     tasks+=[{'taskId':f'S{s}','kind':'SPIRAL','stage':s,'skill':'prior','task':{'fa':'مرور مرحله قبل.','en':'Spiral task from an earlier stage.'},'minDays':1} for s in range(1, stage)]
     return {'week':1,'stage':stage,'title':{'fa':'تکلیف','en':'Assignment'},'coreTasks':[{'fa':'کار','en':'Do the lesson.'}],'weaknessDrills':[],'spiralReview':[{'stage':s,'skill':'prior','task':{'fa':'مرور','en':'Review.'}} for s in range(1, stage)],'riskRules':{'maxRiskPct':'1','hardStructuralStop':True,'minNetRR':'2','noSignals':True},'deliverables':[{'fa':'سند','en':'A document.'}],'dueAtISO':'2026-11-27T23:59:59+01:00','dailyTasks':tasks,'dailyLogRequirement':{'minDays':3,'eligibleWeekdays':['MON','TUE','WED','THU','FRI'],'timezone':'Europe/Amsterdam','freshCount':True},'fridayDeliverable':{'fa':'جمعه','en':'Friday file.'}}
 
+def _paper(**over):
+    plan={'equity':'10000','riskPct':'1','entry':'1.08','stopLevel':'1.07','stopType':'hard','pointValue':'10','pointValueSource':'illustrative','lot':'0.1','spreadCosts':'1','target':'1.10','netRR':'2'}
+    plan.update(over)
+    return plan
+
+def _conditional():
+    return {'condition':'WAIT until the marked level is swept','entry':'1.0840','stop':'1.0820','target':'1.0900','sizeRisk':'1% of paper equity, rounded down'}
+
 def _entry(task='C1'):
     return {'taskIds':[task],'dayCall':'NO_TRADE','dayCallReason':'Observed reaction unavailable','routine':{'freshness':'FRESH','oneLine':'I checked the list before acting.'},'observations':'EURUSD bid 1.08 at 10:15 on the broker screen.','currentApplication':'Applied this week lesson to that reading.','spiralApplication':'Marked the earlier level.','paperPlan':None,'selfCheck':'No signal. Simulated only.'}
+
+def _trade(task='C1', **over):
+    body=_entry(task)
+    body['dayCall']='TRADE'
+    body['dayCallReason']=''
+    body['paperPlan']=_paper(**over)
+    return body
 
 def _arm(svc, student, when, stage=1):
     svc.clock=lambda: when
@@ -264,6 +279,74 @@ def test_a8_missing_plan_reissues_the_practical(svc, account):
     row=report['decisions'][-1]
     assert row['reasonCode']=='PLAN_MISSING_REMEDIAL' and row['body']['verdict']=='NOT_APPROVED' and row['body']['unlockNext'] is False
 
+def _counted_gate(packet, passed):
+    counted=[e for e in packet['entries'] if e['localDate'] in packet['countedLocalDates']]
+    dates=sorted({e['localDate'] for e in counted})
+    if passed:
+        return {'requiredDays':3,'serverCountedDays':len(dates),'genuineDays':len(dates),'genuineEntryIds':[e['entryId'] for e in counted],'rejectedEntries':[],'passed':True}
+    return {'requiredDays':3,'serverCountedDays':len(dates),'genuineDays':0,'genuineEntryIds':[],'rejectedEntries':[{'entryId':e['entryId'],'reason':'Day was not genuine enough.'} for e in counted],'passed':False}
+
+def test_plan_missing_keeps_scores_and_hides_them_from_the_student(svc, account):
+    from sfa_api.contracts import validate_decision
+    from sfa_api.grading import verdict
+    s,_=account
+    svc.config.admin_id=4242
+    _arm(svc, s, at(2026,11,24,9), stage=8)
+    with svc.db.tx() as c:
+        c.execute('UPDATE students SET stage=8 WHERE student=?', (s['student'],))
+        c.execute('UPDATE weeks SET plan_required=1 WHERE student=?', (s['student'],))
+    for day in (24, 25, 26):
+        svc.clock=lambda day=day: at(2026,11,day,10)
+        body=_entry(); body['taskIds']=['C1','S1']
+        svc.create_daily_entry(s, body)
+    sid=_submit_friday(svc, s)
+    packet=next(i for i in svc.queue() if i['requestId']=='practical:'+sid)['dailyLog']
+    assert packet['countedDays']==3 and packet['tradeDays']==0
+    gate=_counted_gate(packet, True)
+    d=pdecision(svc, sid, 96, False)
+    d['schemaVersion']=3
+    d['routineGate']=gate
+    d['verdict']='NOT_APPROVED'
+    d['unlockNext']=False
+    d['finalHardBlock']=False
+    d['nextAssignment']=None
+    d['remedialAssignment']=assignment(d['week']+1, d['stage'])
+    formula=verdict(sum(d['scores'].values()), svc.config.practical_approved, svc.config.practical_partial, False)
+    assert formula=='APPROVED' and d['routineGate']['passed'] is True
+    counted=[{'entryId':e['entryId'],'localDate':e['localDate']} for e in packet['entries'] if e['localDate'] in packet['countedLocalDates']]
+    accepted=validate_decision(d, {'id':sid,'student':s['student'],'week':d['week'],'stage':d['stage']}, svc.config, [], 'DAILY_LOG_V1', 'LEGACY', counted, False, True)
+    assert accepted['verdict']=='NOT_APPROVED' and accepted['scores']==d['scores'] and accepted['routineGate']['passed'] is True
+    rid='practical:'+sid
+    lease=svc.claim(rid)['leaseToken']
+    with pytest.raises(Invalid, match='PLAN_AND_NO_PLAN_CONFLICT'):
+        svc.decision(d, rid, lease, risk_evidence(d), False, None, True)
+    with pytest.raises(Invalid, match='PLAN_AND_NO_PLAN_CONFLICT'):
+        svc.decision(d, rid, lease, None, True, 'A8 has no plan, so this reason is the wrong envelope.', True)
+    approved=dict(d); approved['verdict']='APPROVED'; approved['remedialAssignment']=None
+    with pytest.raises(Invalid, match='PLAN_MISSING_REMEDIAL_ONLY'):
+        svc.decision(approved, rid, lease, None, False, None, True)
+    svc.decision(d, rid, lease, None, False, None, True)
+    stored=json.loads(svc.db.rows('SELECT body FROM mentor_decisions WHERE id=?', (d['decisionId'],))[0]['body'])
+    assert stored['verdict']=='NOT_APPROVED' and stored['unlockNext'] is False and stored['finalHardBlock'] is False
+    assert stored['scores']==d['scores'] and stored['routineGate']==gate
+    assert stored['remedialAssignment']['stage']==8 and stored['remedialAssignment']['week']==d['week']+1
+    kinds=[e['kind'] for e in svc.db.rows('SELECT kind FROM events WHERE student=?', (s['student'],))]
+    assert 'PLAN_MISSING_REMEDIAL' in kinds and 'ROUTINE_GATE' in kinds
+    assert 'FINAL_PLAN_RISK_EVIDENCE' not in kinds and 'NO_PLAN' not in kinds
+    ent=svc.entitlements(s['student'])
+    assert ent['status']=='REMEDIAL_ISSUED' and ent['unlockedStage']==8
+    full=svc.report(s['student'])
+    assert full['decisions'][-1]['body']['scores']['risk']==40
+    assert full['decisions'][-1]['body']['routineGate']['passed'] is True
+    student=svc.report(s['student'], audience='student')
+    visible=student['decisions'][-1]
+    assert visible['reasonCode']=='PLAN_MISSING_REMEDIAL'
+    assert set(visible['body'])=={'feedback'}
+    blob=json.dumps(student)
+    assert 'routineGate' not in blob and 'NOT_APPROVED' not in blob and '"risk"' not in blob
+    assert 'plan missing: redo and re-upload' in student['markdown']
+    assert visible['body']['feedback']['en']
+
 def test_a8_missing_plan_cannot_approve(svc, account):
     s,_=account
     _open(svc, s, 8)
@@ -273,26 +356,74 @@ def test_a8_missing_plan_cannot_approve(svc, account):
     with pytest.raises(Invalid, match='PLAN_MISSING_REMEDIAL_ONLY'):
         svc.decision(d, rid, svc.claim(rid)['leaseToken'], None, False, None, True)
 
-def test_trade_on_no_trade_day_is_flagged_and_blocks_no_plan(svc, account):
+def _submit_friday(svc, student):
+    svc.clock=lambda: at(2026,11,27,16)
+    sid=svc.draft(student)
+    svc.upload(student, sid, FileStorage(stream=io.BytesIO(b'Friday note.'), filename='work.txt'))
+    svc.submit_practical(student, sid)
+    return sid
+
+def test_only_trade_days_count_and_a_conditional_plan_does_not(svc, account):
     s,_=account
     _arm(svc, s, at(2026,11,24,9), stage=1)
-    traded=_entry(); traded['dayCall']='NO_TRADE'; traded['paperPlan']={'equity':'10000','riskPct':'1','entry':'1.08','stopLevel':'1.07','stopType':'hard','pointValue':'10','pointValueSource':'illustrative','lot':'0.1','spreadCosts':'1','target':'1.10','netRR':'2'}
-    svc.create_daily_entry(s, traded)
-    quiet=_entry(); quiet['dayCall']='NO_TRADE'
+    quiet=_entry(); quiet['dayCallReason']=''; quiet['groundingRefs']=['EURUSD bid 1.0850 at 10:15 Amsterdam']
+    quiet['conditionalPlan']=_conditional()
+    made=svc.create_daily_entry(s, quiet)
+    assert made['fields']['paperPlan'] is None and made['fields']['conditionalPlan']['condition'].startswith('WAIT')
     svc.clock=lambda: at(2026,11,25,9)
-    svc.create_daily_entry(s, quiet)
-    svc.clock=lambda: at(2026,11,27,16)
-    sid=svc.draft(s)
-    svc.upload(s, sid, FileStorage(stream=io.BytesIO(b'Friday note.'), filename='work.txt'))
-    svc.submit_practical(s, sid)
+    svc.create_daily_entry(s, _trade())
+    sid=_submit_friday(svc, s)
     packet=next(i for i in svc.queue() if i['requestId']=='practical:'+sid)['dailyLog']
-    assert packet['tradeDays']==1 and packet['noTradeDays']==1 and packet['tradesOnNoTradeDays']==1
-    assert packet['tradeOnNoTradeDay']==['2026-11-24']
-    d=_v3(svc, sid, 90, {'requiredDays':3,'serverCountedDays':packet['countedDays'],'genuineDays':0,'genuineEntryIds':[],'rejectedEntries':[{'entryId':e['entryId'],'reason':'Day was not genuine enough.'} for e in packet['entries'] if e['localDate'] in packet['countedLocalDates']],'passed':False})
-    # The gate object above may not match counted days. noPlan is rejected before the gate because a trade was recorded.
+    assert packet['tradeDays']==1 and packet['noTradeDays']==1 and packet['tradesOnNoTradeDays']==0
+    assert packet['tradeOnNoTradeDay']==[]
     rid='practical:'+sid
     with pytest.raises(Invalid, match='NO_PLAN_REQUIRES_ZERO_TRADES'):
-        svc.decision(d, rid, svc.claim(rid)['leaseToken'], None, True, 'No plan. The log already records a paper trade on 24 Nov.')
+        gate={'requiredDays':3,'serverCountedDays':packet['countedDays'],'genuineDays':0,'genuineEntryIds':[],'rejectedEntries':[{'entryId':e['entryId'],'reason':'Day was not genuine enough.'} for e in packet['entries'] if e['localDate'] in packet['countedLocalDates']],'passed':False}
+        svc.decision(_v3(svc, sid, 90, gate), rid, svc.claim(rid)['leaseToken'], None, True, 'No Friday plan, but Tuesday was a trade day.')
+
+def test_conditional_plan_on_a_no_trade_week_does_not_block_no_plan(svc, account):
+    s,_=account
+    _arm(svc, s, at(2026,11,24,9), stage=1)
+    body=_entry(); body['conditionalPlan']=_conditional()
+    svc.create_daily_entry(s, body)
+    sid=_submit_friday(svc, s)
+    packet=next(i for i in svc.queue() if i['requestId']=='practical:'+sid)['dailyLog']
+    assert packet['tradeDays']==0 and packet['tradeOnNoTradeDay']==[] and packet['noTradeDays']==1
+    rid='practical:'+sid
+    gate={'requiredDays':3,'serverCountedDays':packet['countedDays'],'genuineDays':0,'genuineEntryIds':[],'rejectedEntries':[{'entryId':e['entryId'],'reason':'Day was not genuine enough.'} for e in packet['entries'] if e['localDate'] in packet['countedLocalDates']],'passed':False}
+    result=svc.decision(_v3(svc, sid, 90, gate), rid, svc.claim(rid)['leaseToken'], None, True, 'No Friday plan. The only plan is a conditional WAIT drill.')
+    assert result['state']=='DELIVERED'
+    kinds=[e['kind'] for e in svc.db.rows('SELECT kind FROM events WHERE student=?', (s['student'],))]
+    assert 'NO_PLAN' in kinds and 'FINAL_PLAN_RISK_EVIDENCE' not in kinds
+
+def test_same_date_trade_and_no_trade_is_the_only_flag(svc, account):
+    s,_=account
+    _arm(svc, s, at(2026,11,24,9), stage=1)
+    svc.create_daily_entry(s, _trade())
+    svc.create_daily_entry(s, _entry())
+    sid=_submit_friday(svc, s)
+    packet=next(i for i in svc.queue() if i['requestId']=='practical:'+sid)['dailyLog']
+    assert packet['tradeDays']==1 and packet['noTradeDays']==0 and packet['tradesOnNoTradeDays']==1
+    assert packet['tradeOnNoTradeDay']==['2026-11-24']
+
+def test_daily_plan_rules_are_presence_only(svc, account):
+    s,_=account
+    _arm(svc, s, at(2026,11,24,9), stage=1)
+    with pytest.raises(Invalid, match='PAPER_PLAN_TRADE_ONLY'):
+        svc.create_daily_entry(s, {**_entry(), 'paperPlan': _paper()})
+    with pytest.raises(Invalid, match='CONDITIONAL_PLAN_NO_TRADE_ONLY'):
+        svc.create_daily_entry(s, {**_trade(), 'conditionalPlan': _conditional()})
+    bare=_trade(); bare['paperPlan']=None
+    with pytest.raises(Invalid, match='PAPER_PLAN_REQUIRED'):
+        svc.create_daily_entry(s, bare)
+    ungrounded=_entry(); ungrounded['dayCallReason']='no setup'
+    with pytest.raises(Invalid, match='GROUNDING_REQUIRED'):
+        svc.create_daily_entry(s, ungrounded)
+    unsafe=_trade(stopType='mental', riskPct='5', netRR='0.4')
+    stored=svc.create_daily_entry(s, unsafe)
+    assert stored['fields']['paperPlan']['stopType']=='mental'
+    assert stored['fields']['paperPlan']['riskPct']=='5' and stored['fields']['paperPlan']['netRR']=='0.4'
+    assert stored['fields']['conditionalPlan'] is None
 
 def test_legacy_week_is_unchanged(svc, account):
     s,_=account

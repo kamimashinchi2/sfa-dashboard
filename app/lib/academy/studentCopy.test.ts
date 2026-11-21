@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { missionHref, nextStep, statusLabel } from "./studentCopy";
+import { decisionPresentation, missionHref, nextStep, statusLabel } from "./studentCopy";
 
 describe("student next step", () => {
   it("tells a signed-out student to log in and use chat, not email", () => {
@@ -25,5 +25,25 @@ describe("student next step", () => {
   it("uses plain status words", () => {
     expect(statusLabel("ASSIGNMENT_ISSUED", "en")).toMatch(/assignment/i);
     expect(statusLabel("NOPE", "fa")).toMatch(/نامشخص/);
+  });
+
+  it("shows a plan-missing decision as the redo line and feedback only", () => {
+    const shown = decisionPresentation(
+      {
+        reasonCode: "PLAN_MISSING_REMEDIAL",
+        body: {
+          verdict: "NOT_APPROVED",
+          format: "sfa-practical-decision",
+          feedback: { en: "Upload the Final Paper Plan.", fa: "پلن نهایی را بارگذاری کنید." },
+          scores: { risk: 40, technicalMacro: 40, journalPsychology: 16 },
+          routineGate: { passed: true, genuineDays: 3 },
+        },
+      },
+      "en",
+    );
+    expect(shown.headline).toBe("plan missing: redo and re-upload");
+    expect(shown.feedback).toBe("Upload the Final Paper Plan.");
+    expect(shown.showRejectionNote).toBe(false);
+    expect(JSON.stringify(shown)).not.toMatch(/NOT_APPROVED|routineGate|"risk"/);
   });
 });

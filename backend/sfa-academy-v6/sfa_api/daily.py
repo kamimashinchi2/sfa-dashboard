@@ -14,6 +14,10 @@ AMSTERDAM = ZoneInfo('Europe/Amsterdam')
 SESSION_AT = ((9, 14, 'LONDON'),)
 FRESHNESS = ('FRESH', 'RECENT', 'STALE', 'UNKNOWN')
 PAPER_KEYS = ('equity', 'riskPct', 'entry', 'stopLevel', 'stopType', 'pointValue', 'pointValueSource', 'lot', 'spreadCosts', 'target', 'netRR')
+# A WAIT / fallback plan on a no-trade day. It is not a paper trade.
+CONDITIONAL_KEYS = ('condition', 'entry', 'stop', 'target', 'sizeRisk')
+OBSERVED_UNAVAILABLE = 'Observed reaction unavailable'
+GROUNDING_MAX = 8
 TASK_RE = re.compile(r'[A-Za-z0-9_.:-]{1,40}\Z')
 WEEKDAY = ('MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN')
 OPEN_STATES = ('ASSIGNMENT_ISSUED', 'REMEDIAL_ISSUED', 'PRACTICAL_OVERDUE')
@@ -165,9 +169,32 @@ def counted_days(rows, **kw):
     return sorted({parse_date(r['local_date']).isoformat() for r in counted_entries(rows, **kw)})
 
 
+def _filled(value, limit, code):
+    require(isinstance(value, str), code)
+    cleaned = value.strip()
+    text(cleaned, limit)
+    return cleaned
+
+
+def _plan(value, keys, code, limit):
+    require(isinstance(value, dict) and set(value) == set(keys), code)
+    return {k: _filled(value[k], limit, code) for k in keys}
+
+
+def _grounding_refs(payload):
+    raw = payload.get('groundingRefs', [])
+    if raw is None:
+        raw = []
+    require(isinstance(raw, list) and len(raw) <= GROUNDING_MAX, 'GROUNDING_INVALID')
+    refs = []
+    for item in raw:
+        refs.append(_filled(item, 300, 'GROUNDING_INVALID'))
+    return refs
+
+
 def validate_daily_payload(payload, assignment, now_dt):
     require(isinstance(payload, dict), 'DAILY_LOG_INVALID')
-    allowed = {'taskIds', 'routine', 'observations', 'currentApplication', 'spiralApplication', 'paperPlan', 'selfCheck', 'dayCall', 'dayCallReason'}
+    allowed = {'taskIds', 'routine', 'observations', 'currentApplication', 'spiralApplication', 'paperPlan', 'conditionalPlan', 'groundingRefs', 'selfCheck', 'dayCall', 'dayCallReason'}
     require(set(payload) <= allowed, 'DAILY_LOG_INVALID')
     day_call = payload.get('dayCall')
     require(day_call in ('TRADE', 'NO_TRADE'), 'DAY_CALL_REQUIRED')
@@ -178,6 +205,7 @@ def validate_daily_payload(payload, assignment, now_dt):
         require(isinstance(day_reason, str) and len(day_reason) <= 500, 'DAY_CALL_REASON_INVALID')
         text(day_reason, 500)
         day_reason = day_reason.strip()
+    refs = _grounding_refs(payload)
     raw_ids = payload.get('taskIds') or []
     require(isinstance(raw_ids, list) and len(raw_ids) <= 40, 'DAILY_LOG_INVALID')
     known = {t['taskId'] for t in _tasks(assignment) if isinstance(t, dict)}
@@ -215,18 +243,30 @@ def validate_daily_payload(payload, assignment, now_dt):
         text(spiral, 4000)
     self_check = payload.get('selfCheck')
     text(self_check, 4000)
-    paper = payload.get('paperPlan', None)
-    if paper is not None:
-        require(isinstance(paper, dict) and set(paper) == set(PAPER_KEYS), 'PAPER_PLAN_INVALID')
-        paper = {k: paper[k].strip() if isinstance(paper[k], str) else paper[k] for k in PAPER_KEYS}
-        for k in PAPER_KEYS:
-            text(paper[k], 200)
+    # Presence only. Daily risk size, stop type, and R:R are not a HARD_BLOCK.
+    paper_raw = payload.get('paperPlan', None)
+    conditional_raw = payload.get('conditionalPlan', None)
+    if day_call == 'TRADE':
+        require(conditional_raw is None, 'CONDITIONAL_PLAN_NO_TRADE_ONLY')
+        require(paper_raw is not None, 'PAPER_PLAN_REQUIRED')
+        paper = _plan(paper_raw, PAPER_KEYS, 'PAPER_PLAN_INVALID', 200)
+        conditional = None
+    else:
+        require(paper_raw is None, 'PAPER_PLAN_TRADE_ONLY')
+        paper = None
+        if conditional_raw is None:
+            conditional = None
+        else:
+            conditional = _plan(conditional_raw, CONDITIONAL_KEYS, 'CONDITIONAL_PLAN_INVALID', 500)
+        require(bool(refs) or day_reason == OBSERVED_UNAVAILABLE, 'GROUNDING_REQUIRED')
     fields = {
         'routine': routine,
         'observations': observations.strip(),
         'currentApplication': current.strip(),
         'spiralApplication': spiral.strip(),
         'paperPlan': paper,
+        'conditionalPlan': conditional,
+        'groundingRefs': refs,
         'selfCheck': self_check.strip(),
     }
     return {'taskIds': task_ids, 'dayCall': day_call, 'dayCallReason': day_reason, 'fields': fields}
@@ -591,38 +631,30 @@ class DailyMixin:
         ids = set(packet.pop('_countedIds'))
         return [{'entryId': e['entryId'], 'localDate': e['localDate']} for e in packet['entries'] if e['entryId'] in ids]
 
-def _recorded_trade(body):
-    return (body.get('fields') or {}).get('paperPlan') is not None
-
 def trade_call_summary(rows):
-    """Per local date. A recorded trade is dayCall TRADE or a paper plan. No numeric penalty."""
+    """Per local date. Only dayCall TRADE is a trade. conditionalPlan never counts.
+
+    tradeDays is the number of dates with a TRADE entry. tradeOnNoTradeDay lists a
+    date only when that date also has a NO_TRADE entry. No numeric penalty.
+    """
     by = {}
     for row in rows:
         body = _entry_body(row)
         local = parse_date(row['local_date']).isoformat()
-        slot = by.setdefault(local, {'calls': set(), 'plan': False})
+        calls = by.setdefault(local, set())
         call = body.get('dayCall')
-        if call:
-            slot['calls'].add(call)
-        if _recorded_trade(body):
-            slot['plan'] = True
-    trade_days = []
-    no_trade_days = []
-    flagged = []
-    for local, slot in by.items():
-        recorded = 'TRADE' in slot['calls'] or slot['plan']
-        if recorded:
+        if call in ('TRADE', 'NO_TRADE'):
+            calls.add(call)
+    trade_days, no_trade_days, flagged = [], [], []
+    for local, calls in by.items():
+        if 'TRADE' in calls:
             trade_days.append(local)
-        if slot['calls'] == {'NO_TRADE'} and not slot['plan']:
+        if calls == {'NO_TRADE'}:
             no_trade_days.append(local)
-        if 'NO_TRADE' in slot['calls'] and recorded:
+        if 'TRADE' in calls and 'NO_TRADE' in calls:
             flagged.append(local)
     trade_days.sort(); no_trade_days.sort(); flagged.sort()
     return {'tradeDays': len(trade_days), 'noTradeDays': len(no_trade_days), 'tradesOnNoTradeDays': len(flagged), 'tradeOnNoTradeDay': flagged, 'recordedTrades': len(trade_days)}
 
 def week_has_recorded_trade(rows):
-    for row in rows:
-        body = _entry_body(row)
-        if body.get('dayCall') == 'TRADE' or _recorded_trade(body):
-            return True
-    return False
+    return trade_call_summary(rows)['tradeDays'] > 0
