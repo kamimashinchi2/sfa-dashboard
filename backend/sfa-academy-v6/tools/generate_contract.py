@@ -140,7 +140,15 @@ text+='''
   not "not approved". `noPlan` on A8 is still `PLAN_REQUIRED_FOR_WEEK`.
 - Student daily log: `GET/POST /api/v1/daily-log`, `PUT /api/v1/daily-log/<id>`,
   `POST /api/v1/daily-log/<id>/files`. Echo history: `GET /echo/v1/daily-log?student=&week=`.
+  Each student entry has `countReason` (null when the day counts; otherwise a short code such as
+  `NO_SPIRAL_TASK`, `WEEKEND`, `BEFORE_ISSUE`, `AFTER_DUE`, `AFTER_SUBMISSION`, or `NOT_LOCKED`).
+  A test-account create that sends `testLocalDate` for a date that already has an entry revises
+  that entry, including after midnight. The grading packet keeps one test-backdated row per date.
+  A normal student may still store up to three entries on one day, and a day still counts once.
   Entry files use the same Echo file route as practical files. LEGACY weeks are unchanged.
+- Student report, quiz feedback, and notifications omit `echoNotes`, `noPlanReason`, and
+  `correctAnswer`. The Echo report and admin decision views keep `echoNotes`.
+- `GET /api/v1/practicals` returns the current week and that week's practical model only.
 - Report = {student:{student,alias,stage,current_week},markdown:string,weaknesses:[{student,id,skill,first_week,
   evidence:JSON-string,status:"OPEN"|"IMPROVING"|"RESOLVED",last_drilled,clean_weeks,last_clean_week}],
   weeks:[{student,week,stage,state,attempt,assignment:JSON-string|null,quiz_verdict,practical_verdict}],

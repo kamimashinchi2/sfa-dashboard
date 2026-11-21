@@ -5,7 +5,7 @@ from flask import Flask,request,jsonify,send_file,g
 from werkzeug.exceptions import HTTPException
 import psycopg
 from .config import Config
-from .service import Service,NOTICE
+from .service import Service,NOTICE,redact_student
 from .contracts import Invalid,require,canonical
 from .plan_policy import plan_policy, plan_policy_table
 from .security import verify,token_hash
@@ -119,7 +119,7 @@ def create_app(config=None):
         s=student()
         with svc.db.tx() as c: w=svc._week(c,s['student'])
         return {'week':w['week'],'stage':w['stage'],'status':w['state'],'assignment':json.loads(w['assignment']) if w['assignment'] else None,'practicalModel':w.get('practical_model') or 'LEGACY','planPolicy':plan_policy(w['stage'])}
-    @ep('GET','/api/v1/daily-log','week=current','{entries,countedDays,requiredDays,dueFriday,nextLockAtISO}')
+    @ep('GET','/api/v1/daily-log','week=current','{entries:[{countReason}],countedDays,requiredDays,dueFriday,nextLockAtISO}')
     def daily_log(): return svc.daily_log_view(student(), request.args.get('week','current'))
     @ep('POST','/api/v1/daily-log','DailyLogInput','DailyEntry')
     def daily_log_create(): return svc.create_daily_entry(student(), payload()), 201
@@ -130,9 +130,9 @@ def create_app(config=None):
         s=student(); require(len(request.files.getlist('file'))==1 and set(request.files)=={'file'},'ONE_FILE_REQUIRED'); return svc.add_daily_file(s, eid, request.files['file']), 201
     @ep('GET','/echo/v1/daily-log','student and week query','{studentId,week,practicalModel,entries}',auth='Echo Bearer')
     def echo_daily(): return svc.echo_daily_log(request.args.get('student'), request.args.get('week'))
-    @ep('GET','/api/v1/practicals','none','{submissions:[{id,stage,week,state,created,files:[File]}]}')
+    @ep('GET','/api/v1/practicals','none','{currentWeek,practicalModel,submissions:[{id,stage,week,practicalModel,state,created,files:[File]}]}')
     def practical_history():
-        s=student();return {'submissions':[{**r,'files':svc.file_list(r['id'])} for r in svc.db.rows('SELECT id,stage,week,state,created FROM submissions WHERE student=? ORDER BY created DESC LIMIT 100',(s['student'],))]}
+        return svc.list_practicals(student())
     @ep('POST','/api/v1/practicals/draft','{}','{submissionId,files:[File]}')
     def draft():
         sid=svc.draft(student()); return {'submissionId':sid,'files':svc.file_list(sid)}
@@ -143,7 +143,7 @@ def create_app(config=None):
     def submit(sid): return {'submissionId':svc.submit_practical(student(),sid),'status':'QUEUED'}
     @ep('GET','/api/v1/notifications','none','{notifications:[{id,body:object,created,isRead}]}')
     def notifications():
-        s=student(); return {'notifications':[{'id':r['id'],'body':json.loads(r['body']),'created':r['created'],'isRead':bool(r['is_read'])} for r in svc.db.rows('SELECT * FROM notifications WHERE student=? ORDER BY created DESC LIMIT 100',(s['student'],))]}
+        s=student(); return {'notifications':[{'id':r['id'],'body':redact_student(json.loads(r['body'])),'created':r['created'],'isRead':bool(r['is_read'])} for r in svc.db.rows('SELECT * FROM notifications WHERE student=? ORDER BY created DESC LIMIT 100',(s['student'],))]}
     @ep('POST','/api/v1/notifications/<nid>/read','{}','{ok:true}')
     def read_notification(nid):
         s=student()

@@ -11,3 +11,8 @@ export async function POST(req: Request, ctx: Ctx) {
   const { slug } = await ctx.params;
   return proxyMentor(req, "POST", slug);
 }
+
+export async function PUT(req: Request, ctx: Ctx) {
+  const { slug } = await ctx.params;
+  return proxyMentor(req, "PUT", slug);
+}

@@ -16,6 +16,24 @@ DUMMY=PASSWORDS.hash(secrets.token_urlsafe(32))
 NOTICE='Your learning work and grades are stored on the academy server; Echo and the academy mentor review them. No live trading or sensitive account documents required. / تمرین‌ها و نمرات در سرور آکادمی ذخیره و توسط Echo و منتور بررسی می‌شوند. اطلاعات حساس حساب نفرستید.'
 PLAN_MISSING_EN='plan missing: redo and re-upload'
 PLAN_MISSING_FA='طرح نیست: دوباره انجام دهید و دوباره بارگذاری کنید'
+# Mentor-only fields. Students see feedback, not these notes or answer material.
+STUDENT_HIDDEN={'echoNotes','noPlanReason','correctAnswer','leaseToken','sessionToken','password','password_hash','passwordHash','contentDigest'}
+
+def redact_student(value):
+    """Drop mentor-only notes from a student payload, including JSON stored as text."""
+    if isinstance(value, str):
+        try:
+            parsed=json.loads(value)
+        except (ValueError, TypeError):
+            return value
+        if isinstance(parsed, (dict, list)):
+            return canonical(redact_student(parsed))
+        return value
+    if isinstance(value, list):
+        return [redact_student(item) for item in value]
+    if isinstance(value, dict):
+        return {key: redact_student(child) for key, child in value.items() if key not in STUDENT_HIDDEN}
+    return value
 
 def _student_event_body(event, missing_ids, missing_weeks):
     """Students see the plan-missing line and feedback, not scores or the gate."""
@@ -142,7 +160,8 @@ class Service(DailyMixin, CoreService):
         # Full expected answers are Echo-only; student sees correctness after a complete submission.
         public={k:v for k,v in a.items() if k in ('status','reason','score','correct','total','verdict')}
         public['items']=[{'itemId':i['itemId'],'correct':i['correct']} for i in a['items']]
-        return {'attemptId':aid,'assessment':public,'decision':json.loads(decisions[0]['body']) if decisions and decisions[0]['state']=='DELIVERED' else None}
+        decision=json.loads(decisions[0]['body']) if decisions and decisions[0]['state']=='DELIVERED' else None
+        return redact_student({'attemptId':aid,'assessment':public,'decision':decision})
     def draft(self,s): return self.new_submission(s)
     def upload(self,s,sid,uploaded):
         with self.db.tx() as c:
@@ -189,6 +208,26 @@ class Service(DailyMixin, CoreService):
         return out
     def file_list(self,sid):
         return self.db.rows('SELECT id AS "fileId",name,size,digest,mime FROM files WHERE submission=?',(sid,))
+    def list_practicals(self,s):
+        """Submissions for the current week and that week's practical model only."""
+        with self.db.tx() as c:
+            w=self._week(c,s['student'])
+        model=w.get('practical_model') or 'LEGACY'
+        week=w['week']
+        rows=self.db.rows(
+            '''SELECT submissions.id AS id, submissions.stage AS stage, submissions.week AS week,
+                      submissions.state AS state, submissions.created AS created
+               FROM submissions
+               JOIN weeks ON weeks.student=submissions.student AND weeks.week=submissions.week
+               WHERE submissions.student=? AND submissions.week=?
+                 AND COALESCE(weeks.practical_model,'LEGACY')=?
+               ORDER BY submissions.created DESC LIMIT 100''',
+            (s['student'], week, model))
+        return {
+            'currentWeek': week,
+            'practicalModel': model,
+            'submissions': [{**r, 'practicalModel': model, 'files': self.file_list(r['id'])} for r in rows],
+        }
     def claim(self,rid):
         require(any(r['requestId']==rid for r in self.queue()),'REQUEST_NOT_PENDING')
         token=secrets.token_urlsafe(32)
@@ -327,6 +366,8 @@ class Service(DailyMixin, CoreService):
             if audience=='student' and reason=='PLAN_MISSING_REMEDIAL':
                 missing_weeks.add(body.get('week'))
                 body={'feedback':body.get('feedback')}
+            if audience=='student':
+                body=redact_student(body)
             shown.append({**d,'reasonCode':reason,'body':body})
         if audience=='student' and missing_weeks:
             hidden=[]
@@ -340,6 +381,8 @@ class Service(DailyMixin, CoreService):
         for e in events:
             body=_student_event_body(e, missing, missing_weeks) if audience=='student' else e['body']
             if body is None: continue
+            if audience=='student':
+                body=redact_student(body)
             stamp=datetime.fromtimestamp(e['created'],ZoneInfo('Europe/Amsterdam')).isoformat()
             md+='\n## '+stamp+' Europe/Amsterdam — '+e['kind']+'\n```json\n'+body+'\n```\n'
         md+='\n## Weaknesses\n```json\n'+canonical(weaknesses)+'\n```\n'

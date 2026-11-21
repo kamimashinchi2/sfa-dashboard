@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { canon } from "./canon";
 import { withAnswers } from "./hydrateAnswers";
+import { QUIZ_ANSWER_KEY } from "./server/answerKeyData";
 import { listQuizBanksPublic, itemHash, legacyItemHash } from "./quizHash";
 import { scoreQuiz } from "./grading";
 import {
@@ -88,6 +89,11 @@ describe("served quiz payloads do not reveal answers", () => {
   });
 
   it("shuffles question order, MC positions, and order items across attempts", () => {
+    const authorMc = Object.values(QUIZ_ANSWER_KEY).filter((answer): answer is number => typeof answer === "number");
+    expect(authorMc.length).toBeGreaterThan(10);
+    // The private key pins every MC answer at one index. That is what Mentor sees
+    // after the server maps a submission back to author order. Students do not.
+    expect(new Set(authorMc)).toEqual(new Set([1]));
     const nonces = Array.from({ length: 24 }, (_, i) => i.toString(16).padStart(32, "0"));
     for (const bank of banks()) {
       const servings = nonces.map((nonce) => serveQuizAttempt(bank.items, SECRET, nonce));

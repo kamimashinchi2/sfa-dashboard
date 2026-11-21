@@ -9,14 +9,19 @@ type Entry = {
   localDate: string;
   eligible: boolean;
   ineligibleReason: string | null;
+  countReason?: string | null;
   locked: boolean;
   revisionCount: number;
   taskIds: string[];
+  dayCall?: "TRADE" | "NO_TRADE" | null;
   fields: {
     observations: string;
     currentApplication: string;
     spiralApplication: string;
     selfCheck: string;
+    groundingRefs?: string[];
+    paperPlan?: Record<string, string> | null;
+    conditionalPlan?: Record<string, string> | null;
     routine: { time: string; session: string; calendar: string; freshness: string; oneLine: string };
   };
 };
@@ -77,6 +82,57 @@ function line(value: Text | null | undefined, locale: "fa" | "en"): string {
   return locale === "fa" ? value.fa : value.en;
 }
 
+const COUNT_REASON: Record<string, { en: string; fa: string }> = {
+  NO_CORE_TASK: {
+    en: "Does not count: the core task for this week is missing.",
+    fa: "حساب نمی‌شود: کار اصلی این هفته نیست.",
+  },
+  NO_SPIRAL_TASK: {
+    en: "Does not count: a spiral task from an earlier week is missing.",
+    fa: "حساب نمی‌شود: کار مرور هفته قبل نیست.",
+  },
+  INCOMPLETE: {
+    en: "Does not count: observation or this week's application is empty.",
+    fa: "حساب نمی‌شود: مشاهده یا کاربرد درس این هفته خالی است.",
+  },
+  WEEKEND: {
+    en: "Does not count: weekend days are outside the count.",
+    fa: "حساب نمی‌شود: روزهای آخر هفته شمرده نمی‌شوند.",
+  },
+  BEFORE_ISSUE: {
+    en: "Does not count: this date is on or before the assignment was issued.",
+    fa: "حساب نمی‌شود: این تاریخ هم‌زمان یا قبل از صدور تکلیف است.",
+  },
+  BEFORE_WINDOW: {
+    en: "Does not count: this date is before the current count window.",
+    fa: "حساب نمی‌شود: این تاریخ قبل از بازه شمارش این هفته است.",
+  },
+  AFTER_DUE: {
+    en: "Does not count: this date is after the due Friday.",
+    fa: "حساب نمی‌شود: این تاریخ بعد از جمعه موعد است.",
+  },
+  AFTER_SUBMISSION: {
+    en: "Does not count: saved after the practical was submitted.",
+    fa: "حساب نمی‌شود: بعد از ارسال تمرین ثبت شده.",
+  },
+  NOT_LOCKED: {
+    en: "Does not count yet: it counts after midnight Amsterdam time.",
+    fa: "هنوز حساب نمی‌شود: بعد از نیمه‌شب به وقت آمستردام شمرده می‌شود.",
+  },
+};
+
+function reasonLine(code: string): string {
+  const copy = COUNT_REASON[code];
+  if (!copy) return code;
+  return `${copy.en} / ${copy.fa}`;
+}
+
+function latestForDate(entries: Entry[], day: string): Entry | null {
+  const matches = entries.filter((entry) => entry.localDate === day);
+  if (!matches.length) return null;
+  return matches.reduce((best, entry) => (entry.revisionCount > best.revisionCount ? entry : best));
+}
+
 export default function DailyLogCard({
   locale,
   tasks,
@@ -115,10 +171,45 @@ export default function DailyLogCard({
   if (!view?.active) return null;
   const open = view.state === "ASSIGNMENT_ISSUED" || view.state === "REMEDIAL_ISSUED" || view.state === "PRACTICAL_OVERDUE";
 
+  const clearForm = () => {
+    setTaskIds([]);
+    setObservations("");
+    setCurrentApplication("");
+    setSpiralApplication("");
+    setSelfCheck("");
+    setOneLine("");
+    setFreshness("UNKNOWN");
+    setCalendar("");
+    setDayCall("NO_TRADE");
+    setGrounding("");
+    setPaper(blank(PAPER_FIELDS));
+    setConditional(blank(CONDITIONAL_FIELDS));
+  };
+
+  const loadEntry = (entry: Entry) => {
+    const fields = entry.fields;
+    setTaskIds(entry.taskIds ?? []);
+    setObservations(fields?.observations ?? "");
+    setCurrentApplication(fields?.currentApplication ?? "");
+    setSpiralApplication(fields?.spiralApplication ?? "");
+    setSelfCheck(fields?.selfCheck ?? "");
+    setOneLine(fields?.routine?.oneLine ?? "");
+    setCalendar(fields?.routine?.calendar ?? "");
+    const fresh = fields?.routine?.freshness ?? "";
+    setFreshness((FRESH as readonly string[]).includes(fresh) ? (fresh as (typeof FRESH)[number]) : "UNKNOWN");
+    setDayCall(entry.dayCall === "TRADE" ? "TRADE" : "NO_TRADE");
+    setGrounding((fields?.groundingRefs ?? []).join("\n"));
+    setPaper(fields?.paperPlan ? { ...blank(PAPER_FIELDS), ...fields.paperPlan } : blank(PAPER_FIELDS));
+    setConditional(
+      fields?.conditionalPlan ? { ...blank(CONDITIONAL_FIELDS), ...fields.conditionalPlan } : blank(CONDITIONAL_FIELDS),
+    );
+  };
+
   const save = async () => {
     setMessage(null);
-    const res = await fetch("/api/mentor/daily-log", {
-      method: "POST",
+    const existing = view.testMode && testDate ? latestForDate(view.entries, testDate) : null;
+    const res = await fetch(existing ? `/api/mentor/daily-log/${encodeURIComponent(existing.entryId)}` : "/api/mentor/daily-log", {
+      method: existing ? "PUT" : "POST",
       credentials: "same-origin",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -184,7 +275,14 @@ export default function DailyLogCard({
                 className="mt-1 w-full border border-line bg-ink px-2 py-2"
                 data-testid="test-date"
                 value={testDate}
-                onChange={(event) => setTestDate(event.target.value)}
+                onChange={(event) => {
+                  const day = event.target.value;
+                  setTestDate(day);
+                  if (!day) return;
+                  const match = latestForDate(view.entries, day);
+                  if (match) loadEntry(match);
+                  else clearForm();
+                }}
               >
                 <option value="">{locale === "fa" ? "انتخاب تاریخ" : "Choose a date"}</option>
                 {(view.allowedDates ?? []).map((day) => (
@@ -317,6 +415,9 @@ export default function DailyLogCard({
         {view.entries.map((entry) => (
           <li key={entry.entryId}>
             {entry.localDate} · {entry.eligible ? "eligible" : entry.ineligibleReason} · {entry.locked ? (locale === "fa" ? "قفل" : "locked") : (locale === "fa" ? "باز" : "open")} · rev {entry.revisionCount}
+            {entry.countReason ? (
+              <p data-testid="count-reason">{reasonLine(entry.countReason)}</p>
+            ) : null}
           </li>
         ))}
       </ul>
