@@ -1,0 +1,307 @@
+{
+  "level": "L07",
+  "items": [
+    {
+      "id": "L07-Q01",
+      "kind": "mc",
+      "prompt": {
+        "fa": "STUB سؤال 1 از L07. کدام گام مطالعه پیش از اندازه است؟",
+        "en": "STUB L07 question 1. Which study step comes before size?"
+      },
+      "rationale": {
+        "fa": "STUB. فصل، ابطال و بودجه را پیش از اندازه می‌خواهد. این یادداشت یک گزینه را نام نمی‌برد.",
+        "en": "STUB. The chapter asks for the invalidation and the budget before size. This note does not name a choice."
+      },
+      "remediationTopic": "stub-l07",
+      "chapterRef": "MCFX-L07-C01",
+      "options": [
+        {
+          "fa": "یادداشت مطالعه 1 برای L07",
+          "en": "Study note 1 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 2 برای L07",
+          "en": "Study note 2 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 3 برای L07",
+          "en": "Study note 3 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 4 برای L07",
+          "en": "Study note 4 for L07"
+        }
+      ]
+    },
+    {
+      "id": "L07-Q02",
+      "kind": "mc",
+      "prompt": {
+        "fa": "STUB سؤال 2 از L07. کدام گام مطالعه پیش از اندازه است؟",
+        "en": "STUB L07 question 2. Which study step comes before size?"
+      },
+      "rationale": {
+        "fa": "STUB. فصل، ابطال و بودجه را پیش از اندازه می‌خواهد. این یادداشت یک گزینه را نام نمی‌برد.",
+        "en": "STUB. The chapter asks for the invalidation and the budget before size. This note does not name a choice."
+      },
+      "remediationTopic": "stub-l07",
+      "chapterRef": "MCFX-L07-C01",
+      "options": [
+        {
+          "fa": "یادداشت مطالعه 1 برای L07",
+          "en": "Study note 1 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 2 برای L07",
+          "en": "Study note 2 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 3 برای L07",
+          "en": "Study note 3 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 4 برای L07",
+          "en": "Study note 4 for L07"
+        }
+      ]
+    },
+    {
+      "id": "L07-Q03",
+      "kind": "mc",
+      "prompt": {
+        "fa": "STUB سؤال 3 از L07. کدام گام مطالعه پیش از اندازه است؟",
+        "en": "STUB L07 question 3. Which study step comes before size?"
+      },
+      "rationale": {
+        "fa": "STUB. فصل، ابطال و بودجه را پیش از اندازه می‌خواهد. این یادداشت یک گزینه را نام نمی‌برد.",
+        "en": "STUB. The chapter asks for the invalidation and the budget before size. This note does not name a choice."
+      },
+      "remediationTopic": "stub-l07",
+      "chapterRef": "MCFX-L07-C01",
+      "options": [
+        {
+          "fa": "یادداشت مطالعه 1 برای L07",
+          "en": "Study note 1 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 2 برای L07",
+          "en": "Study note 2 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 3 برای L07",
+          "en": "Study note 3 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 4 برای L07",
+          "en": "Study note 4 for L07"
+        }
+      ]
+    },
+    {
+      "id": "L07-Q04",
+      "kind": "numeric",
+      "prompt": {
+        "fa": "STUB عدد L07. رقم خالص نمونه را به صورت اعشار با دو رقم بنویسید.",
+        "en": "STUB L07 numeric. Enter the sample net figure as a decimal with two places."
+      },
+      "rationale": {
+        "fa": "STUB. فصل، ابطال و بودجه را پیش از اندازه می‌خواهد. این یادداشت یک گزینه را نام نمی‌برد.",
+        "en": "STUB. The chapter asks for the invalidation and the budget before size. This note does not name a choice."
+      },
+      "remediationTopic": "stub-l07",
+      "chapterRef": "MCFX-L07-C01"
+    },
+    {
+      "id": "L07-Q05",
+      "kind": "mc",
+      "prompt": {
+        "fa": "STUB سؤال 5 از L07. کدام گام مطالعه پیش از اندازه است؟",
+        "en": "STUB L07 question 5. Which study step comes before size?"
+      },
+      "rationale": {
+        "fa": "STUB. فصل، ابطال و بودجه را پیش از اندازه می‌خواهد. این یادداشت یک گزینه را نام نمی‌برد.",
+        "en": "STUB. The chapter asks for the invalidation and the budget before size. This note does not name a choice."
+      },
+      "remediationTopic": "stub-l07",
+      "chapterRef": "MCFX-L07-C01",
+      "options": [
+        {
+          "fa": "یادداشت مطالعه 1 برای L07",
+          "en": "Study note 1 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 2 برای L07",
+          "en": "Study note 2 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 3 برای L07",
+          "en": "Study note 3 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 4 برای L07",
+          "en": "Study note 4 for L07"
+        }
+      ]
+    },
+    {
+      "id": "L07-Q06",
+      "kind": "mc",
+      "prompt": {
+        "fa": "STUB سؤال 6 از L07. کدام گام مطالعه پیش از اندازه است؟",
+        "en": "STUB L07 question 6. Which study step comes before size?"
+      },
+      "rationale": {
+        "fa": "STUB. فصل، ابطال و بودجه را پیش از اندازه می‌خواهد. این یادداشت یک گزینه را نام نمی‌برد.",
+        "en": "STUB. The chapter asks for the invalidation and the budget before size. This note does not name a choice."
+      },
+      "remediationTopic": "stub-l07",
+      "chapterRef": "MCFX-L07-C01",
+      "options": [
+        {
+          "fa": "یادداشت مطالعه 1 برای L07",
+          "en": "Study note 1 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 2 برای L07",
+          "en": "Study note 2 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 3 برای L07",
+          "en": "Study note 3 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 4 برای L07",
+          "en": "Study note 4 for L07"
+        }
+      ]
+    },
+    {
+      "id": "L07-Q07",
+      "kind": "order",
+      "prompt": {
+        "fa": "STUB سؤال 7 از L07. کدام گام مطالعه پیش از اندازه است؟",
+        "en": "STUB L07 question 7. Which study step comes before size?"
+      },
+      "rationale": {
+        "fa": "STUB. فصل، ابطال و بودجه را پیش از اندازه می‌خواهد. این یادداشت یک گزینه را نام نمی‌برد.",
+        "en": "STUB. The chapter asks for the invalidation and the budget before size. This note does not name a choice."
+      },
+      "remediationTopic": "stub-l07",
+      "chapterRef": "MCFX-L07-C01",
+      "options": [
+        {
+          "fa": "بودجه",
+          "en": "Budget"
+        },
+        {
+          "fa": "ابطال",
+          "en": "Invalidation"
+        },
+        {
+          "fa": "هزینه",
+          "en": "Costs"
+        },
+        {
+          "fa": "اندازه",
+          "en": "Size"
+        }
+      ]
+    },
+    {
+      "id": "L07-Q08",
+      "kind": "mc",
+      "prompt": {
+        "fa": "STUB سؤال 8 از L07. کدام گام مطالعه پیش از اندازه است؟",
+        "en": "STUB L07 question 8. Which study step comes before size?"
+      },
+      "rationale": {
+        "fa": "STUB. فصل، ابطال و بودجه را پیش از اندازه می‌خواهد. این یادداشت یک گزینه را نام نمی‌برد.",
+        "en": "STUB. The chapter asks for the invalidation and the budget before size. This note does not name a choice."
+      },
+      "remediationTopic": "stub-l07",
+      "chapterRef": "MCFX-L07-C01",
+      "options": [
+        {
+          "fa": "یادداشت مطالعه 1 برای L07",
+          "en": "Study note 1 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 2 برای L07",
+          "en": "Study note 2 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 3 برای L07",
+          "en": "Study note 3 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 4 برای L07",
+          "en": "Study note 4 for L07"
+        }
+      ]
+    },
+    {
+      "id": "L07-Q09",
+      "kind": "mc",
+      "prompt": {
+        "fa": "STUB سؤال 9 از L07. کدام گام مطالعه پیش از اندازه است؟",
+        "en": "STUB L07 question 9. Which study step comes before size?"
+      },
+      "rationale": {
+        "fa": "STUB. فصل، ابطال و بودجه را پیش از اندازه می‌خواهد. این یادداشت یک گزینه را نام نمی‌برد.",
+        "en": "STUB. The chapter asks for the invalidation and the budget before size. This note does not name a choice."
+      },
+      "remediationTopic": "stub-l07",
+      "chapterRef": "MCFX-L07-C01",
+      "options": [
+        {
+          "fa": "یادداشت مطالعه 1 برای L07",
+          "en": "Study note 1 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 2 برای L07",
+          "en": "Study note 2 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 3 برای L07",
+          "en": "Study note 3 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 4 برای L07",
+          "en": "Study note 4 for L07"
+        }
+      ]
+    },
+    {
+      "id": "L07-Q10",
+      "kind": "mc",
+      "prompt": {
+        "fa": "STUB سؤال 10 از L07. کدام گام مطالعه پیش از اندازه است؟",
+        "en": "STUB L07 question 10. Which study step comes before size?"
+      },
+      "rationale": {
+        "fa": "STUB. فصل، ابطال و بودجه را پیش از اندازه می‌خواهد. این یادداشت یک گزینه را نام نمی‌برد.",
+        "en": "STUB. The chapter asks for the invalidation and the budget before size. This note does not name a choice."
+      },
+      "remediationTopic": "stub-l07",
+      "chapterRef": "MCFX-L07-C01",
+      "options": [
+        {
+          "fa": "یادداشت مطالعه 1 برای L07",
+          "en": "Study note 1 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 2 برای L07",
+          "en": "Study note 2 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 3 برای L07",
+          "en": "Study note 3 for L07"
+        },
+        {
+          "fa": "یادداشت مطالعه 4 برای L07",
+          "en": "Study note 4 for L07"
+        }
+      ]
+    }
+  ]
+}

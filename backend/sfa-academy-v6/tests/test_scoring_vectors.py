@@ -2,11 +2,14 @@
 import json
 from pathlib import Path
 
+from sfa_api.academy_rules import effective_rules
 from sfa_api.config import Config
 from sfa_api.grading import verdict
 from sfa_api.risk import hard_block
 
-VECTORS = json.loads((Path(__file__).resolve().parents[3] / "shared" / "scoring-vectors.json").read_text())
+ROOT = Path(__file__).resolve().parents[3]
+VECTORS = json.loads((ROOT / "shared" / "scoring-vectors.json").read_text())
+LEGACY = effective_rules(None, json.loads((ROOT / "shared" / "legacy-rules.json").read_text()))
 
 
 def test_thresholds_match_the_shared_file():
@@ -41,4 +44,4 @@ def test_hard_block_vectors_match_risk_gate():
             "stopType": row["stopType"],
             "evidenceRefs": ["document:final-plan"],
         }
-        assert hard_block(evidence) is row["blocked"]
+        assert hard_block(evidence, rules=LEGACY) is row["blocked"]

@@ -106,6 +106,7 @@ def test_sfa_cli_help_for_every_command():
         ["import-legacy"],
         ["adopt-legacy"],
         ["test-account"],
+        ["reset-test-account"],
         ["open-practical-window"],
     ]
     top = run([PY, "-m", "sfa_api.cli", "--help"])
@@ -494,4 +495,7 @@ def test_answer_key_extractor_usage_and_repo_smoke():
     sample = payload["quizzes"]["M1"][0]
     assert sample["hashVersion"] == 2
     assert len(sample["itemHash"]) == 64
-    assert set(payload["quizzes"]) == {"M1", "M2", "M3", "M4", "M5", "A6", "A7", "A8"}
+    assert {"M1", "M2", "M3", "M4", "M5", "A6", "A7", "A8", "L01", "L02", "L03", "L04", "L05", "L06", "L07", "L08"} <= set(payload["quizzes"])
+    assert payload["quizzes"]["M1"][0]["itemId"].startswith("M1-")
+    assert len(payload["quizzes"]["L01"]) == 10
+    assert payload["quizzes"]["L01"][0]["itemId"].startswith("L01-")

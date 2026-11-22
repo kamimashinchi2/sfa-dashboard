@@ -1,0 +1,13 @@
+{
+  "defaults": {
+    "maxRiskPctPerTrade": "1.00",
+    "stopRequirement": "HARD_STRUCTURAL",
+    "mentalStopIsHardBlock": true,
+    "minNetRR": "2.00",
+    "stopBlockMode": "MENTAL_OR_NONE",
+    "unplannedStopMoveIsHardBlock": false,
+    "plannedStopMoveAllowed": true,
+    "dailyLossCapPct": null
+  },
+  "levels": {}
+}

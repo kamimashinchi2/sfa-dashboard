@@ -1,0 +1,498 @@
+{
+  "defaults": {
+    "maxRiskPctPerTrade": "1.00",
+    "stopRequirement": "REGISTERED_STOP",
+    "mentalStopIsHardBlock": false,
+    "minNetRR": "2.00",
+    "stopBlockMode": "NO_STOP_ONLY",
+    "unplannedStopMoveIsHardBlock": true,
+    "plannedStopMoveAllowed": true,
+    "dailyLossCapPct": null
+  },
+  "levels": {
+    "L00": {
+      "situations": [
+        {
+          "id": "L00-S1",
+          "condition": {
+            "fa": "گرد کردن حجم به سمت پایین تا ریسک از بودجه مجاز عبور نکند",
+            "en": "round position size down to the symbol step so risk does not exceed the budget"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L00-C04"
+        }
+      ]
+    },
+    "L01": {
+      "situations": [
+        {
+          "id": "L01-S1",
+          "condition": {
+            "fa": "مثال عددی محاسبه حجم در هر معامله",
+            "en": "per-trade position-size example"
+          },
+          "riskPct": "1.00",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L01-C03"
+        },
+        {
+          "id": "L01-S2",
+          "condition": {
+            "fa": "نخستین معامله آزمایشی، پیش از رها کردن موقعیت",
+            "en": "first demo trade, before leaving the position"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "ثبت قطعی حد ضرر پیش از رها کردن موقعیت",
+            "en": "place the Stop Loss before leaving the position"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L01-C04"
+        },
+        {
+          "id": "L01-S3",
+          "condition": {
+            "fa": "تعریف واحد 1R در ژورنال",
+            "en": "definition of 1R in the journal"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "یک واحد ریسک اولیه (1R) برابر است با زیان برنامه‌ریزی‌شده همراه با هزینه بر اساس طرح ثبت‌شده پیش از ارسال سفارش، نه سقف کل بودجه مجاز حساب",
+            "en": "1R equals the planned loss plus cost from the pre-trade plan, not the account-wide budget cap"
+          },
+          "citation": "MCFX-L01-C05"
+        },
+        {
+          "id": "L01-S4",
+          "condition": {
+            "fa": "پرونده کارگاه GOLD-B، یک درصد از ارزش لحظه‌ای اولیه",
+            "en": "GOLD-B workshop example, 1 percent of initial equity"
+          },
+          "riskPct": "1.00",
+          "stopRule": {
+            "fa": "حد خروج سقف تضمینی زیان نیست",
+            "en": "the planned exit is not a guaranteed loss cap"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L01-C06"
+        }
+      ]
+    },
+    "L02": {
+      "situations": [
+        {
+          "id": "L02-S1",
+          "condition": {
+            "fa": "اجرای حد ضرر و شکاف قیمتی",
+            "en": "Stop Loss execution and price gaps"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "حد ضرر سطح فعال‌سازی است نه سقف تضمینی زیان؛ پرهیز از جابه‌جایی بی‌قاعده حد ضرر",
+            "en": "Stop Loss is an activation level, not a guaranteed cap; do not move it irregularly"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L02-C04"
+        },
+        {
+          "id": "L02-S2",
+          "condition": {
+            "fa": "پرونده کارگاه GOLD-C با بودجه ریسک ۱۲ دلار (درصد بیان نشده)",
+            "en": "GOLD-C workshop with a 12 USD risk budget (no percent stated)"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "حجم از فاصله حد ضرر، اندازه قرارداد و کارمزد به دست می‌آید و رو به پایین گرد می‌شود",
+            "en": "size from stop distance, contract size and commission, then round down"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L02-C06"
+        }
+      ]
+    },
+    "L03": {
+      "situations": [
+        {
+          "id": "L03-S1",
+          "condition": {
+            "fa": "طراحی روش: سقف زیان هر معامله به‌صورت درصد سرمایه یا 1R ثابت، پیش از مشاهده نتیجه (عدد درصد بیان نشده)",
+            "en": "method design: per-trade loss cap as a percent of capital or a fixed 1R, set before seeing the result (no percent given)"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "خروج دوگانه: سطح خروج حفاظتی (ابطال سناریو) و قاعده خروج در سود یا پایان افق زمانی",
+            "en": "dual exits: a protective exit (scenario invalidation) plus a profit or time exit"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L03-C11"
+        },
+        {
+          "id": "L03-S2",
+          "condition": {
+            "fa": "محدود کردن موقعیت‌های هم‌زمان روی یک نماد یا نمادهای هم‌بسته",
+            "en": "limit concurrent positions on one symbol or on correlated symbols"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L03-C11"
+        }
+      ]
+    },
+    "L05": {
+      "situations": [
+        {
+          "id": "L05-S1",
+          "condition": {
+            "fa": "چک‌لیست ده‌موردی پیش از معامله (تکمیل آن الزامی است؛ عدد درصد در خود چک‌لیست نیامده)",
+            "en": "mandatory ten-item pre-trade checklist (the checklist names a fixed-percent formula but gives no number)"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "حد زیان باید در پشت یک سطح ساختاری مشخص و معتبر باشد",
+            "en": "place the Stop Loss behind a valid structural level"
+          },
+          "rrRule": {
+            "fa": "نسبت سود به زیان پتانسیل حداقل ۱ به ۲",
+            "en": "potential reward-to-risk at least 1:2"
+          },
+          "citation": "MCFX-L05-C04"
+        },
+        {
+          "id": "L05-S2",
+          "condition": {
+            "fa": "سقف ریسک فعال روزانه در چک‌لیست (حد مجاز نام برده شده، عدد بیان نشده)",
+            "en": "daily aggregate active-risk cap in the checklist (a cap is named, no number given)"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L05-C04"
+        },
+        {
+          "id": "L05-S3",
+          "condition": {
+            "fa": "مدیریت مشروط از پیش نوشته‌شده",
+            "en": "pre-written conditional position management"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "اگر قیمت به 1.5R در جهت موافق برسد، حد زیان به نقطه ورود منتقل شود و ۵۰٪ حجم بسته شود؛ فقط اگر این قانون پیش از ورود نوشته شده باشد",
+            "en": "if price reaches 1.5R in favor, move the Stop Loss to break-even and close 50 percent, only if this rule was written before entry"
+          },
+          "rrRule": {
+            "fa": "1.5R اینجا ماشه مدیریت است نه کف هدف",
+            "en": "1.5R is a management trigger here, not a target floor"
+          },
+          "citation": "MCFX-L05-C04"
+        },
+        {
+          "id": "L05-S4",
+          "condition": {
+            "fa": "تغییر هیجانی و غیرمجاز حد زیان",
+            "en": "unauthorized emotional change to the stop"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "گشاد کردن یا حذف حد زیان، یا جابه‌جایی آن از روی ترس، غیرمجاز است",
+            "en": "do not widen or delete the Stop Loss, and do not move it from fear"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L05-C04"
+        },
+        {
+          "id": "L05-S5",
+          "condition": {
+            "fa": "مثال عددی استاندارد فصل (حساب ۱۰٬۰۰۰ دلار)",
+            "en": "the chapter's standard worked example (10,000 USD account)"
+          },
+          "riskPct": "2.00",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L05-C04"
+        },
+        {
+          "id": "L05-S6",
+          "condition": {
+            "fa": "سناریوی تمرین فصل (حساب ۵٬۰۰۰ دلار)",
+            "en": "the chapter's exercise scenario (5,000 USD account)"
+          },
+          "riskPct": "1.50",
+          "stopRule": {
+            "fa": "عدم دستکاری حد زیان پس از فعال شدن معامله تحت هر شرایطی؛ استفاده از Lock/Hidden Stop در پلتفرم",
+            "en": "do not modify the Stop Loss after the trade is active, under any circumstances; use Lock/Hidden Stop on the platform"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L05-C04"
+        },
+        {
+          "id": "L05-S7",
+          "condition": {
+            "fa": "جریمه عملیاتی پس از جابه‌جایی هیجانی حد زیان: معامله بعدی",
+            "en": "operational penalty after an emotional stop move: the next trade"
+          },
+          "riskPct": "1.00",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L05-C04"
+        },
+        {
+          "id": "L05-S8",
+          "condition": {
+            "fa": "پایبندی هفتگی به برنامه بین ۷۵٪ و ۸۹٪: کاهش ۲۵٪ از حجم کل معاملات هفته آینده",
+            "en": "weekly on-plan compliance 75-89 percent: cut next week's total volume by 25 percent"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L05-C04"
+        },
+        {
+          "id": "L05-S9",
+          "condition": {
+            "fa": "پایبندی هفتگی به برنامه کمتر از ۷۵٪: توقف کامل معاملات زنده به مدت ۳ روز",
+            "en": "weekly on-plan compliance below 75 percent: pause live trading for 3 days"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L05-C04"
+        },
+        {
+          "id": "L05-S10",
+          "condition": {
+            "fa": "بودجه ریسک هر معامله، صرفاً به‌صورت مثال (مثلاً)",
+            "en": "per-trade risk budget, illustrative only (for example)"
+          },
+          "riskPct": "1.00",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L05-C06"
+        },
+        {
+          "id": "L05-S11",
+          "condition": {
+            "fa": "ریسک کل شناور در مجموع معاملات فعال، صرفاً به‌صورت مثال (مثلاً)",
+            "en": "aggregate floating risk across open trades, illustrative only (for example)"
+          },
+          "riskPct": "3.00",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L05-C06"
+        },
+        {
+          "id": "L05-S12",
+          "condition": {
+            "fa": "فیلدهای الزامی سند پروژه: سقف ریسک هر معامله، ریسک روزانه و حداکثر افت مجاز (بدون عدد)",
+            "en": "required project fields: per-trade cap, daily risk and max drawdown (no numbers given)"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "حد زیان ساختاری و حد سود پله‌ای به‌عنوان فیلد تعریف می‌شوند، نه به‌عنوان یک قاعده عددی",
+            "en": "a structural Stop Loss and scaled Take Profit are named as fields to define, not as a numeric rule"
+          },
+          "rrRule": {
+            "fa": "نسبت ریسک به ریوارد به‌عنوان فیلد تعریف می‌شود، بدون عدد",
+            "en": "R/R is named as a field to define, with no number"
+          },
+          "citation": "MCFX-L05-C06"
+        }
+      ],
+      "maxRiskPctPerTrade": "2.00",
+      "dailyActiveRiskCap": "STUDENT_PRESTATED",
+      "weeklyCompliancePause": "75-89% => next week volume -25%; <75% => pause live trading 3 days (MCFX-L05-C04)"
+    },
+    "L06": {
+      "situations": [
+        {
+          "id": "L06-S1",
+          "condition": {
+            "fa": "آزمون استحکام حد سود در سه سناریو، نه یک هدف اجباری",
+            "en": "robustness test of take-profit at three settings, not a mandated target"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "حد خروج در 1R و 2R و 3R آزموده می‌شود؛ این یک کف هدف نیست",
+            "en": "take-profit is tested at 1R, 2R and 3R; this is not a mandated floor"
+          },
+          "citation": "MCFX-L06-C04"
+        },
+        {
+          "id": "L06-S2",
+          "condition": {
+            "fa": "شناسنامه فنی استراتژی نمونه این فصل (روش Failed Breakout)، نه یک قانون عمومی دوره",
+            "en": "this chapter's sample strategy passport (Failed Breakout method), not a course-wide rule"
+          },
+          "riskPct": "1.00",
+          "stopRule": {
+            "fa": "حد زیان ۱.۵ پیپ پایین‌تر از پایین‌ترین قیمت کندل نفوذکننده (فقط در روش نمونه)",
+            "en": "Stop Loss 1.5 pips below the penetrating candle's low (example method only)"
+          },
+          "rrRule": {
+            "fa": "حد سود با نسبت ثابت ۱:۲ نسبت به حد زیان، یا ثبت سیگنال معکوس",
+            "en": "fixed 1:2 Take Profit versus the Stop Loss, or a reverse signal"
+          },
+          "citation": "MCFX-L06-C08"
+        }
+      ]
+    },
+    "L07": {
+      "situations": [
+        {
+          "id": "L07-S1",
+          "condition": {
+            "fa": "مثال امید ریاضی، نه یک قاعده هدف",
+            "en": "expectancy illustration, not a target mandate"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "میانگین سود 2R و میانگین زیان 1R فقط در یک مثال امید ریاضی آمده است",
+            "en": "a 2R average win and 1R average loss are used only as an expectancy example"
+          },
+          "citation": "MCFX-L07-C01"
+        },
+        {
+          "id": "L07-S2",
+          "condition": {
+            "fa": "قاعده ریسک ثابت: پرهیز از افزایش حجم پس از زیان (مارتینگل)",
+            "en": "fixed-risk discipline: do not increase size after losses (no martingale)"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L07-C02"
+        },
+        {
+          "id": "L07-S3",
+          "condition": {
+            "fa": "روش‌های حجم‌گذاری نام‌برده‌شده: درصد ثابت ریسک (Fixed Risk %) یا معیار کسر کلی (Fractional Kelly)، بدون عدد",
+            "en": "named sizing methods: Fixed Risk % or Fractional Kelly, no number given"
+          },
+          "riskPct": "not stated",
+          "stopRule": {
+            "fa": "حجم از فاصله حد زیان و انحراف معیار دارایی به دست می‌آید",
+            "en": "size from Stop Loss distance and the asset's standard deviation"
+          },
+          "rrRule": {
+            "fa": "not stated",
+            "en": "not stated"
+          },
+          "citation": "MCFX-L07-C06"
+        }
+      ]
+    }
+  },
+  "approval": {
+    "by": "Kamyar",
+    "date": "2026-11-22",
+    "decisions": [
+      "1% all levels, L05 up to 2% with chapter citation (L05-C04)",
+      "hard block only when no stop is registered; mental stop not a hard block",
+      "pre-planned stop move (e.g. 1.5R to break-even) allowed; unplanned widening/removal after entry = hard block",
+      "no numeric daily loss cap; L05 enforces student pre-stated daily active-risk cap + weekly compliance pauses",
+      "L04/L08 use defaults"
+    ]
+  }
+}

@@ -2,7 +2,7 @@
 // Read-only: builds an answer key JSON from a local checkout of sfa-dashboard.
 // Usage: node extract_answer_key.mjs <repoDir> [commitLabel] > answer-key.json
 // Requires Node >= 22.6 (native TypeScript type stripping). Never writes into the repo.
-import { mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync, mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -15,11 +15,19 @@ function stripServerOnly(code) {
 }
 const src = join(repo, "app/lib/academy");
 const tmp = mkdtempSync(join(tmpdir(), "sfa-key-"));
-for (const f of readdirSync(src)) {
-  if (!f.endsWith(".ts") || f.endsWith(".test.ts")) continue;
-  const code = stripServerOnly(readFileSync(join(src, f), "utf8")).replace(/from "(\.\/[^"]+)"/g, (m, p) => `from "${p}.ts"`);
-  writeFileSync(join(tmp, f), code);
+function copyTree(dir, dest) {
+  mkdirSync(dest, { recursive: true });
+  for (const name of readdirSync(dir)) {
+    if (name === "server" || name.endsWith(".test.ts") || name.endsWith(".test.tsx")) continue;
+    const from = join(dir, name);
+    if (statSync(from).isDirectory()) copyTree(from, join(dest, name));
+    else if (name.endsWith(".ts")) {
+      const code = stripServerOnly(readFileSync(from, "utf8")).replace(/from "(\.[^"]+)"/g, (m, spec) => spec.endsWith(".ts") ? m : `from "${spec}.ts"`);
+      writeFileSync(join(dest, name), code);
+    }
+  }
 }
+copyTree(src, tmp);
 const cur = await import(pathToFileURL(join(tmp, "curriculum.ts")).href);
 const adv = await import(pathToFileURL(join(tmp, "advancedCurriculum.ts")).href);
 const quizzes = await import(pathToFileURL(join(tmp, "assessmentVersion.ts")).href);
@@ -54,6 +62,22 @@ const add = (quizId, items) => {
 };
 for (const m of cur.missions) add(m.id, hydrate(m.quiz));
 for (const a of adv.advancedModules) add(a.id, hydrate(a.quiz));
+const packDir = join(repo, "content/v3");
+const manifest = JSON.parse(readFileSync(join(packDir, "manifest.json"), "utf8"));
+for (const level of manifest.levels) {
+  if (!level.graded) continue;
+  const quiz = JSON.parse(readFileSync(join(packDir, "quizzes", level.level + ".quiz.json"), "utf8"));
+  const key = JSON.parse(readFileSync(join(packDir, "keys", level.level + ".key.json"), "utf8"));
+  const items = quiz.items.map((item) => {
+    const answer = key.answers[item.id];
+    if (answer === undefined) {
+      console.error("Missing private answer for " + item.id);
+      process.exit(1);
+    }
+    return { ...item, answer };
+  });
+  add(level.level, items);
+}
 process.stdout.write(JSON.stringify(out, null, 2) + "\n");
 
 rmSync(tmp,{recursive:true,force:true});

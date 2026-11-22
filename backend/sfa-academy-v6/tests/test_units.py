@@ -159,9 +159,9 @@ def test_override_next_work_blocked(svc,account,bank):
     with pytest.raises(Invalid):svc.override(d['decisionId'],'Mentor correction requested')
 
 
-def risk_evidence(d): return {'currentEquity':'10000','riskAmount':'100','netReward':'220','stopType':'MENTAL' if d.get('finalHardBlock') else 'STRUCTURAL_HARD','evidenceRefs':['document:final-plan']}
+def risk_evidence(d): return {'currentEquity':'10000','riskAmount':'100','netReward':'220','stopType':'NONE' if d.get('finalHardBlock') else 'STRUCTURAL_HARD','evidenceRefs':['document:final-plan']}
 
-@pytest.mark.parametrize('equity,risk,reward,stop,blocked',[('10000','100','200','STRUCTURAL_HARD',False),('10000','100.01','300','STRUCTURAL_HARD',True),('10000','100','199.99','STRUCTURAL_HARD',True),('10000','100','220','MENTAL',True),('10000','100','220','NONE',True)])
+@pytest.mark.parametrize('equity,risk,reward,stop,blocked',[('10000','100','200','STRUCTURAL_HARD',False),('10000','100.01','300','STRUCTURAL_HARD',True),('10000','100','199.99','STRUCTURAL_HARD',True),('10000','100','220','MENTAL',False),('10000','100','220','NONE',True)])
 def test_decimal_final_plan_gate(equity,risk,reward,stop,blocked):
     from sfa_api.risk import hard_block
     assert hard_block({'currentEquity':equity,'riskAmount':risk,'netReward':reward,'stopType':stop,'evidenceRefs':['p2']}) is blocked

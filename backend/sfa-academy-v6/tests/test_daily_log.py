@@ -171,7 +171,7 @@ def test_packet_is_server_built_and_hides_answer_keys(svc, account):
     svc.create_daily_entry(s, body)
     view=svc.daily_log_view(s)
     blob=json.dumps(view)
-    for banned in ('correctAnswer','echoNotes','answerKey','ECHO_ACADEMY_API_KEY','contentDigest'):
+    for banned in ('correctAnswer','echoNotes','answerKey','ECHO_ACADEMY_API_KEY','contentDigest','academyRules','approval','Kamyar'):
         assert banned not in blob
     svc.clock=lambda: at(2026,11,27,18)
     sid=svc.draft(s)
@@ -181,6 +181,9 @@ def test_packet_is_server_built_and_hides_answer_keys(svc, account):
     assert item['dailyLog']['countedDays']>=0
     assert 'contentDigest' in item['dailyLog']['entries'][0]
     assert 'correctAnswer' not in json.dumps(item['dailyLog'])
+    assert item['academyRules']['effective']['stopBlockMode']=='NO_STOP_ONLY'
+    assert 'approval' not in item['academyRules']
+    assert item['dailyLog']['academyRules']['level']=='L02'
     assert item['weekPlanRequired'] is False and item['dailyLog']['weekPlanRequired'] is False
     assert item['planPolicy']=='optional'
 
@@ -454,7 +457,7 @@ def test_unsafe_daily_trade_does_not_block_a_clean_friday_plan(svc, account):
     packet=next(i for i in svc.queue() if i['requestId']=='practical:'+sid)['dailyLog']
     assert packet['unsafeDailyTradeCount']==1
     assert packet['unsafeDailyTrades'][0]['date']=='2026-11-24'
-    assert packet['unsafeDailyTrades'][0]['reasons']==['MENTAL_STOP','RISK_OVER_1PCT','NET_RR_UNDER_2']
+    assert packet['unsafeDailyTrades'][0]['reasons']==['RISK_OVER_1PCT','NET_RR_UNDER_2']
     gate=_counted_gate(packet, True)
     d=_v3(svc, sid, 90, gate, blocked=False)
     evidence=risk_evidence(d)
@@ -484,8 +487,7 @@ def test_week_average_uses_changing_equity_and_accepts_structural_hard(svc, acco
     # Mean of the per-trade ratios is 2.6667. The ratio of the rounded means is not that.
     assert summary['avgNetRR']=='2.8889'
     assert len(summary['evidenceRefs'])==3 and all(ref.startswith('daily:') for ref in summary['evidenceRefs'])
-    assert packet['unsafeDailyTradeCount']==1
-    assert packet['unsafeDailyTrades'][0]['reasons']==['MENTAL_STOP']
+    assert packet['unsafeDailyTradeCount']==0
     gate=_counted_gate(packet, True)
     d=_v3(svc, sid, 90, gate, blocked=False)
     rid='practical:'+sid

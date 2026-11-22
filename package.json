@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "content:v3": "node scripts/build-content-v3.mjs",
+    "predev": "node scripts/build-content-v3.mjs",
+    "prebuild": "node scripts/build-content-v3.mjs",
+    "pretest": "node scripts/build-content-v3.mjs",
+    "pretypecheck": "node scripts/build-content-v3.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1 --port 3000",

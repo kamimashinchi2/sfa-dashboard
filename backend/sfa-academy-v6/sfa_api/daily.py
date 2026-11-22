@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, date
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation, localcontext
 from zoneinfo import ZoneInfo
 from .contracts import Invalid, SID, canonical, ident, require, text
+from .academy_rules import effective_rules, level_for_stage, rules_for_stage
+from .paper_fields import classify_stop, parse_lenient_decimal
 from .plan_policy import plan_policy
 
 AMSTERDAM = ZoneInfo('Europe/Amsterdam')
@@ -22,7 +24,7 @@ OBSERVED_UNAVAILABLE = 'Observed reaction unavailable'
 GROUNDING_MAX = 8
 # A hard structural stop on a daily paper plan. Anything else is mental or no stop.
 HARD_STOPS = {'hard', 'structural', 'structuralhard', 'hardstructural', 'hardstop', 'structuralhardstop'}
-UNSAFE_REASON_ORDER = ('MENTAL_STOP', 'RISK_OVER_1PCT', 'NET_RR_UNDER_2')
+UNSAFE_REASON_ORDER = ('MENTAL_STOP', 'NO_STOP', 'UNPLANNED_STOP_MOVE', 'RISK_OVER_1PCT', 'NET_RR_UNDER_2')
 TASK_RE = re.compile(r'[A-Za-z0-9_.:-]{1,40}\Z')
 WEEKDAY = ('MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN')
 OPEN_STATES = ('ASSIGNMENT_ISSUED', 'REMEDIAL_ISSUED', 'PRACTICAL_OVERDUE')
@@ -271,9 +273,19 @@ def _filled(value, limit, code):
     return cleaned
 
 
-def _plan(value, keys, code, limit):
-    require(isinstance(value, dict) and set(value) == set(keys), code)
-    return {k: _filled(value[k], limit, code) for k in keys}
+def _plan(value, keys, code, limit, optional=()):
+    require(isinstance(value, dict), code)
+    present = set(value)
+    require(set(keys) <= present <= set(keys) | set(optional), code)
+    out = {k: _filled(value[k], limit, code) for k in keys}
+    for key in optional:
+        if key not in value or value[key] in (None, ''):
+            continue
+        cleaned = _filled(value[key], limit, code)
+        if key == 'stopMoved':
+            require(cleaned in ('planned', 'unplanned', 'no'), code)
+        out[key] = cleaned
+    return out
 
 
 def _grounding_refs(payload):
@@ -344,7 +356,7 @@ def validate_daily_payload(payload, assignment, now_dt):
     if day_call == 'TRADE':
         require(conditional_raw is None, 'CONDITIONAL_PLAN_NO_TRADE_ONLY')
         require(paper_raw is not None, 'PAPER_PLAN_REQUIRED')
-        paper = _plan(paper_raw, PAPER_KEYS, 'PAPER_PLAN_INVALID', 200)
+        paper = _plan(paper_raw, PAPER_KEYS, 'PAPER_PLAN_INVALID', 200, ('stopMoved',))
         conditional = None
     else:
         require(paper_raw is None, 'PAPER_PLAN_TRADE_ONLY')
@@ -786,6 +798,7 @@ class DailyMixin:
             'unsafeDailyTrades': unsafe,
             'unsafeDailyTradeCount': len(unsafe),
             'weekTradeRiskSummary': week_trade_risk_summary(entries),
+            'academyRules': rules_for_stage(row.get('stage')),
             'entries': packet_entries,
             '_countedIds': sorted(chosen_ids),
         }
@@ -866,6 +879,40 @@ class DailyMixin:
             self._event(c, 'test-account-off:' + uuid.uuid4().hex, student_id, 'TEST_ACCOUNT_DISABLED', {'student': student_id})
         return {'student': student_id, 'isTestAccount': False}
 
+    def reset_test_account(self, student_id):
+        """Wipe attempts, daily entries, and week progress for one flagged test account."""
+        from pathlib import Path
+        with self.db.tx() as c:
+            student = self._named_student(c, student_id)
+            require(student['is_test_account'], 'TEST_ACCOUNT_REQUIRED')
+            paths = [row['path'] for row in c.execute(
+                'SELECT path FROM files WHERE submission IN (SELECT id FROM submissions WHERE student=?)', (student_id,))]
+            paths += [row['path'] for row in c.execute(
+                'SELECT path FROM daily_entry_files WHERE entry IN (SELECT id FROM daily_entries WHERE student=?)', (student_id,))]
+            counts = {
+                'files': c.execute('DELETE FROM files WHERE submission IN (SELECT id FROM submissions WHERE student=?)', (student_id,)).rowcount,
+                'decisions': c.execute('DELETE FROM decisions WHERE submission IN (SELECT id FROM submissions WHERE student=?)', (student_id,)).rowcount,
+                'submissions': c.execute('DELETE FROM submissions WHERE student=?', (student_id,)).rowcount,
+                'dailyFiles': c.execute('DELETE FROM daily_entry_files WHERE entry IN (SELECT id FROM daily_entries WHERE student=?)', (student_id,)).rowcount,
+                'dailyRevisions': c.execute('DELETE FROM daily_entry_revisions WHERE entry IN (SELECT id FROM daily_entries WHERE student=?)', (student_id,)).rowcount,
+                'entries': c.execute('DELETE FROM daily_entries WHERE student=?', (student_id,)).rowcount,
+                'quizzes': c.execute('DELETE FROM quizzes WHERE student=?', (student_id,)).rowcount,
+                'mentorDecisions': c.execute('DELETE FROM mentor_decisions WHERE student=?', (student_id,)).rowcount,
+                'weaknesses': c.execute('DELETE FROM weaknesses WHERE student=?', (student_id,)).rowcount,
+                'responses': c.execute('DELETE FROM responses WHERE student=?', (student_id,)).rowcount,
+                'notifications': c.execute('DELETE FROM notifications WHERE student=?', (student_id,)).rowcount,
+            }
+            c.execute('DELETE FROM weeks WHERE student=?', (student_id,))
+            self._insert_week(c, student_id, 1, 1, 'LESSON_OPEN')
+            c.execute('UPDATE students SET stage=1, current_week=1 WHERE student=?', (student_id,))
+            self._event(c, 'test-reset:' + uuid.uuid4().hex, student_id, 'TEST_ACCOUNT_RESET', {'student': student_id})
+        for path in paths:
+            try:
+                Path(path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        return {'student': student_id, 'reset': True, 'isTestAccount': True, **{key: int(value or 0) for key, value in counts.items()}}
+
 def trade_call_summary(rows):
     """Per local date. Only dayCall TRADE is a trade. conditionalPlan never counts.
 
@@ -900,24 +947,11 @@ def _stop_token(value):
 
 
 def _is_hard_stop(value):
-    return _stop_token(value) in HARD_STOPS
+    return classify_stop(value) == 'HARD_STRUCTURAL'
 
 
 def _parse_num(value):
-    if not isinstance(value, str):
-        return None
-    raw = value.strip().replace(',', '')
-    if raw.endswith('%'):
-        raw = raw[:-1].strip()
-    if not raw:
-        return None
-    try:
-        number = Decimal(raw)
-    except InvalidOperation:
-        return None
-    if not number.is_finite():
-        return None
-    return number
+    return parse_lenient_decimal(value)
 
 
 def round_half_up_money(amount):
@@ -944,20 +978,29 @@ def _trade_plans(rows):
         paper = (body.get('fields') or {}).get('paperPlan')
         if not isinstance(paper, dict):
             continue
-        plans.append({'date': parse_date(row['local_date']).isoformat(), 'entryId': row['id'], 'paper': paper})
+        plans.append({'date': parse_date(row['local_date']).isoformat(), 'entryId': row['id'], 'paper': paper, 'stage': row.get('stage')})
     plans.sort(key=lambda item: (item['date'], item['entryId']))
     return plans
 
 
-def _unsafe_reasons(paper):
+def _unsafe_reasons(paper, rules=None):
+    rules = rules or effective_rules(None)
     reasons = []
-    if not _is_hard_stop(paper.get('stopType')):
-        reasons.append('MENTAL_STOP')
+    kind = classify_stop(paper.get('stopType'))
+    if kind == 'HARD_STRUCTURAL':
+        pass
+    elif kind == 'MENTAL':
+        if rules['stopBlockMode'] == 'MENTAL_OR_NONE' and rules['mentalStopIsHardBlock']:
+            reasons.append('MENTAL_STOP')
+    elif rules['stopRequirement'] in ('HARD_STRUCTURAL', 'REGISTERED_STOP'):
+        reasons.append('NO_STOP')
+    if paper.get('stopMoved') == 'unplanned' and rules['unplannedStopMoveIsHardBlock']:
+        reasons.append('UNPLANNED_STOP_MOVE')
     risk_pct = _parse_num(paper.get('riskPct'))
-    if risk_pct is not None and risk_pct > 1:
+    if risk_pct is not None and risk_pct > Decimal(rules['maxRiskPctPerTrade']):
         reasons.append('RISK_OVER_1PCT')
     net_rr = _parse_num(paper.get('netRR'))
-    if net_rr is not None and net_rr < 2:
+    if net_rr is not None and net_rr < Decimal(rules['minNetRR']):
         reasons.append('NET_RR_UNDER_2')
     return [code for code in UNSAFE_REASON_ORDER if code in reasons]
 
@@ -966,7 +1009,7 @@ def unsafe_daily_trades(rows):
     """TRADE-day paper plans that break a daily risk rule. Not a HARD_BLOCK and not a score change."""
     flagged = []
     for item in _trade_plans(rows):
-        reasons = _unsafe_reasons(item['paper'])
+        reasons = _unsafe_reasons(item['paper'], effective_rules(level_for_stage(item.get('stage'))))
         if reasons:
             flagged.append({'date': item['date'], 'entryId': item['entryId'], 'reasons': reasons})
     return flagged

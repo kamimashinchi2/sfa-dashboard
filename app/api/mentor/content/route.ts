@@ -12,6 +12,7 @@ import { readSessionToken } from "@/app/lib/academy/server/sessionCookie";
 import { newShuffleNonce, serveQuizAttempt } from "@/app/lib/academy/server/quizAttempt";
 import { quizItemHmacKey } from "@/app/lib/academy/server/quizHmacKey";
 import { stageNumberForId } from "@/app/lib/academy/publicCatalog";
+import { homeworkForTrack } from "@/app/lib/academy/v3Lessons";
 
 /**
  * Authenticated lesson delivery.
@@ -131,6 +132,7 @@ export async function GET(req: Request) {
       practicalTask: mission.practicalTask,
       practicalPlan: mission.practicalPlan ?? null,
       lessons: mission.lessons,
+      homework: homeworkForTrack(mission.id),
       quiz: publicQuiz,
       shuffleNonce: served.shuffleNonce,
       entitlement: ent.entitlement,
@@ -148,6 +150,7 @@ export async function GET(req: Request) {
     practicalTask: mod.practicalTask,
     practicalPlan: mod.practicalPlan ?? null,
     lessons: mod.lessons,
+    homework: homeworkForTrack(mod.id),
     quiz: publicQuiz,
     shuffleNonce: served.shuffleNonce,
     entitlement: ent.entitlement,

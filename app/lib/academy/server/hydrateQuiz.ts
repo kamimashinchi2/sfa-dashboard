@@ -1,11 +1,12 @@
 import "server-only";
 import type { QuizItem } from "../curriculum";
 import { QUIZ_ANSWER_KEY } from "./answerKeyData";
+import { V3_QUIZ_ANSWER_KEY } from "./v3AnswerKeyData";
 
 /** Attach private answers for server-side scoring / hashing. */
 export function hydrateQuizAnswers(items: QuizItem[]): QuizItem[] {
   return items.map((item) => {
-    const answer = QUIZ_ANSWER_KEY[item.id];
+    const answer = QUIZ_ANSWER_KEY[item.id] ?? V3_QUIZ_ANSWER_KEY[item.id];
     if (answer === undefined) return { ...item };
     return { ...item, answer };
   });

@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { performanceCard, practicalHardBlock } from "./grading";
+import { effectiveRiskRules, type RiskRulesDocument } from "./academyRules";
 import { claimQuizVerdict, PRACTICAL_THRESHOLDS, QUIZ_THRESHOLDS } from "./thresholds";
 
 type Vectors = {
@@ -31,9 +32,12 @@ type Vectors = {
   }[];
 };
 
-const vectors = JSON.parse(
-  readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../shared/scoring-vectors.json"), "utf8"),
-) as Vectors;
+const sharedDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../shared");
+const vectors = JSON.parse(readFileSync(resolve(sharedDir, "scoring-vectors.json"), "utf8")) as Vectors;
+const legacyRules = effectiveRiskRules(
+  null,
+  JSON.parse(readFileSync(resolve(sharedDir, "legacy-rules.json"), "utf8")) as RiskRulesDocument,
+);
 
 describe("shared practical scoring vectors", () => {
   it("uses the same quiz and practical thresholds as the vector file", () => {
@@ -67,12 +71,15 @@ describe("shared practical scoring vectors", () => {
   it("pins the three hard-block rules on the same evidence as Python", () => {
     for (const row of vectors.hardBlockCases) {
       expect(
-        practicalHardBlock({
-          currentEquity: row.currentEquity,
-          riskAmount: row.riskAmount,
-          netReward: row.netReward,
-          stopType: row.stopType,
-        }),
+        practicalHardBlock(
+          {
+            currentEquity: row.currentEquity,
+            riskAmount: row.riskAmount,
+            netReward: row.netReward,
+            stopType: row.stopType,
+          },
+          legacyRules,
+        ),
       ).toBe(row.blocked);
     }
   });

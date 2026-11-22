@@ -35,6 +35,10 @@ export function missionPassedForUnlock(
   return true;
 }
 
+/**
+ * L00 is not in this chain. M1 (L01) stays open for a logged-in student
+ * whether or not they opened the public readiness level.
+ */
 export function prerequisiteFor(missionId: MissionId): MissionId | null {
   const idx = MISSION_ORDER.indexOf(missionId);
   if (idx <= 0) return null;

@@ -4,7 +4,8 @@ import type {
   RiskResult,
   RiskStatus,
 } from "./contracts";
-import { MAX_RISK_PCT, MIN_NET_RR } from "./contracts";
+import { effectiveRiskRules, type EffectiveRiskRules } from "./academyRules";
+import { classifyStop } from "./paperParse";
 import {
   canonicalize,
   decAbs,
@@ -34,7 +35,12 @@ function issue(code: string, field?: string, evidenceIds: string[] = []): Issue 
  *   lots = floor_to_step(riskAmount / (stopPips × pipValueAccount))
  * Report actual loss at the floored lots.
  */
-export function evaluateRisk(input: RiskInput): RiskResult {
+export function evaluateRisk(
+  input: RiskInput,
+  rules: EffectiveRiskRules = effectiveRiskRules(null),
+): RiskResult {
+  const maxRiskPct = rules.maxRiskPctPerTrade;
+  const minNetRR = rules.minNetRR;
   const issues: Issue[] = [];
   let hardBlock = false;
   let unverified = false;
@@ -55,10 +61,15 @@ export function evaluateRisk(input: RiskInput): RiskResult {
   }
 
   // Stop type — HARD_BLOCK reasons always surface, even when other fields missing
-  if (input.stopType === "MENTAL") {
-    markHard("MENTAL_STOP", "stopType");
-  } else if (input.stopType === "NONE") {
-    markHard("NO_STOP", "stopType");
+  const stopClass = classifyStop(input.stopType);
+  if (stopClass === "MENTAL") {
+    if (rules.stopBlockMode === "MENTAL_OR_NONE" && rules.mentalStopIsHardBlock) {
+      markHard("MENTAL_STOP", "stopType");
+    }
+  } else if (stopClass !== "HARD_STRUCTURAL") {
+    if (rules.stopRequirement === "HARD_STRUCTURAL" || rules.stopRequirement === "REGISTERED_STOP") {
+      markHard("NO_STOP", "stopType");
+    }
   }
   if (input.preEntry === "NO") {
     markHard("PRE_ENTRY_NO", "preEntry");
@@ -137,8 +148,14 @@ export function evaluateRisk(input: RiskInput): RiskResult {
     } else if (decCompare(p.value, "0") === 0) {
       markHard("NONPOSITIVE_RISK_PCT", "riskPct");
       riskPct = p.value;
-    } else if (decCompare(p.value, MAX_RISK_PCT) > 0) {
+    } else if (decCompare(p.value, maxRiskPct) > 0) {
       markHard("RISK_PCT_HARD_BLOCK", "riskPct");
+      riskPct = p.value;
+    } else if (
+      rules.minRiskPctPerTrade &&
+      decCompare(p.value, rules.minRiskPctPerTrade) < 0
+    ) {
+      markHard("RISK_PCT_BELOW_MIN", "riskPct");
       riskPct = p.value;
     } else {
       riskPct = p.value;
@@ -255,7 +272,7 @@ export function evaluateRisk(input: RiskInput): RiskResult {
     decIsPositive(conversion) &&
     riskPct &&
     decIsPositive(riskPct) &&
-    decCompare(riskPct, MAX_RISK_PCT) <= 0 &&
+    decCompare(riskPct, maxRiskPct) <= 0 &&
     entry &&
     stop &&
     target &&
@@ -367,7 +384,7 @@ export function evaluateRisk(input: RiskInput): RiskResult {
               }
               if (equity) {
                 const actualPct = decMul(decDiv(loss, equity)!, "100");
-                if (decCompare(actualPct, MAX_RISK_PCT) > 0) {
+                if (decCompare(actualPct, maxRiskPct) > 0) {
                   markHard("ACTUAL_RISK_OVER_CAP", "loss");
                 }
               }
@@ -392,7 +409,7 @@ export function evaluateRisk(input: RiskInput): RiskResult {
                 if (
                   input.costs.status === "KNOWN" &&
                   netRR !== null &&
-                  decCompare(netRR, MIN_NET_RR) < 0
+                  decCompare(netRR, minNetRR) < 0
                 ) {
                   markHard("NET_RR_BELOW_2", "netRR");
                 }
@@ -424,9 +441,9 @@ export function evaluateRisk(input: RiskInput): RiskResult {
     maxLots &&
     loss &&
     netRR &&
-    decCompare(netRR, MIN_NET_RR) >= 0 &&
+    decCompare(netRR, minNetRR) >= 0 &&
     riskPct &&
-    decCompare(riskPct, MAX_RISK_PCT) <= 0
+    decCompare(riskPct, maxRiskPct) <= 0
   ) {
     status = "PASS_SIMULATION";
   } else {

@@ -51,6 +51,8 @@ def main():
         sp.add_parser(name).add_argument('email')
     x=sp.add_parser('override'); x.add_argument('decisionId'); x.add_argument('--reason',required=True)
     x=sp.add_parser('open-practical-window'); x.add_argument('student'); x.add_argument('--reason',required=True)
+    x=sp.add_parser('reset-test-account', help='Wipe attempts, entries, and progress for one flagged test account')
+    x.add_argument('studentId')
     x=sp.add_parser('test-account', help='Mark one student as a test account and switch one of their weeks to the daily log')
     x.add_argument('studentId')
     x.add_argument('--week', type=int, help='Week number to switch to DAILY_LOG_V1')
@@ -99,6 +101,7 @@ def main():
         else:
             require(a.week is not None,'WEEK_REQUIRED')
             print(json.dumps(s.enable_test_account(a.studentId,a.week,a.reason)))
+    elif a.command=='reset-test-account': print(json.dumps(s.reset_test_account(a.studentId)))
     elif a.command=='import-legacy': print(json.dumps(import_sqlite(s,a.path)))
     else: print(json.dumps({'database':'ok','students':s.db.rows('SELECT count(*) AS n FROM students')[0]['n'],'pendingRequests':len(s.queue()),'approvalRequired':s.config.approval_required}))
 if __name__=='__main__': main()

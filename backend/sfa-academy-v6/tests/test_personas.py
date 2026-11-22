@@ -36,7 +36,8 @@ def grade(svc, student, correct, stage):
 def evidence(kind):
     base = {"currentEquity": "10000", "riskAmount": "50", "netReward": "200", "stopType": "STRUCTURAL_HARD", "evidenceRefs": ["file:final-plan"]}
     if kind == "mental":
-        base["stopType"] = "MENTAL"
+        # Approved rules: a mental stop is not a hard block. A missing stop is.
+        base["stopType"] = "NONE"
     elif kind == "risk":
         base["riskAmount"] = "101"
         base["netReward"] = "300"
