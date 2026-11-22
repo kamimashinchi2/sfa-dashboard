@@ -1,4 +1,11 @@
 import type { Text } from "./contracts";
+import { V3_LEVELS } from "./generated/v3Manifest";
+
+/** Chapter codes for a stage, in manifest order. Bodies stay out of this module. */
+export function weekChapterCodes(stage: number): string[] {
+  const row = V3_LEVELS.find((item) => item.stage === stage);
+  return row ? [...row.chapters] : [];
+}
 
 /** Lesson copy grounded in the NotebookLM exports. Financial terms stay in English. */
 export type LessonPatch = {

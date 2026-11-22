@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   publicAdvanced,
   publicMissions,
+  publicReadiness,
 } from "../lib/academy/publicCatalog";
 import { resolveBuildStamp } from "../lib/academy/buildStamp";
 
@@ -27,7 +28,19 @@ export default function AcademyPage() {
         <StageMap />
 
         <section>
-          <h2 className="font-display text-3xl text-paper">Pilot missions</h2>
+          <h2 className="font-display text-3xl text-paper">Readiness</h2>
+          <ul className="mt-6 grid gap-3">
+            <li className="border border-line bg-ink/40 p-4">
+              <Link href={publicReadiness.href} className="font-display text-xl text-gold-soft hover:underline">
+                {publicReadiness.title.en}
+              </Link>
+              <p className="mt-2 text-sm text-fog">{publicReadiness.summary.en}</p>
+              <p className="mt-2 text-sm text-fog" lang="fa" dir="rtl">
+                {publicReadiness.summary.fa}
+              </p>
+            </li>
+          </ul>
+          <h2 className="mt-10 font-display text-3xl text-paper">Pilot missions</h2>
           <ul className="mt-6 grid gap-3 sm:grid-cols-2">
             {publicMissions.map((m) => (
               <li key={m.id} className="border border-line bg-ink/40 p-4">

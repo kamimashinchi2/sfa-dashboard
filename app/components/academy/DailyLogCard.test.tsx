@@ -105,8 +105,9 @@ describe("daily log card", () => {
     };
     await act(async () => {
       for (const [key, value] of Object.entries(values)) {
-        const input = container?.querySelector(`[data-testid=paper-${key}]`) as HTMLInputElement;
-        setValue(input, value);
+        const field = container?.querySelector(`[data-testid=paper-${key}]`);
+        if (field instanceof HTMLSelectElement) setSelect(field, value === "hard" ? "HARD_STRUCTURAL" : value);
+        else setValue(field as HTMLInputElement, value);
       }
       container?.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
@@ -115,7 +116,16 @@ describe("daily log card", () => {
     expect(traded).not.toHaveProperty("testLocalDate");
     expect(traded.dayCall).toBe("TRADE");
     expect(traded.paperPlan).not.toBeNull();
-    expect(traded.paperPlan).toMatchObject({ entry: "1.0850", stopLevel: "1.0820", target: "1.0920", riskPct: "1" });
+    expect(traded.paperPlan).toMatchObject({ entry: "1.0850", stopLevel: "1.0820", target: "1.0920", riskPct: "1", stopType: "HARD_STRUCTURAL" });
+    expect(traded.paperPlan).not.toHaveProperty("stopMoved");
+
+    await act(async () => {
+      setSelect(container?.querySelector("[data-testid=paper-stopMoved]") as HTMLSelectElement, "planned");
+      container?.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    const moved = posts.at(-1) as { paperPlan: { stopMoved?: string } };
+    expect(moved.paperPlan.stopMoved).toBe("planned");
 
     await act(async () => {
       container?.querySelectorAll("[data-testid=day-call] button")[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

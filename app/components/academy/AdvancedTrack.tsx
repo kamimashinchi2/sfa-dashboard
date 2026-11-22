@@ -60,6 +60,21 @@ function AdvancedBody({ content }: { content: AuthorizedContent }) {
           <MicroLesson key={lesson.id} lesson={lesson} />
         ))}
       </div>
+      {mod.homework ? (
+        <section className="space-y-2 border border-line bg-ink/30 p-5">
+          <h2 className="font-display text-2xl text-paper">
+            {locale === "fa" ? "کار روزانه" : "Daily task"}
+          </h2>
+          <p className="text-sm text-fog">{t(mod.homework.dailyTask, locale)}</p>
+          {mod.homework.fridayPlanRequired ? (
+            <p className="text-xs text-gold-soft">
+              {locale === "fa"
+                ? "در این سطح پلن جمعه لازم است."
+                : "This level requires the Friday plan."}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="space-y-3 border border-line bg-ink/30 p-5">
         <h2 className="font-display text-2xl text-paper">

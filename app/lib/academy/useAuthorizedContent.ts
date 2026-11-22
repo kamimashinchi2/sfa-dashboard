@@ -19,6 +19,13 @@ export type AuthorizedContent = {
   practicalPlan?: PracticalPlan | null;
   lessons: Lesson[];
   quiz: PublicQuizItem[];
+  homework?: {
+    level: string;
+    dailyTask: Text;
+    checklist: Text[];
+    fridayPlanRequired: boolean;
+    riskDrill: Text | null;
+  } | null;
   /** Per-attempt server shuffle. Sent back with the submission; not a permutation map. */
   shuffleNonce: string;
   entitlement: {

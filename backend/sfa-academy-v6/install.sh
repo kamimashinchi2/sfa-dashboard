@@ -351,6 +351,9 @@ if ! runuser -u "$PM2_USER" -- env "PATH=$PM2_PATH" "SFA_QUIZ_ITEM_HMAC_FILE=$PM
   die 'Private answer-key extraction failed; old bridge left running. Review /var/log/sfa-key-extract.log privately.'
 fi
 install -m 640 -o root -g sfa "$KEY_TMP" "/etc/sfa/answer-keys/$COMMIT.json"
+if [[ -f "$APP_DIR/content/v3/rules.json" ]]; then
+  install -m 644 -o root -g root "$APP_DIR/content/v3/rules.json" /etc/sfa/rules.json
+fi
 rm -f "$KEY_TMP"
 KEY_TMP=''
 stage 'migrate'

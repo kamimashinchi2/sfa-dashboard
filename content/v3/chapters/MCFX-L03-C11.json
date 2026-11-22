@@ -1,0 +1,64 @@
+{
+  "code": "MCFX-L03-C11",
+  "level": "L03",
+  "order": 11,
+  "title": {
+    "fa": "STUB — فصل 11 از L03",
+    "en": "STUB — L03 chapter 11"
+  },
+  "objectives": [
+    {
+      "fa": "این فصل نمونه است.",
+      "en": "This chapter is a stub."
+    }
+  ],
+  "body": {
+    "fa": "STUB. MCFX-L03-C11 با متن اصلی جایگزین می‌شود.\n\nاین تمرین است، نه سیگنال.",
+    "en": "STUB. MCFX-L03-C11 is replaced when the real chapter is copied in.\n\nThis is practice, not a signal."
+  },
+  "workedExample": {
+    "fa": "فقط آموزشی.",
+    "en": "Illustrative only."
+  },
+  "trap": {
+    "fa": "تصویر را سفارش ندانید.",
+    "en": "Do not treat a picture as an order."
+  },
+  "reality": {
+    "fa": "ابطال پیش از اندازه نوشته می‌شود.",
+    "en": "Write the invalidation before the size."
+  },
+  "exercises": [
+    {
+      "prompt": {
+        "fa": "پیش از اندازه چه می‌نویسید؟",
+        "en": "What do you write before size?"
+      },
+      "selfCheck": {
+        "fa": "ابطال و بودجه.",
+        "en": "The invalidation and the budget."
+      }
+    }
+  ],
+  "summary": {
+    "fa": "STUB خلاصه MCFX-L03-C11.",
+    "en": "STUB summary for MCFX-L03-C11."
+  },
+  "question": {
+    "fa": "چه چیز هنوز کم است؟",
+    "en": "What is still missing?"
+  },
+  "selfReviewRubric": [
+    {
+      "fa": "مطالعه را از سفارش جدا کردم.",
+      "en": "I separated study from an order."
+    }
+  ],
+  "sourceRefs": [
+    "STUB"
+  ],
+  "gaps": [
+    "STUB: replace MCFX-L03-C11 with the source chapter"
+  ],
+  "enReviewed": false
+}

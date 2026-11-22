@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { classifyStop, parseLenientDecimal } from "../../lib/academy/paperParse";
 
 type Text = { fa: string; en: string };
 type Task = { taskId: string; kind: string; task: Text };
@@ -68,6 +69,22 @@ const CONDITIONAL_FIELDS = [
 
 type PaperKey = (typeof PAPER_FIELDS)[number][0];
 type ConditionalKey = (typeof CONDITIONAL_FIELDS)[number][0];
+type StopMove = "" | "planned" | "unplanned" | "no";
+
+const STOP_CHOICES = [
+  ["HARD_STRUCTURAL", "Hard structural", "استاپ ساختاری سخت"],
+  ["MENTAL", "Mental", "ذهنی"],
+  ["NONE", "None", "بدون استاپ"],
+] as const;
+
+const MOVE_CHOICES = [
+  ["", "Not answered", "بدون پاسخ"],
+  ["planned", "Planned", "از پیش نوشته‌شده"],
+  ["unplanned", "Unplanned", "بدون برنامه"],
+  ["no", "No", "جابه‌جا نشده"],
+] as const;
+
+const NUMERIC_PAPER = new Set<PaperKey>(["equity", "riskPct", "netRR"]);
 
 function blank<K extends string>(fields: readonly (readonly [K, string, string])[]): Record<K, string> {
   return Object.fromEntries(fields.map(([key]) => [key, ""])) as Record<K, string>;
@@ -153,6 +170,7 @@ export default function DailyLogCard({
   const [dayCall, setDayCall] = useState<"TRADE" | "NO_TRADE">("NO_TRADE");
   const [grounding, setGrounding] = useState("");
   const [paper, setPaper] = useState<Record<PaperKey, string>>(() => blank(PAPER_FIELDS));
+  const [stopMoved, setStopMoved] = useState<StopMove>("");
   const [conditional, setConditional] = useState<Record<ConditionalKey, string>>(() => blank(CONDITIONAL_FIELDS));
   const [testDate, setTestDate] = useState("");
 
@@ -183,6 +201,7 @@ export default function DailyLogCard({
     setDayCall("NO_TRADE");
     setGrounding("");
     setPaper(blank(PAPER_FIELDS));
+    setStopMoved("");
     setConditional(blank(CONDITIONAL_FIELDS));
   };
 
@@ -199,7 +218,19 @@ export default function DailyLogCard({
     setFreshness((FRESH as readonly string[]).includes(fresh) ? (fresh as (typeof FRESH)[number]) : "UNKNOWN");
     setDayCall(entry.dayCall === "TRADE" ? "TRADE" : "NO_TRADE");
     setGrounding((fields?.groundingRefs ?? []).join("\n"));
-    setPaper(fields?.paperPlan ? { ...blank(PAPER_FIELDS), ...fields.paperPlan } : blank(PAPER_FIELDS));
+    if (fields?.paperPlan) {
+      const saved = { ...blank(PAPER_FIELDS), ...fields.paperPlan };
+      saved.stopType = classifyStop(saved.stopType);
+      for (const key of ["equity", "riskPct", "netRR"] as const) {
+        saved[key] = parseLenientDecimal(saved[key]) ?? saved[key];
+      }
+      setPaper(saved);
+      const moved = fields.paperPlan.stopMoved;
+      setStopMoved(moved === "planned" || moved === "unplanned" || moved === "no" ? moved : "");
+    } else {
+      setPaper(blank(PAPER_FIELDS));
+      setStopMoved("");
+    }
     setConditional(
       fields?.conditionalPlan ? { ...blank(CONDITIONAL_FIELDS), ...fields.conditionalPlan } : blank(CONDITIONAL_FIELDS),
     );
@@ -222,7 +253,7 @@ export default function DailyLogCard({
         dayCall,
         dayCallReason: "",
         groundingRefs: dayCall === "NO_TRADE" ? linesOf(grounding) : [],
-        paperPlan: dayCall === "TRADE" ? paper : null,
+        paperPlan: dayCall === "TRADE" ? { ...paper, ...(stopMoved ? { stopMoved } : {}) } : null,
         conditionalPlan:
           dayCall === "NO_TRADE" && Object.values(conditional).some((value) => value.trim())
             ? conditional
@@ -325,17 +356,51 @@ export default function DailyLogCard({
             <fieldset className="space-y-2 border border-line p-3" data-testid="paper-plan">
               <legend className="px-1 text-paper">{locale === "fa" ? "پلن کاغذی" : "Paper plan"}</legend>
               <p className="text-xs text-fog">{locale === "fa" ? "شبیه‌سازی است، سفارش نیست." : "Simulated, not an order."}</p>
-              {PAPER_FIELDS.map(([key, en, fa]) => (
-                <label key={key} className="block">
-                  {locale === "fa" ? fa : en}
-                  <input
-                    className="mt-1 w-full border border-line bg-ink px-2 py-2"
-                    data-testid={`paper-${key}`}
-                    value={paper[key]}
-                    onChange={(event) => setPaper((cur) => ({ ...cur, [key]: event.target.value }))}
-                  />
-                </label>
-              ))}
+              {PAPER_FIELDS.map(([key, en, fa]) =>
+                key === "stopType" ? (
+                  <label key={key} className="block">
+                    {locale === "fa" ? fa : en}
+                    <select
+                      className="mt-1 w-full border border-line bg-ink px-2 py-2"
+                      data-testid="paper-stopType"
+                      value={classifyStop(paper.stopType)}
+                      onChange={(event) => setPaper((cur) => ({ ...cur, stopType: event.target.value }))}
+                    >
+                      {STOP_CHOICES.map(([value, labelEn, labelFa]) => (
+                        <option key={value} value={value}>
+                          {locale === "fa" ? labelFa : labelEn}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <label key={key} className="block">
+                    {locale === "fa" ? fa : en}
+                    <input
+                      className="mt-1 w-full border border-line bg-ink px-2 py-2"
+                      data-testid={`paper-${key}`}
+                      inputMode={NUMERIC_PAPER.has(key) ? "decimal" : undefined}
+                      value={paper[key]}
+                      onChange={(event) => setPaper((cur) => ({ ...cur, [key]: event.target.value }))}
+                    />
+                  </label>
+                ),
+              )}
+              <label className="block">
+                {locale === "fa" ? "استاپ جابه‌جا شد؟ (برنامه‌ریزی‌شده / بدون برنامه / نه)" : "Stop moved? (planned / unplanned / no)"}
+                <select
+                  className="mt-1 w-full border border-line bg-ink px-2 py-2"
+                  data-testid="paper-stopMoved"
+                  value={stopMoved}
+                  onChange={(event) => setStopMoved(event.target.value as StopMove)}
+                >
+                  {MOVE_CHOICES.map(([value, labelEn, labelFa]) => (
+                    <option key={value || "blank"} value={value}>
+                      {locale === "fa" ? labelFa : labelEn}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </fieldset>
           ) : (
             <div className="space-y-2">

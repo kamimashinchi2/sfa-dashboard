@@ -27,7 +27,7 @@ export function validateProgress(raw: unknown): {
     return { ok: false, value: null, warning: "BAD_VERSION" };
   }
   const stage = Number(p.selectedStage);
-  if (![1, 2, 3, 4, 5, 6, 7, 8].includes(stage)) {
+  if (![0, 1, 2, 3, 4, 5, 6, 7, 8].includes(stage)) {
     return { ok: false, value: null, warning: "BAD_STAGE" };
   }
   return {

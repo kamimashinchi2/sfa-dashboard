@@ -5,13 +5,19 @@ import type { StageId } from "../../lib/academy/contracts";
 import {
   publicAdvanced,
   publicMissions,
+  publicReadiness,
   publicStageTitles,
 } from "../../lib/academy/publicCatalog";
 import { t, ui } from "../../lib/academy/dictionary";
 import { earnedStageProgress } from "../../lib/academy/unlock";
+import { V3_LEVELS } from "../../lib/academy/generated/v3Manifest";
 import { useProgress } from "./ProgressProvider";
 
-const STAGES = [1, 2, 3, 4, 5, 6, 7, 8] as StageId[];
+function chapterCount(stage: StageId): number {
+  return V3_LEVELS.find((level) => level.stage === stage)?.chapters.length ?? 0;
+}
+
+const STAGES = [0, 1, 2, 3, 4, 5, 6, 7, 8] as StageId[];
 
 function missionsForStage(stage: StageId) {
   return publicMissions.filter((m) => m.stages.includes(stage));
@@ -33,7 +39,7 @@ export default function StageMap() {
           {t(ui.stagesPreview, locale)}
         </p>
         <h2 id="stage-map-heading" className="mt-2 font-display text-3xl text-paper">
-          {locale === "fa" ? "نقشه هشت‌مرحله‌ای" : "Eight-stage map"}
+          {locale === "fa" ? "نقشه سطح‌ها" : "Level map"}
         </h2>
         <p className="mt-2 text-xs text-fog">
           {locale === "fa"
@@ -66,8 +72,11 @@ export default function StageMap() {
                 {t(publicStageTitles[id], locale)}
               </span>
               <span className="mt-2 block text-[11px] text-fog">
-                {[...linked.map((m) => m.id), ...adv.map((a) => a.id)].join(", ") ||
-                  (locale === "fa" ? "عمق بعدی" : "Deferred depth")}
+                {id === 0
+                  ? "L00"
+                  : [...linked.map((m) => m.id), ...adv.map((a) => a.id)].join(", ") ||
+                    (locale === "fa" ? "عمق بعدی" : "Deferred depth")}
+                {` · ${chapterCount(id)}`}
               </span>
             </button>
           );
@@ -80,6 +89,21 @@ export default function StageMap() {
             : "Missions / modules for selected stage:"}
         </p>
         <ul className="mt-3 space-y-2">
+          {progress.selectedStage === 0 ? (
+            <li>
+              <Link
+                href={publicReadiness.href}
+                className="text-sm text-gold-soft underline-offset-4 hover:underline"
+              >
+                {t(publicReadiness.title, locale)}
+              </Link>
+              <p className="text-xs text-fog">
+                {locale === "fa"
+                  ? "همیشه باز است. ورود نمی‌خواهد و درِ L01 نیست."
+                  : "Always open. No login, and it does not gate L01."}
+              </p>
+            </li>
+          ) : null}
           {missionsForStage(progress.selectedStage).map((m) => (
             <li key={m.id}>
               <Link

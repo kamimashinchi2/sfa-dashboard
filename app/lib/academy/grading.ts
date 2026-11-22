@@ -6,6 +6,8 @@ import {
   QUIZ_THRESHOLDS,
   type ClaimVerdict,
 } from "./thresholds";
+import { effectiveRiskRules, type EffectiveRiskRules } from "./academyRules";
+import { classifyStop } from "./paperParse";
 
 export type QuizAnswer = string | number | number[] | null | undefined;
 
@@ -292,21 +294,40 @@ function pillarPoints(value: number | null, cap: number): number | null {
  * mental or missing structural stop, risk above 1% of equity, or net reward
  * below twice the risk. Exact 1% and exact 1:2 are not blocks.
  */
-export function practicalHardBlock(evidence: {
-  currentEquity: string;
-  riskAmount: string;
-  netReward: string;
-  stopType: string;
-}): boolean {
-  if (evidence.stopType !== "STRUCTURAL_HARD") return true;
+export function practicalHardBlock(
+  evidence: {
+    currentEquity: string;
+    riskAmount: string;
+    netReward: string;
+    stopType: string;
+    /** Absent means the stop-move question was not asked. It is not a violation. */
+    stopMoved?: string | null;
+  },
+  rules: EffectiveRiskRules = effectiveRiskRules(null),
+): boolean {
+  const stopClass = classifyStop(evidence.stopType);
+  if (stopClass === "MENTAL") {
+    if (rules.stopBlockMode === "MENTAL_OR_NONE" && rules.mentalStopIsHardBlock) return true;
+  } else if (stopClass !== "HARD_STRUCTURAL") {
+    if (rules.stopRequirement === "HARD_STRUCTURAL" || rules.stopRequirement === "REGISTERED_STOP") return true;
+  }
+  if (evidence.stopMoved === "unplanned" && rules.unplannedStopMoveIsHardBlock) return true;
+  if (evidence.stopMoved === "planned" && rules.plannedStopMoveAllowed === false) return true;
   const equity = parseDec(evidence.currentEquity);
   const risk = parseDec(evidence.riskAmount);
   const reward = parseDec(evidence.netReward);
   if (!equity.ok || !risk.ok || !reward.ok) {
     throw new Error("RISK_INPUT_UNVERIFIED");
   }
-  if (decCompare(decMul(risk.value, "100"), equity.value) > 0) return true;
-  if (decCompare(reward.value, decMul(risk.value, "2")) < 0) return true;
+  const maxPct = rules.maxRiskPctPerTrade;
+  if (decCompare(decMul(risk.value, "100"), decMul(equity.value, maxPct)) > 0) return true;
+  if (
+    rules.minRiskPctPerTrade &&
+    decCompare(decMul(risk.value, "100"), decMul(equity.value, rules.minRiskPctPerTrade)) < 0
+  ) {
+    return true;
+  }
+  if (decCompare(reward.value, decMul(risk.value, rules.minNetRR)) < 0) return true;
   return false;
 }
 

@@ -1,0 +1,25 @@
+{
+  "level": "L03",
+  "dailyTask": {
+    "fa": "STUB کار روزانه ساختار و stop سخت. آنچه خواندید را ثبت کنید. سفارش نفرستید.",
+    "en": "STUB daily task for Structure and the hard stop. Record what you studied. Do not send an order."
+  },
+  "groundingChapters": [
+    "MCFX-L03-C01",
+    "MCFX-L03-C02"
+  ],
+  "checklist": [
+    {
+      "fa": "یادداشت فصل را نام می‌برد.",
+      "en": "The note names the chapter."
+    }
+  ],
+  "fridayPlanRequired": false,
+  "riskDrill": {
+    "fa": "یک بودجه آموزشی ۱٪ روی equity کاغذی بنویسید.",
+    "en": "Write one illustrative 1% budget on paper equity."
+  },
+  "gaps": [
+    "STUB"
+  ]
+}

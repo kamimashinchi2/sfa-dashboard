@@ -54,6 +54,7 @@ sudo sfa override DECISION_ID --reason 'What was wrong with this grade'
 sudo sfa open-practical-window STUDENT_ID --reason 'Why this exception is open'
 sudo sfa test-account S10001 --week 2 --reason "bot E2E test"
 sudo sfa test-account S10001 --off
+sudo sfa reset-test-account S10001
 sudo sfa backup-now
 sudo sfa show-echo-key
 sudo sfa check-echo-key
@@ -134,7 +135,15 @@ When the test is finished, turn the flag off. The week stays on the daily-log mo
 sudo sfa test-account S10001 --off
 ```
 
-If that week already has a submitted practical, this command does not delete it. Use a week that has not been submitted yet.
+If that week already has a submitted practical, turning the flag off does not delete it. Use a week that has not been submitted yet.
+
+To wipe a flagged test account and start again, run:
+
+```bash
+sudo sfa reset-test-account S10001
+```
+
+This deletes that account's quiz attempts, daily entries, practical submissions, and week progress, then opens week 1 again. It refuses any student who is not flagged with `sfa test-account`. It does not delete the login, and it does not print the Echo key or the answer key.
 
 ## After you pull new code
 

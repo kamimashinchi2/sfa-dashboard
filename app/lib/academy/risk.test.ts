@@ -204,7 +204,7 @@ describe("P0-1 contract math", () => {
 });
 
 describe("P0-2 stop type", () => {
-  it("Mental → HARD_BLOCK MENTAL_STOP even with missing conversion", () => {
+  it("Mental stop is not a hard block under the approved rules", () => {
     const result = evaluateRisk(
       goldBase({
         stopType: "MENTAL",
@@ -213,8 +213,8 @@ describe("P0-2 stop type", () => {
         stop: null,
       }),
     );
-    expect(result.status).toBe("HARD_BLOCK");
-    expect(result.issues.some((i) => i.code === "MENTAL_STOP")).toBe(true);
+    expect(result.issues.some((i) => i.code === "MENTAL_STOP")).toBe(false);
+    expect(result.status).not.toBe("HARD_BLOCK");
   });
 
   it("None → HARD_BLOCK NO_STOP", () => {

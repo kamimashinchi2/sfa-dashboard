@@ -4,15 +4,16 @@
  */
 import type { QuizItem } from "./curriculum";
 import { QUIZ_ANSWER_KEY } from "./server/answerKeyData";
+import { V3_QUIZ_ANSWER_KEY } from "./server/v3AnswerKeyData";
 
 export function withAnswers(items: QuizItem[]): QuizItem[] {
   return items.map((item) => {
-    const answer = item.answer ?? QUIZ_ANSWER_KEY[item.id];
+    const answer = item.answer ?? QUIZ_ANSWER_KEY[item.id] ?? V3_QUIZ_ANSWER_KEY[item.id];
     return answer === undefined ? { ...item } : { ...item, answer };
   });
 }
 
 export function withAnswer(item: QuizItem): QuizItem {
-  const answer = item.answer ?? QUIZ_ANSWER_KEY[item.id];
+  const answer = item.answer ?? QUIZ_ANSWER_KEY[item.id] ?? V3_QUIZ_ANSWER_KEY[item.id];
   return answer === undefined ? { ...item } : { ...item, answer };
 }

@@ -3,6 +3,7 @@
  * No lesson bodies, quiz prompts, options, or answer keys.
  */
 import type { AdvancedId, MissionId, StageId, Text } from "./contracts";
+import { V3_LEVELS } from "./generated/v3Manifest";
 
 export type PublicMissionOutline = {
   id: MissionId;
@@ -22,6 +23,10 @@ export type PublicAdvancedOutline = {
 };
 
 export const publicStageTitles: Record<StageId, Text> = {
+  0: {
+    fa: "آمادگی",
+    en: "Readiness",
+  },
   1: {
     fa: "مبانی و مکانیک FX",
     en: "FX Foundations & Mechanics",
@@ -182,6 +187,20 @@ export function publicAdvancedOutline(
  * Bridge / quiz-result stage binding (contracts.py MISSIONS).
  * M1..M5 → 1..5, A6..A8 → 6..8. Used for transport + content entitlement.
  */
+export const publicReadiness = {
+  id: "L00" as const,
+  stages: [0] as StageId[],
+  title: {
+    fa: "L00 — آمادگی",
+    en: "L00 — Readiness",
+  },
+  summary: {
+    fa: "سطح عمومی، بدون آزمون و بدون نمره. بعد از آن L01 است و ورود می‌خواهد.",
+    en: "Public readiness. No quiz and no grade. L01 comes next and needs a login.",
+  },
+  href: "/academy/l00",
+};
+
 export function bridgeStageForId(id: string): number | null {
   const map: Record<string, number> = {
     M1: 1,
@@ -201,17 +220,13 @@ export function bridgeStageForId(id: string): number | null {
  * Primary stage matches the 8-week bridge: M1..M5 are weeks 1..5, A6..A8 are weeks 6..8.
  */
 export function curriculumPrimaryStage(id: string): number | null {
-  const map: Record<string, number> = {
-    M1: 1,
-    M2: 2,
-    M3: 3,
-    M4: 4,
-    M5: 5,
-    A6: 6,
-    A7: 7,
-    A8: 8,
-  };
-  return map[id] ?? null;
+  const row = V3_LEVELS.find((level) => {
+    if (level.level === id) return true;
+    if ("missionId" in level && level.missionId === id) return true;
+    if ("advancedId" in level && level.advancedId === id) return true;
+    return false;
+  });
+  return row ? row.stage : null;
 }
 
 /** @deprecated prefer bridgeStageForId for gating/transport */

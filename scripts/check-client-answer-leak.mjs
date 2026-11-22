@@ -8,7 +8,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const root = new URL("../.next/static", import.meta.url);
-const markers = ["QUIZ_ANSWER_KEY", "QUIZ_PROVENANCE", "Market_Maker_Scout_v3.0_and_Decision_Engine"];
+const markers = ["QUIZ_ANSWER_KEY", "QUIZ_PROVENANCE", "Market_Maker_Scout_v3.0_and_Decision_Engine", "STUB-KEY-NOT-FOR-CLIENT", "17.50"];
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {

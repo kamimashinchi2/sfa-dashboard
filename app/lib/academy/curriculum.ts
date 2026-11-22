@@ -1,6 +1,6 @@
 import type { Lesson, MissionId, PracticalPlan, StageId, Text } from "./contracts";
 import { PLANS } from "./practicalPlans";
-import { LESSON_PATCH } from "./weekLessons";
+import { packLessons } from "./v3Lessons";
 import { M1_QUIZ, M2_QUIZ, M3_QUIZ, M4_QUIZ, M5_QUIZ } from "./weekQuizzes";
 
 export type QuizItem = {
@@ -35,6 +35,10 @@ export type MissionDef = {
 };
 
 export const stageTitles: Record<StageId, Text> = {
+  0: {
+    fa: "آمادگی",
+    en: "Readiness",
+  },
   1: {
     fa: "مبانی و مکانیک FX",
     en: "FX Foundations & Mechanics",
@@ -69,29 +73,6 @@ export const stageTitles: Record<StageId, Text> = {
   },
 };
 
-function lesson(
-  partial: Omit<Lesson, "selfReviewRubric"> & { selfReviewRubric?: Text[] },
-): Lesson {
-  return {
-    selfReviewRubric: partial.selfReviewRubric ?? [
-      {
-        fa: "آیا سازوکار را بدون تکیه به شعار توضیح دادم؟",
-        en: "Did I explain the mechanism without slogan language?",
-      },
-      {
-        fa: "آیا تله خرده‌فروشی را مشخص کردم؟",
-        en: "Did I name the retail trap explicitly?",
-      },
-      {
-        fa: "آیا واقعیت نهادی را از سیگنال ورود جدا کردم؟",
-        en: "Did I keep institutional reality separate from entry signals?",
-      },
-    ],
-    ...partial,
-    ...(LESSON_PATCH[partial.id] ?? {}),
-  };
-}
-
 export const missions: MissionDef[] = [
   {
     id: "M1",
@@ -105,58 +86,7 @@ export const missions: MissionDef[] = [
       en: "Base/quote, bid/ask, spread, pip/tick/lot, margin vs risk, sessions, spot vs futures.",
     },
     href: "/academy/missions/M1",
-    lessons: [
-      lesson({
-        id: "M1-L1",
-        missionId: "M1",
-        stages: [1],
-        title: {
-          fa: "پایه، نقل و اسپرد",
-          en: "Base, quote and spread",
-        },
-        core: {
-          fa: "در جفت ارز، ارز پایه در برابر ارز نقل قیمت‌گذاری می‌شود؛ اسپرد فاصله bid و ask است و هزینه معامله است نه سیگنال.",
-          en: "In an FX pair the base is priced in the quote; spread is bid–ask distance — a cost, not a signal.",
-        },
-        trap: {
-          fa: "تله خرده‌فروشی: تعقیب کندل بدون محاسبه هزینه اسپرد و ارزش pip.",
-          en: "Retail trap: chasing candles without pricing spread cost and pip value.",
-        },
-        reality: {
-          fa: "میزهای نهادی اول هزینه اجرا و نقدینگی جلسه را اندازه می‌گیرند؛ بعد ساختار.",
-          en: "Institutional desks size execution cost and session liquidity before structure.",
-        },
-        question: {
-          fa: "اگر فقط ask را ببینید و bid را نادیده بگیرید، کدام هزینه پنهان می‌ماند؟",
-          en: "If you only watch the ask and ignore the bid, which cost stays hidden?",
-        },
-      }),
-      lesson({
-        id: "M1-L2",
-        missionId: "M1",
-        stages: [1],
-        title: {
-          fa: "مارجین در برابر بودجه ریسک",
-          en: "Margin versus risk budget",
-        },
-        core: {
-          fa: "مارجین وثیقه کارگزاری است؛ بودجه ریسک (مثلاً ۱٪) محدودیت زیان برنامه‌ریزی‌شده است و جایگزین هم نیستند.",
-          en: "Margin is broker collateral; a risk budget (e.g. 1%) is planned loss capacity — they are not substitutes.",
-        },
-        trap: {
-          fa: "تله: «مارجین دارم پس اندازه را بالا ببرم» بدون سقف ۱٪.",
-          en: "Trap: “I have margin so I can size up” without the 1% ceiling.",
-        },
-        reality: {
-          fa: "واقعیت نهادی: اهرم در دسترس ≠ مجوز ریسک؛ اندازه از stop و بودجه می‌آید.",
-          en: "Institutional reality: available leverage ≠ risk permission; size comes from stop and budget.",
-        },
-        question: {
-          fa: "چرا مارجین آزاد نمی‌تواند به‌تنهایی lot را توجیه کند؟",
-          en: "Why can free margin alone never justify lot size?",
-        },
-      }),
-    ],
+    lessons: packLessons("L01", "M1"),
     quiz: M1_QUIZ,
     practicalTask: PLANS.M1.practicalTask,
     practicalPlan: PLANS.M1.practicalPlan,
@@ -173,33 +103,7 @@ export const missions: MissionDef[] = [
       en: "Venues, participants, Limit/Stop, slippage, PDH/PDL, sweep vs confirmation.",
     },
     href: "/academy/missions/M2",
-    lessons: [
-      lesson({
-        id: "M2-L1",
-        missionId: "M2",
-        stages: [2],
-        title: {
-          fa: "سوئیپ در برابر تأیید",
-          en: "Sweep versus confirmation",
-        },
-        core: {
-          fa: "سوئیپ نقدینگی فراتر از سوئینگ می‌تواند مقدمه جابه‌جایی باشد؛ به‌تنهایی ورود نیست.",
-          en: "A liquidity sweep beyond a swing can precede displacement; alone it is not an entry.",
-        },
-        trap: {
-          fa: "تله: ورود دقیقاً روی فتیله سوئیپ بدون بسته شدن ساختاری.",
-          en: "Trap: entering on the sweep wick without closed structural confirmation.",
-        },
-        reality: {
-          fa: "واقعیت: تأیید بعد از جابه‌جایی و شواهد فریم بسته معنا دارد.",
-          en: "Reality: confirmation matters after displacement on closed-frame evidence.",
-        },
-        question: {
-          fa: "چرا لمس فتیله به‌تنهایی fill شدن سفارش را ثابت نمی‌کند؟",
-          en: "Why does a wick touch alone not prove an order fill?",
-        },
-      }),
-    ],
+    lessons: packLessons("L02", "M2"),
     quiz: M2_QUIZ,
     practicalTask: PLANS.M2.practicalTask,
     practicalPlan: PLANS.M2.practicalPlan,
@@ -216,33 +120,7 @@ export const missions: MissionDef[] = [
       en: "Replay, closed MSS, displacement, FVG/OB, momentum/retracement, structural SL and sizing.",
     },
     href: "/academy/missions/M3",
-    lessons: [
-      lesson({
-        id: "M3-L1",
-        missionId: "M3",
-        stages: [3],
-        title: {
-          fa: "Stop ساختاری و سقف ۱٪",
-          en: "Structural stop and the 1% cap",
-        },
-        core: {
-          fa: "Stop باید شواهد ساختاری داشته باشد؛ risk% بالای ۱٪ در شبیه‌سازی HARD_BLOCK است.",
-          en: "Stops need structural evidence; risk% above 1% is HARD_BLOCK in simulation.",
-        },
-        trap: {
-          fa: "تله: stop ذهنی یا گشاد کردن stop برای حفظ lot.",
-          en: "Trap: mental stops or widening stops to keep lot size.",
-        },
-        reality: {
-          fa: "اندازه از فاصله stop می‌آید؛ فاصله از اندازه پیروی نمی‌کند.",
-          en: "Size follows stop distance; distance does not follow desired size.",
-        },
-        question: {
-          fa: "اگر دانشجو ۲٪ درخواست کند، وضعیت صحیح موتور چیست؟",
-          en: "If a student requests 2%, what is the correct engine status?",
-        },
-      }),
-    ],
+    lessons: packLessons("L03", "M3"),
     quiz: M3_QUIZ,
     practicalTask: PLANS.M3.practicalTask,
     practicalPlan: PLANS.M3.practicalPlan,
@@ -259,33 +137,7 @@ export const missions: MissionDef[] = [
       en: "Inflation Level/Direction/Momentum; Actual/Forecast/Previous/Revisions; NFP, JOLTS, Claims, Sahm — CONTEXT_ONLY.",
     },
     href: "/academy/missions/M4",
-    lessons: [
-      lesson({
-        id: "M4-L1",
-        missionId: "M4",
-        stages: [4],
-        title: {
-          fa: "سورپرایز داده و انتقال مشروط",
-          en: "Data surprise and conditional transmission",
-        },
-        core: {
-          fa: "سورپرایز CPI فقط در صورت قیمت‌گذاری‌نشدن می‌تواند مسیر Fed repricing → yields → DXY/gold را فعال کند.",
-          en: "A CPI surprise can activate Fed repricing → yields → DXY/gold only when not already priced in.",
-        },
-        trap: {
-          fa: "تله: از یک چاپ، ورود طلا با SL/TP ساختن.",
-          en: "Trap: turning one print into a gold entry with SL/TP.",
-        },
-        reality: {
-          fa: "کلان CONTEXT_ONLY است؛ بدون Real Yields/DXY نمی‌توان bias طلا را اثبات کرد.",
-          en: "Macro is CONTEXT_ONLY; missing Real Yields/DXY cannot prove a gold bias.",
-        },
-        question: {
-          fa: "اگر TIPS و DXY غایب باشند، آیا bias طلا قابل اثبات است؟",
-          en: "If TIPS and DXY evidence are missing, can a gold bias be proven?",
-        },
-      }),
-    ],
+    lessons: packLessons("L04", "M4"),
     quiz: M4_QUIZ,
     practicalTask: PLANS.M4.practicalTask,
     practicalPlan: PLANS.M4.practicalPlan,
@@ -296,18 +148,7 @@ export const missions: MissionDef[] = [
     title: PLANS.M5.title!,
     summary: PLANS.M5.summary!,
     href: "/academy/missions/M5",
-    lessons: [
-      lesson({
-        id: "M5-L1",
-        missionId: "M5",
-        stages: [5],
-        title: LESSON_PATCH["M5-L1"].title,
-        core: LESSON_PATCH["M5-L1"].core,
-        trap: LESSON_PATCH["M5-L1"].trap,
-        reality: LESSON_PATCH["M5-L1"].reality,
-        question: LESSON_PATCH["M5-L1"].question,
-      }),
-    ],
+    lessons: packLessons("L05", "M5"),
     quiz: M5_QUIZ,
     practicalTask: PLANS.M5.practicalTask,
     practicalPlan: PLANS.M5.practicalPlan,
@@ -322,5 +163,5 @@ export function missionsForStage(stage: StageId): MissionDef[] {
   return missions.filter((m) => m.stages.includes(stage));
 }
 
-/** Stages 1–8 remain PREVIEW-browsable even without earned progression. */
-export const previewStages: StageId[] = [1, 2, 3, 4, 5, 6, 7, 8];
+/** Stage 0 is public readiness. Stages 1–8 stay preview-browsable. */
+export const previewStages: StageId[] = [0, 1, 2, 3, 4, 5, 6, 7, 8];

@@ -14,12 +14,14 @@ test.describe("Iteration 3 P0/P1", () => {
     await expect(dialog.getByText(/Position size: 0\.5/)).toBeVisible();
   });
 
-  test("Mental stop HARD_BLOCK MENTAL_STOP", async ({ page }) => {
+  test("Missing stop is BLOCKED; a mental stop is not", async ({ page }) => {
     await page.goto("/simulators/risk-grid");
     const dialog = page.getByRole("dialog");
-    await dialog.getByLabel(/Mental/i).check();
+    await dialog.getByLabel(/^None$/i).check();
     await expect(dialog.getByText("BLOCKED", { exact: true })).toBeVisible();
     await expect(dialog.getByText(/hard structural stop is required/i)).toBeVisible();
+    await dialog.getByLabel(/^Mental$/i).check();
+    await expect(dialog.getByText("BLOCKED", { exact: true })).toHaveCount(0);
   });
 
   test("M3 direct URL does not open the scout without a session", async ({ page }) => {

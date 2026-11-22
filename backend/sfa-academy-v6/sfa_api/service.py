@@ -7,6 +7,7 @@ from argon2.exceptions import VerificationError, InvalidHashError
 from .core import CoreService, now
 from .contracts import require, canonical, validate_decision, validate_quiz, Invalid, text
 from .daily import DailyMixin, require_window, server_due_friday, parse_iso, week_has_recorded_trade
+from .academy_rules import rules_for_stage
 from .plan_policy import plan_policy, plan_policy_table
 from .security import token_hash
 from .uploads import store
@@ -17,7 +18,7 @@ NOTICE='Your learning work and grades are stored on the academy server; Echo and
 PLAN_MISSING_EN='plan missing: redo and re-upload'
 PLAN_MISSING_FA='طرح نیست: دوباره انجام دهید و دوباره بارگذاری کنید'
 # Mentor-only fields. Students see feedback, not these notes or answer material.
-STUDENT_HIDDEN={'echoNotes','noPlanReason','correctAnswer','leaseToken','sessionToken','password','password_hash','passwordHash','contentDigest'}
+STUDENT_HIDDEN={'echoNotes','noPlanReason','correctAnswer','leaseToken','sessionToken','password','password_hash','passwordHash','contentDigest','academyRules','approval','situations','dailyActiveRiskCap','weeklyCompliancePause'}
 
 def redact_student(value):
     """Drop mentor-only notes from a student payload, including JSON stored as text."""
@@ -198,7 +199,7 @@ class Service(DailyMixin, CoreService):
                 model=(wrow[0]['practical_model'] if wrow else None) or 'LEGACY'
                 stage=json.loads(r['body'])['stage'] if kind=='quiz' else r['stage']
                 week_required=bool(wrow[0]['plan_required']) if wrow and wrow[0].get('plan_required') is not None else plan_policy(stage)=='required'
-                item.update(practicalModel=model,planPolicy='required' if week_required else 'optional',weekPlanRequired=week_required,nextDueFridayISO=server_due_friday(self.local_now()).isoformat(timespec='seconds'))
+                item.update(practicalModel=model,planPolicy='required' if week_required else 'optional',weekPlanRequired=week_required,nextDueFridayISO=server_due_friday(self.local_now()).isoformat(timespec='seconds'),academyRules=rules_for_stage(stage))
                 if kind=='quiz': item.update(kind='quiz_assessment',packet=json.loads(r['body']),assessment=json.loads(r['assessment']))
                 else:
                     packet=self.build_daily_log_packet_public(r) if model=='DAILY_LOG_V1' else None

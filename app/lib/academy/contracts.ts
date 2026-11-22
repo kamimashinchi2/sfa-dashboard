@@ -4,8 +4,14 @@ export type ISO = string;
 
 export type MissionId = "M1" | "M2" | "M3" | "M4" | "M5";
 export type AdvancedId = "A6" | "A7" | "A8";
-export type StageId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export type StageId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type Text = { fa: string; en: string };
+
+export type ChapterExercise = {
+  prompt: Text;
+  /** Ungraded. Shown behind a "show answer" toggle. */
+  selfCheck: Text | null;
+};
 
 export type PracticalPlan = {
   /** Daily core menu. The assignment Mentor issues is authoritative per student. */
@@ -94,7 +100,7 @@ export type InstrumentPresetId =
 
 export type Lesson = {
   id: string;
-  missionId: MissionId;
+  missionId: MissionId | AdvancedId | "L00";
   stages: StageId[];
   title: Text;
   core: Text;
@@ -104,6 +110,15 @@ export type Lesson = {
   selfReviewRubric: Text[];
   /** Illustrative numbers only. Never a signal or live-market claim. */
   workedExample?: Text;
+  objectives?: Text[];
+  riskExample?: Text;
+  exercises?: ChapterExercise[];
+  summary?: Text;
+  sourceRefs?: string[];
+  gaps?: string[];
+  enReviewed?: boolean;
+  /** Placeholder chapter from the stub pack. */
+  stub?: boolean;
 };
 
 export type Attempt = {

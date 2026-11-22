@@ -104,11 +104,26 @@ function MissionBody({
         <p className="mt-3 max-w-3xl text-fog">{t(mission.summary, locale)}</p>
       </header>
 
+      {mission.lessons.some((lesson) => lesson.stub) ? (
+        <p className="border border-gold/40 px-3 py-2 text-sm text-gold-soft">
+          {locale === "fa"
+            ? "STUB — این فصل‌ها نمونه هستند و با بسته اصلی جایگزین می‌شوند."
+            : "STUB — these chapters are placeholders and will be replaced by the real pack."}
+        </p>
+      ) : null}
       <div className="space-y-8">
         {mission.lessons.map((lesson) => (
           <MicroLesson key={lesson.id} lesson={lesson} />
         ))}
       </div>
+      {mission.homework ? (
+        <section className="space-y-2 border border-line bg-ink/30 p-5">
+          <h2 className="font-display text-2xl text-paper">
+            {locale === "fa" ? "کار روزانه" : "Daily task"}
+          </h2>
+          <p className="text-sm text-fog">{t(mission.homework.dailyTask, locale)}</p>
+        </section>
+      ) : null}
 
       <section className="space-y-3 border border-line bg-ink/30 p-5">
         <h2 className="font-display text-2xl text-paper">
